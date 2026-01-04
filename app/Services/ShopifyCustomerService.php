@@ -6,6 +6,35 @@ use Illuminate\Support\Facades\Http;
 
 class ShopifyCustomerService
 {
+    public function getCustomer(string $shopifyId): array
+    {
+        $domain = config('services.shopify.shop_domain');
+        $token = config('services.shopify.admin_token');
+        $version = config('services.shopify.api_version', '2024-01');
+
+        if (!$domain || !$token) {
+            throw new \RuntimeException('Shopify credentials are not configured.');
+        }
+
+        $response = Http::withHeaders([
+            'X-Shopify-Access-Token' => $token,
+            'Accept' => 'application/json',
+        ])->get("https://{$domain}/admin/api/{$version}/customers/{$shopifyId}.json");
+
+        if (!$response->successful()) {
+            throw new \RuntimeException('Shopify customer fetch failed.');
+        }
+
+        $data = $response->json();
+        $customer = is_array($data) ? ($data['customer'] ?? null) : null;
+
+        if (!is_array($customer) || empty($customer['id'])) {
+            throw new \RuntimeException('Shopify response missing customer data.');
+        }
+
+        return $customer;
+    }
+
     public function createCustomer(array $payload): array
     {
         $domain = config('services.shopify.shop_domain');
