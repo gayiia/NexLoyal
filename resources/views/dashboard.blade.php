@@ -163,18 +163,15 @@
                         </aside>
 
                         <main class="flex-1 px-10 py-8">
-                            <header class="flex flex-wrap items-center justify-between gap-4">
-                                <div>
-                                    <h1 class="text-3xl font-semibold text-slate-50">Dashboard</h1>
-                                </div>
-                                <div class="flex items-center gap-3">
+                            <x-page-header eyebrow="Dashboard" title="Loyalty performance overview" subtitle="Charts pull from Shopify webhooks once connected.">
+                                <x-slot name="actions">
                                     <button class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-sm text-slate-200 nl-panel-muted">Export report</button>
                                     <button class="rounded-xl bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-sky-500/30">Create campaign</button>
                                     <button id="theme-toggle" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-sm text-slate-200 nl-panel-muted" type="button">
                                         Switch theme
                                     </button>
-                                </div>
-                            </header>
+                                </x-slot>
+                            </x-page-header>
                             <section class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5 nl-panel">
                                 <div class="flex flex-wrap items-center gap-2 border-b border-slate-800/70 pb-3">
                                     <span class="text-xs uppercase tracking-[0.3em] text-slate-400 nl-text-muted">Filters</span>

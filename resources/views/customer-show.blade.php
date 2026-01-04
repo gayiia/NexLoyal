@@ -100,19 +100,14 @@
                         </aside>
 
                         <main class="flex-1 px-10 py-8">
-                            <header class="flex flex-wrap items-center justify-between gap-4">
-                                <div>
-                                    <p class="text-xs uppercase tracking-[0.3em] text-slate-400 nl-text-muted">Customer</p>
-                                    <h1 class="text-3xl font-semibold text-slate-50">{{ $customer->full_name ?: 'Unnamed customer' }}</h1>
-                                    <p class="mt-2 text-sm text-slate-300 nl-text-muted">Shopify ID {{ $customer->shopify_id }}</p>
-                                </div>
-                                <div class="flex items-center gap-3 text-xs">
+                            <x-page-header eyebrow="Customer" title="{{ $customer->full_name ?: 'Unnamed customer' }}" subtitle="Shopify ID {{ $customer->shopify_id }}" breadcrumb="Customers / View">
+                                <x-slot name="actions">
                                     <a class="rounded-xl border border-slate-700 px-4 py-2 text-slate-200" href="{{ route('customers') }}">Back to customers</a>
                                     <button id="theme-toggle" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-200 nl-panel-muted" type="button">
                                         Switch theme
                                     </button>
-                                </div>
-                            </header>
+                                </x-slot>
+                            </x-page-header>
 
                             <section class="mt-6 grid gap-4 lg:grid-cols-3">
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
