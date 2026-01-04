@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\CustomerGroupController;
 use App\Http\Controllers\ShopifyWebhookController;
 use Illuminate\Support\Facades\Route;
 
@@ -18,6 +19,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('customers', [CustomerController::class, 'index'])->name('customers');
     Route::post('customers', [CustomerController::class, 'store'])->name('customers.store');
     Route::get('customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
+    Route::get('customer-groups', [CustomerGroupController::class, 'index'])
+        ->name('customer-groups');
 });
 
 require __DIR__.'/settings.php';
