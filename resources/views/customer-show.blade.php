@@ -47,6 +47,18 @@
                 border-color: rgba(148, 163, 184, 0.6);
                 color: #0f172a;
             }
+            .nl-theme-light .text-slate-50,
+            .nl-theme-light .text-slate-100,
+            .nl-theme-light .text-slate-200 {
+                color: #0f172a;
+            }
+            .nl-theme-light .text-slate-300 {
+                color: #334155;
+            }
+            .nl-theme-light .text-slate-400,
+            .nl-theme-light .text-slate-500 {
+                color: #475569;
+            }
         </style>
     </head>
     <body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
@@ -96,6 +108,9 @@
                                 </div>
                                 <div class="flex items-center gap-3 text-xs">
                                     <a class="rounded-xl border border-slate-700 px-4 py-2 text-slate-200" href="{{ route('customers') }}">Back to customers</a>
+                                    <button id="theme-toggle" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-200 nl-panel-muted" type="button">
+                                        Switch theme
+                                    </button>
                                 </div>
                             </header>
 
@@ -152,6 +167,7 @@
             (function () {
                 const storageKey = 'nl-theme';
                 const body = document.body;
+                const button = document.getElementById('theme-toggle');
 
                 const applyTheme = (theme) => {
                     if (theme === 'light') {
@@ -163,6 +179,16 @@
 
                 const stored = localStorage.getItem(storageKey);
                 applyTheme(stored || 'dark');
+
+                if (button) {
+                    button.textContent = body.classList.contains('nl-theme-light') ? 'Switch to dark' : 'Switch to light';
+                    button.addEventListener('click', () => {
+                        const next = body.classList.contains('nl-theme-light') ? 'dark' : 'light';
+                        localStorage.setItem(storageKey, next);
+                        applyTheme(next);
+                        button.textContent = next === 'light' ? 'Switch to dark' : 'Switch to light';
+                    });
+                }
             })();
         </script>
     </body>

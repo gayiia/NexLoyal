@@ -52,6 +52,18 @@
                 border-color: rgba(148, 163, 184, 0.6);
                 color: #0f172a;
             }
+            .nl-theme-light .text-slate-50,
+            .nl-theme-light .text-slate-100,
+            .nl-theme-light .text-slate-200 {
+                color: #0f172a;
+            }
+            .nl-theme-light .text-slate-300 {
+                color: #334155;
+            }
+            .nl-theme-light .text-slate-400,
+            .nl-theme-light .text-slate-500 {
+                color: #475569;
+            }
             .nl-filter-pill {
                 font-size: 11px;
                 letter-spacing: 0.12em;
@@ -153,16 +165,14 @@
                         <main class="flex-1 px-10 py-8">
                             <header class="flex flex-wrap items-center justify-between gap-4">
                                 <div>
-                                    <p class="text-xs uppercase tracking-[0.3em] text-slate-400 nl-text-muted">Dashboard</p>
-                                    <h1 class="text-3xl font-semibold text-slate-50">Loyalty performance overview</h1>
-                                    <p class="mt-2 text-sm text-slate-300 nl-text-muted">Charts pull from Shopify webhooks once connected.</p>
+                                    <h1 class="text-3xl font-semibold text-slate-50">Dashboard</h1>
                                 </div>
                                 <div class="flex items-center gap-3">
                                     <button class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-sm text-slate-200 nl-panel-muted">Export report</button>
+                                    <button class="rounded-xl bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-sky-500/30">Create campaign</button>
                                     <button id="theme-toggle" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-sm text-slate-200 nl-panel-muted" type="button">
                                         Switch theme
                                     </button>
-                                    <button class="rounded-xl bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-sky-500/30">Create campaign</button>
                                 </div>
                             </header>
                             <section class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5 nl-panel">
@@ -498,5 +508,3 @@
         </script>
     </body>
 </html>
-
-

@@ -52,6 +52,18 @@
                 border-color: rgba(148, 163, 184, 0.6);
                 color: #0f172a;
             }
+            .nl-theme-light .text-slate-50,
+            .nl-theme-light .text-slate-100,
+            .nl-theme-light .text-slate-200 {
+                color: #0f172a;
+            }
+            .nl-theme-light .text-slate-300 {
+                color: #334155;
+            }
+            .nl-theme-light .text-slate-400,
+            .nl-theme-light .text-slate-500 {
+                color: #475569;
+            }
             .nl-filter-input {
                 height: 34px;
                 font-size: 12px;
@@ -134,14 +146,18 @@
                                     <p class="text-xs uppercase tracking-[0.3em] text-slate-400 nl-text-muted">Customers</p>
                                     <h1 class="text-3xl font-semibold text-slate-50">Customers</h1>
                                 </div>
-                                <div class="text-xs text-slate-400">Customers / Customers</div>
+                                <div class="flex items-center gap-3 text-xs text-slate-400">
+                                    <span>Customers / Customers</span>
+                                    <button id="theme-toggle" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-200 nl-panel-muted" type="button">
+                                        Switch theme
+                                    </button>
+                                </div>
                             </header>
 
                             <section class="mt-6 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel">
                                 <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/70 px-6 py-4">
                                     <div>
                                         <p class="text-sm font-semibold text-slate-100">Customer List</p>
-                                        <p class="text-xs text-slate-400">Synced from Shopify customer webhooks.</p>
                                     </div>
                                     <button class="nl-export-button text-xs">Export Excel</button>
                                 </div>
@@ -288,6 +304,14 @@
 
                 const stored = localStorage.getItem(storageKey);
                 applyTheme(stored || 'dark');
+
+                if (button) {
+                    button.addEventListener('click', () => {
+                        const next = body.classList.contains('nl-theme-light') ? 'dark' : 'light';
+                        localStorage.setItem(storageKey, next);
+                        applyTheme(next);
+                    });
+                }
             })();
         </script>
     </body>
