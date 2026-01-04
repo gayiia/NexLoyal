@@ -34,5 +34,12 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    'shopify' => [
+        'webhook_secret' => env('SHOPIFY_WEBHOOK_SECRET'),
+        'shop_domain' => env('SHOPIFY_SHOP_DOMAIN'),
+        'admin_token' => env('SHOPIFY_ADMIN_TOKEN'),
+        'api_version' => env('SHOPIFY_API_VERSION', '2024-01'),
+        'webhook_address' => env('SHOPIFY_WEBHOOK_ADDRESS'),
+    ],
 
 ];
