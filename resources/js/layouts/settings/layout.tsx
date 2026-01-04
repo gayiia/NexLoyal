@@ -31,6 +31,11 @@ const sidebarNavItems: NavItem[] = [
         href: editAppearance(),
         icon: null,
     },
+    {
+        title: 'Customer groups',
+        href: '/settings/customer-groups',
+        icon: null,
+    },
 ];
 
 export default function SettingsLayout({ children }: PropsWithChildren) {
