@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Services\ShopifyCustomerService;
 use Illuminate\Http\Request;
 
 class CustomerController extends Controller
@@ -76,5 +77,51 @@ class CustomerController extends Controller
     public function show(Customer $customer)
     {
         return view('customer-show', compact('customer'));
+    }
+
+    public function store(Request $request, ShopifyCustomerService $shopify)
+    {
+        $validated = $request->validate([
+            'first_name' => ['required', 'string', 'max:120'],
+            'last_name' => ['required', 'string', 'max:120'],
+            'gender' => ['required', 'in:female,male,nonbinary,other,na'],
+            'email' => ['required', 'email', 'max:255'],
+            'phone_country' => ['required', 'string', 'max:8'],
+            'phone' => ['required', 'string', 'max:40'],
+        ]);
+
+        $fullPhone = trim($validated['phone_country'].' '.$validated['phone']);
+
+        $payload = [
+            'first_name' => $validated['first_name'],
+            'last_name' => $validated['last_name'],
+            'email' => $validated['email'],
+            'phone' => $fullPhone,
+            'tags' => 'gender:'.$validated['gender'],
+        ];
+
+        try {
+            $shopifyCustomer = $shopify->createCustomer($payload);
+        } catch (\Throwable $exception) {
+            return back()
+                ->withErrors(['shopify' => $exception->getMessage()])
+                ->withInput();
+        }
+
+        Customer::create([
+            'shopify_id' => (string) ($shopifyCustomer['id'] ?? ''),
+            'first_name' => $shopifyCustomer['first_name'] ?? $validated['first_name'],
+            'last_name' => $shopifyCustomer['last_name'] ?? $validated['last_name'],
+            'email' => $shopifyCustomer['email'] ?? $validated['email'],
+            'phone' => $shopifyCustomer['phone'] ?? $fullPhone,
+            'gender' => $validated['gender'],
+            'status' => $shopifyCustomer['state'] ?? null,
+            'orders_count' => (int) ($shopifyCustomer['orders_count'] ?? 0),
+            'total_spent' => (float) ($shopifyCustomer['total_spent'] ?? 0),
+            'currency' => $shopifyCustomer['currency'] ?? null,
+            'shopify_created_at' => $shopifyCustomer['created_at'] ?? null,
+        ]);
+
+        return redirect()->route('customers');
     }
 }
