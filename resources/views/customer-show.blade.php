@@ -92,10 +92,20 @@
                                     <span>Notifications</span>
                                     <span class="text-xs text-slate-500 nl-text-muted">Engage</span>
                                 </a>
-                                <a href="#" class="flex items-center justify-between rounded-xl border border-transparent px-4 py-3 text-slate-300 hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
-                                    <span>Settings</span>
-                                    <span class="text-xs text-slate-500 nl-text-muted">Rules</span>
-                                </a>
+                                <div>
+                                    <button id="settings-toggle" type="button" class="flex w-full items-center justify-between rounded-xl border border-transparent px-4 py-3 text-slate-300 hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
+                                        <span>Settings</span>
+                                        <span class="text-xs text-slate-500 nl-text-muted">Rules</span>
+                                    </button>
+                                    <div id="settings-menu" class="mt-2 hidden space-y-1 pl-4 text-xs">
+                                        <a href="{{ route('profile.edit') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Profile</a>
+                                        <a href="{{ route('user-password.edit') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Password</a>
+                                        <a href="{{ route('two-factor.show') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Two-Factor Auth</a>
+                                        <a href="{{ route('appearance.edit') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Appearance</a>
+                                        <a href="{{ route('customer-groups') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Customer groups</a>
+                                        <a href="{{ route('tier-rules') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Tier rules</a>
+                                    </div>
+                                </div>
                             </nav>
                         </aside>
 
@@ -182,6 +192,18 @@
                         localStorage.setItem(storageKey, next);
                         applyTheme(next);
                         button.textContent = next === 'light' ? 'Switch to dark' : 'Switch to light';
+                    });
+                }
+
+                const settingsToggle = document.getElementById('settings-toggle');
+                const settingsMenu = document.getElementById('settings-menu');
+                const shouldOpenSettings = window.location.pathname.startsWith('/settings');
+                if (settingsMenu) {
+                    settingsMenu.classList.toggle('hidden', !shouldOpenSettings);
+                }
+                if (settingsToggle && settingsMenu) {
+                    settingsToggle.addEventListener('click', () => {
+                        settingsMenu.classList.toggle('hidden');
                     });
                 }
             })();
