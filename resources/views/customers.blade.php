@@ -141,7 +141,7 @@
                         </aside>
 
                         <main class="flex-1 px-10 py-8">
-                            <x-page-header eyebrow="Customers" title="Customers" breadcrumb="Customers / Customers">
+                            <x-page-header eyebrow="" title="Customers" breadcrumb="Customers / Customers">
                                 <x-slot name="actions">
                                     <button id="theme-toggle" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-200 nl-panel-muted" type="button">
                                         Switch theme

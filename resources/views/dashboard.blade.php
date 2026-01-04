@@ -163,7 +163,7 @@
                         </aside>
 
                         <main class="flex-1 px-10 py-8">
-                            <x-page-header eyebrow="Dashboard" title="Loyalty performance overview" subtitle="Charts pull from Shopify webhooks once connected.">
+                            <x-page-header eyebrow="" title="Dashobaord" subtitle="">
                                 <x-slot name="actions">
                                     <button class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-sm text-slate-200 nl-panel-muted">Export report</button>
                                     <button class="rounded-xl bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-sky-500/30">Create campaign</button>
