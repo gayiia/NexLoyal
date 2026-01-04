@@ -126,6 +126,7 @@
                                         <a href="{{ route('two-factor.show') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Two-Factor Auth</a>
                                         <a href="{{ route('appearance.edit') }}" class="block rounded-lg bg-slate-900/80 px-3 py-2 text-slate-100">Appearance</a>
                                         <a href="{{ route('customer-groups') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Customer groups</a>
+                                        <a href="{{ route('point-rules') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Point rules</a>
                                         <a href="{{ route('tier-rules') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Tier rules</a>
                                     </div>
                                 </div>

@@ -97,6 +97,66 @@
                 letter-spacing: 0.08em;
                 text-transform: uppercase;
             }
+            .nl-action-trigger {
+                border: 1px solid rgba(148, 163, 184, 0.4);
+                padding: 6px 12px;
+                border-radius: 999px;
+                font-size: 11px;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                background: rgba(30, 41, 59, 0.5);
+                color: #e2e8f0;
+            }
+            .nl-action-menu {
+                position: absolute;
+                right: 0;
+                top: calc(100% + 8px);
+                min-width: 160px;
+                padding: 8px;
+                border-radius: 12px;
+                border: 1px solid rgba(148, 163, 184, 0.25);
+                background: rgba(15, 23, 42, 0.95);
+                box-shadow: 0 18px 40px rgba(2, 6, 23, 0.45);
+                opacity: 0;
+                pointer-events: none;
+                transform: translateY(-6px);
+                transition: opacity 120ms ease, transform 120ms ease;
+                z-index: 20;
+            }
+            .nl-action-menu.is-open {
+                opacity: 1;
+                pointer-events: auto;
+                transform: translateY(0);
+            }
+            .nl-action-item {
+                width: 100%;
+                text-align: left;
+                padding: 8px 10px;
+                border-radius: 10px;
+                font-size: 12px;
+                color: #e2e8f0;
+            }
+            .nl-action-item:hover {
+                background: rgba(30, 41, 59, 0.6);
+            }
+            .nl-action-item-danger {
+                color: #fda4af;
+            }
+            .nl-theme-light .nl-action-trigger {
+                background: rgba(226, 232, 240, 0.8);
+                color: #0f172a;
+            }
+            .nl-theme-light .nl-action-menu {
+                background: rgba(255, 255, 255, 0.96);
+                border-color: rgba(148, 163, 184, 0.4);
+                color: #0f172a;
+            }
+            .nl-theme-light .nl-action-item {
+                color: #0f172a;
+            }
+            .nl-theme-light .nl-action-item:hover {
+                background: rgba(226, 232, 240, 0.9);
+            }
             .nl-action-primary {
                 background: rgba(59, 130, 246, 0.15);
                 color: #bfdbfe;
@@ -220,6 +280,7 @@
                                         <a href="{{ route('two-factor.show') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Two-Factor Auth</a>
                                         <a href="{{ route('appearance.edit') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Appearance</a>
                                         <a href="{{ route('customer-groups') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Customer groups</a>
+                                        <a href="{{ route('point-rules') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Point rules</a>
                                         <a href="{{ route('tier-rules') }}" class="block rounded-lg bg-slate-900/80 px-3 py-2 text-slate-100">Tier rules</a>
                                     </div>
                                 </div>
@@ -247,7 +308,7 @@
                                 </div>
 
                                 <div class="px-6 py-5">
-                                    <div class="overflow-x-auto">
+                                    <div>
                                         <table class="w-full text-left text-xs">
                                             <thead class="nl-table-head text-slate-300">
                                                 <tr>
@@ -264,7 +325,7 @@
                                             <tbody class="divide-y divide-slate-800/80 text-slate-200">
                                                 @forelse ($tiers as $tier)
                                                     <tr class="nl-table-row">
-                                                        <td class="px-4 py-4">{{ $loop->iteration }}</td>
+                                                        <td class="px-4 py-4">{{ ($tiers->currentPage() - 1) * $tiers->perPage() + $loop->iteration }}</td>
                                                         <td class="px-4 py-4 font-semibold text-slate-100">{{ $tier->title }}</td>
                                                         <td class="px-4 py-4">
                                                             <div class="flex items-center gap-2">
@@ -281,34 +342,43 @@
                                                             </span>
                                                         </td>
                                                         <td class="px-4 py-4">
-                                                            <div class="flex flex-wrap gap-2">
+                                                            <div class="relative inline-flex">
                                                                 <button
-                                                                    class="nl-action-button nl-action-primary"
+                                                                    class="nl-action-trigger"
                                                                     type="button"
-                                                                    data-tier-edit
-                                                                    data-tier-action="{{ route('tier-rules.update', $tier) }}"
-                                                                    data-tier-title="{{ $tier->title }}"
-                                                                    data-tier-color="{{ $tier->color }}"
-                                                                    data-tier-min-points="{{ $tier->min_points }}"
-                                                                    data-tier-max-points="{{ $tier->max_points }}"
-                                                                    data-tier-single-value="{{ $tier->single_point_value }}"
-                                                                    data-tier-description="{{ $tier->description }}"
+                                                                    data-action-toggle
                                                                 >
-                                                                    Edit
+                                                                    Actions
                                                                 </button>
-                                                                <form method="POST" action="{{ route('tier-rules.status', $tier) }}">
-                                                                    @csrf
-                                                                    @method('PATCH')
-                                                                    <input type="hidden" name="status" value="{{ $tier->status === 'active' ? 'inactive' : 'active' }}">
-                                                                    <button class="nl-action-button nl-action-warning" type="submit">
-                                                                        {{ $tier->status === 'active' ? 'Deactivate' : 'Activate' }}
+                                                                <div class="nl-action-menu" data-action-menu>
+                                                                    <button
+                                                                        class="nl-action-item"
+                                                                        type="button"
+                                                                        data-tier-edit
+                                                                        data-tier-action="{{ route('tier-rules.update', $tier) }}"
+                                                                        data-tier-title="{{ $tier->title }}"
+                                                                        data-tier-color="{{ $tier->color }}"
+                                                                        data-tier-min-points="{{ $tier->min_points }}"
+                                                                        data-tier-max-points="{{ $tier->max_points }}"
+                                                                        data-tier-single-value="{{ $tier->single_point_value }}"
+                                                                        data-tier-description="{{ $tier->description }}"
+                                                                    >
+                                                                        Edit
                                                                     </button>
-                                                                </form>
-                                                                <form method="POST" action="{{ route('tier-rules.destroy', $tier) }}">
-                                                                    @csrf
-                                                                    @method('DELETE')
-                                                                    <button class="nl-action-button nl-action-danger" type="submit">Delete</button>
-                                                                </form>
+                                                                    <form method="POST" action="{{ route('tier-rules.status', $tier) }}">
+                                                                        @csrf
+                                                                        @method('PATCH')
+                                                                        <input type="hidden" name="status" value="{{ $tier->status === 'active' ? 'inactive' : 'active' }}">
+                                                                        <button class="nl-action-item" type="submit">
+                                                                            {{ $tier->status === 'active' ? 'Deactivate' : 'Activate' }}
+                                                                        </button>
+                                                                    </form>
+                                                                    <form method="POST" action="{{ route('tier-rules.destroy', $tier) }}">
+                                                                        @csrf
+                                                                        @method('DELETE')
+                                                                        <button class="nl-action-item nl-action-item-danger" type="submit">Delete</button>
+                                                                    </form>
+                                                                </div>
                                                             </div>
                                                         </td>
                                                     </tr>
@@ -321,6 +391,24 @@
                                                 @endforelse
                                             </tbody>
                                         </table>
+                                    </div>
+                                    <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
+                                        <div>
+                                            Showing {{ $tiers->firstItem() ?? 0 }} to {{ $tiers->lastItem() ?? 0 }} of {{ $tiers->total() }} entries
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            @php
+                                                $current = $tiers->currentPage();
+                                                $last = $tiers->lastPage();
+                                                $start = max($current - 1, 1);
+                                                $end = min($current + 1, $last);
+                                            @endphp
+                                            <a class="rounded-lg border border-slate-700 px-3 py-1 {{ $tiers->onFirstPage() ? 'pointer-events-none text-slate-600' : 'text-slate-200' }}" href="{{ $tiers->previousPageUrl() ?? '#' }}">Prev</a>
+                                            @for ($page = $start; $page <= $end; $page++)
+                                                <a class="rounded-lg border border-slate-700 px-3 py-1 {{ $page === $current ? 'bg-slate-800 text-slate-100' : 'text-slate-300' }}" href="{{ $tiers->url($page) }}">{{ $page }}</a>
+                                            @endfor
+                                            <a class="rounded-lg border border-slate-700 px-3 py-1 {{ $current === $last ? 'pointer-events-none text-slate-600' : 'text-slate-200' }}" href="{{ $tiers->nextPageUrl() ?? '#' }}">Next</a>
+                                        </div>
                                     </div>
                                 </div>
                             </section>
@@ -429,6 +517,8 @@
                 const colorInput = document.getElementById('tier-color-input');
                 const colorPreview = document.getElementById('tier-color-preview');
                 const editButtons = document.querySelectorAll('[data-tier-edit]');
+                const actionToggles = document.querySelectorAll('[data-action-toggle]');
+                const actionMenus = document.querySelectorAll('[data-action-menu]');
                 const modalEyebrow = document.getElementById('tier-modal-eyebrow');
                 const modalTitle = document.getElementById('tier-modal-title');
                 const modalDescription = document.getElementById('tier-modal-description');
@@ -504,6 +594,12 @@
                     }
                 };
 
+                const closeAllMenus = () => {
+                    actionMenus.forEach((menu) => {
+                        menu.classList.remove('is-open');
+                    });
+                };
+
                 const setModalOpen = (isOpen) => {
                     if (!modal) {
                         return;
@@ -548,6 +644,7 @@
 
                 if (openModalButton) {
                     openModalButton.addEventListener('click', () => {
+                        closeAllMenus();
                         resetForm();
                         setModalOpen(true);
                     });
@@ -555,8 +652,21 @@
 
                 editButtons.forEach((button) => {
                     button.addEventListener('click', () => {
+                        closeAllMenus();
                         setEditMode(button);
                         setModalOpen(true);
+                    });
+                });
+
+                actionToggles.forEach((button) => {
+                    button.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        const menu = button.parentElement ? button.parentElement.querySelector('[data-action-menu]') : null;
+                        const willOpen = menu && !menu.classList.contains('is-open');
+                        closeAllMenus();
+                        if (menu && willOpen) {
+                            menu.classList.add('is-open');
+                        }
                     });
                 });
 
@@ -575,7 +685,12 @@
                 document.addEventListener('keydown', (event) => {
                     if (event.key === 'Escape') {
                         setModalOpen(false);
+                        closeAllMenus();
                     }
+                });
+
+                document.addEventListener('click', () => {
+                    closeAllMenus();
                 });
 
                 if (colorInput && colorPreview) {

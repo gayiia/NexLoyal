@@ -23,6 +23,10 @@ Route::middleware('auth')->group(function () {
         return view('settings.appearance');
     })->name('appearance.edit');
 
+    Route::get('settings/point-rules', function () {
+        return view('settings.point-rules');
+    })->name('point-rules');
+
     Route::get('settings/tier-rules', [TierRuleController::class, 'index'])->name('tier-rules');
     Route::post('settings/tier-rules', [TierRuleController::class, 'store'])->name('tier-rules.store');
     Route::patch('settings/tier-rules/{tier}', [TierRuleController::class, 'update'])->name('tier-rules.update');

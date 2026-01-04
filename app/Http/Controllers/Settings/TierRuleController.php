@@ -15,7 +15,7 @@ class TierRuleController extends Controller
         $tiers = Tier::query()
             ->orderBy('min_points')
             ->orderBy('max_points')
-            ->get();
+            ->paginate(10);
 
         return view('settings.tier-rules', compact('tiers'));
     }
