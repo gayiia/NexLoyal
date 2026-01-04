@@ -100,6 +100,59 @@
             .nl-theme-light .nl-table-row:hover {
                 background: rgba(226, 232, 240, 0.8);
             }
+            .nl-modal-backdrop {
+                position: fixed;
+                inset: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 24px;
+                background: rgba(2, 6, 23, 0.7);
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 200ms ease;
+                z-index: 50;
+            }
+            .nl-modal-backdrop.is-open {
+                opacity: 1;
+                pointer-events: auto;
+            }
+            .nl-modal-panel {
+                width: 100%;
+                max-width: 680px;
+                border-radius: 18px;
+                background: linear-gradient(160deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.95));
+                border: 1px solid rgba(148, 163, 184, 0.2);
+                box-shadow: 0 30px 80px rgba(2, 6, 23, 0.55);
+            }
+            .nl-modal-divider {
+                border-color: rgba(148, 163, 184, 0.16);
+            }
+            .nl-modal-label {
+                font-size: 11px;
+                letter-spacing: 0.18em;
+            }
+            .nl-modal-input {
+                height: 42px;
+                font-size: 13px;
+            }
+            .nl-modal-primary {
+                background: linear-gradient(135deg, #38bdf8, #2563eb);
+                color: #020617;
+                font-weight: 600;
+                box-shadow: 0 12px 24px rgba(37, 99, 235, 0.4);
+            }
+            .nl-theme-light .nl-modal-backdrop {
+                background: rgba(148, 163, 184, 0.55);
+            }
+            .nl-theme-light .nl-modal-panel {
+                background: linear-gradient(160deg, rgba(255, 255, 255, 0.95), rgba(241, 245, 249, 0.95));
+                border-color: rgba(148, 163, 184, 0.4);
+                color: #0f172a;
+            }
+            .nl-theme-light .nl-modal-divider {
+                border-color: rgba(148, 163, 184, 0.3);
+            }
         </style>
     </head>
     <body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
@@ -154,7 +207,12 @@
                                     <div>
                                         <p class="text-sm font-semibold text-slate-100">Customer List</p>
                                     </div>
-                                    <button class="nl-export-button text-xs">Export Excel</button>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <button id="open-create-customer" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900" type="button">
+                                            Create customer
+                                        </button>
+                                        <button class="nl-export-button text-xs">Export Excel</button>
+                                    </div>
                                 </div>
 
                                 <div class="px-6 py-5">
@@ -280,11 +338,105 @@
                 </div>
             </div>
         </div>
+        <div id="create-customer-modal" class="nl-modal-backdrop" aria-hidden="true">
+            <div class="nl-modal-panel">
+                <div class="flex items-start justify-between border-b border-slate-800 px-6 py-5 nl-modal-divider">
+                    <div>
+                        <p class="text-xs uppercase tracking-[0.35em] text-slate-400">Create customer</p>
+                        <p class="mt-2 text-lg font-semibold text-slate-100">Add a new customer</p>
+                        <p class="mt-1 text-xs text-slate-400">Capture key details to start tracking rewards and activity.</p>
+                    </div>
+                    <button type="button" class="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-200" data-modal-close>
+                        Close
+                    </button>
+                </div>
+                <form id="create-customer-form" class="px-6 py-6" method="POST" action="{{ route('customers.store') }}">
+                    @csrf
+                    @if ($errors->any())
+                        <div class="mb-5 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-xs text-rose-200" data-error-banner>
+                            <p class="font-semibold text-rose-100">Fix the highlighted fields to continue.</p>
+                            @if ($errors->has('shopify'))
+                                <p class="mt-1 text-rose-200">{{ $errors->first('shopify') }}</p>
+                            @endif
+                        </div>
+                    @endif
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        <div class="flex flex-col gap-2">
+                            <label class="nl-modal-label uppercase text-slate-400">First name</label>
+                            <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="text" name="first_name" value="{{ old('first_name') }}" placeholder="e.g. Jamie" required>
+                            @error('first_name')
+                                <p class="text-xs text-rose-300" data-error-message>{{ $message }}</p>
+                            @enderror
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <label class="nl-modal-label uppercase text-slate-400">Last name</label>
+                            <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="text" name="last_name" value="{{ old('last_name') }}" placeholder="e.g. Patel" required>
+                            @error('last_name')
+                                <p class="text-xs text-rose-300" data-error-message>{{ $message }}</p>
+                            @enderror
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <label class="nl-modal-label uppercase text-slate-400">Gender</label>
+                            <select class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" name="gender" required>
+                                <option value="" disabled @selected(!old('gender'))>Select</option>
+                                <option value="female" @selected(old('gender') === 'female')>Female</option>
+                                <option value="male" @selected(old('gender') === 'male')>Male</option>
+                                <option value="nonbinary" @selected(old('gender') === 'nonbinary')>Non-binary</option>
+                                <option value="other" @selected(old('gender') === 'other')>Other</option>
+                                <option value="na" @selected(old('gender') === 'na')>Prefer not to say</option>
+                            </select>
+                            @error('gender')
+                                <p class="text-xs text-rose-300" data-error-message>{{ $message }}</p>
+                            @enderror
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <label class="nl-modal-label uppercase text-slate-400">Email</label>
+                            <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="email" name="email" value="{{ old('email') }}" placeholder="name@email.com" required>
+                            @error('email')
+                                <p class="text-xs text-rose-300" data-error-message>{{ $message }}</p>
+                            @enderror
+                        </div>
+                        <div class="flex flex-col gap-2 sm:col-span-2">
+                            <label class="nl-modal-label uppercase text-slate-400">Mobile number</label>
+                            <div class="flex flex-col gap-2 sm:flex-row">
+                                <select class="nl-modal-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200 sm:max-w-[160px]" name="phone_country" required>
+                                    <option value="" disabled @selected(!old('phone_country'))>Country code</option>
+                                    <option value="+1" @selected(old('phone_country') === '+1')>US (+1)</option>
+                                    <option value="+44" @selected(old('phone_country') === '+44')>UK (+44)</option>
+                                    <option value="+61" @selected(old('phone_country') === '+61')>AU (+61)</option>
+                                    <option value="+91" @selected(old('phone_country') === '+91')>IN (+91)</option>
+                                    <option value="+94" @selected(old('phone_country') === '+94')>LK (+94)</option>
+                                    <option value="+65" @selected(old('phone_country') === '+65')>SG (+65)</option>
+                                </select>
+                                <input class="nl-modal-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="tel" name="phone" value="{{ old('phone') }}" placeholder="555 123 4567" required>
+                            </div>
+                            @error('phone_country')
+                                <p class="text-xs text-rose-300" data-error-message>{{ $message }}</p>
+                            @enderror
+                            @error('phone')
+                                <p class="text-xs text-rose-300" data-error-message>{{ $message }}</p>
+                            @enderror
+                        </div>
+                    </div>
+                    <div class="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-slate-800 pt-5 nl-modal-divider">
+                        <button type="button" class="rounded-xl border border-slate-700 px-4 py-2 text-xs text-slate-200" data-modal-close>
+                            Cancel
+                        </button>
+                        <button type="submit" class="nl-modal-primary rounded-xl px-5 py-2 text-xs">
+                            Save customer
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
         <script>
             (function () {
                 const storageKey = 'nl-theme';
                 const body = document.body;
                 const button = document.getElementById('theme-toggle');
+                const modal = document.getElementById('create-customer-modal');
+                const openModalButton = document.getElementById('open-create-customer');
+                const closeButtons = modal ? modal.querySelectorAll('[data-modal-close]') : [];
 
                 const applyTheme = (theme) => {
                     if (theme === 'light') {
@@ -306,6 +458,72 @@
                         localStorage.setItem(storageKey, next);
                         applyTheme(next);
                     });
+                }
+
+                const form = document.getElementById('create-customer-form');
+                const clearErrors = () => {
+                    if (!modal) {
+                        return;
+                    }
+                    modal.querySelectorAll('[data-error-message]').forEach((node) => {
+                        node.remove();
+                    });
+                    const banner = modal.querySelector('[data-error-banner]');
+                    if (banner) {
+                        banner.remove();
+                    }
+                };
+
+                const resetForm = () => {
+                    if (!form) {
+                        return;
+                    }
+                    form.reset();
+                    form.querySelectorAll('input[type="text"], input[type="email"], input[type="tel"]').forEach((input) => {
+                        input.value = '';
+                    });
+                    form.querySelectorAll('select').forEach((select) => {
+                        select.selectedIndex = 0;
+                    });
+                };
+
+                const setModalOpen = (isOpen) => {
+                    if (!modal) {
+                        return;
+                    }
+                    modal.classList.toggle('is-open', isOpen);
+                    modal.setAttribute('aria-hidden', String(!isOpen));
+                    if (!isOpen) {
+                        clearErrors();
+                        resetForm();
+                    }
+                };
+
+                if (openModalButton) {
+                    openModalButton.addEventListener('click', () => setModalOpen(true));
+                }
+
+                if (modal) {
+                    modal.addEventListener('click', (event) => {
+                        if (event.target === modal) {
+                            setModalOpen(false);
+                        }
+                    });
+                }
+
+                closeButtons.forEach((button) => {
+                    button.addEventListener('click', () => setModalOpen(false));
+                });
+
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape') {
+                        setModalOpen(false);
+                    }
+                });
+
+                const shouldOpen = {{ $errors->any() ? 'true' : 'false' }};
+                if (shouldOpen) {
+                    setModalOpen(true);
                 }
             })();
         </script>
