@@ -178,7 +178,7 @@
                                     <span>Customers</span>
                                     <span class="text-xs text-slate-400 nl-text-muted">Segments</span>
                                 </a>
-                                <a href="#" class="flex items-center justify-between rounded-xl border border-transparent px-4 py-3 text-slate-300 hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
+                                <a href="{{ route('coupons') }}" class="flex items-center justify-between rounded-xl border border-transparent px-4 py-3 text-slate-300 hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
                                     <span>Coupons</span>
                                     <span class="text-xs text-slate-500 nl-text-muted">Rewards</span>
                                 </a>
