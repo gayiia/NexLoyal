@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerGroupController;
+use App\Http\Controllers\CouponController;
 use App\Http\Controllers\ShopifyWebhookController;
 use Illuminate\Support\Facades\Route;
 
@@ -21,6 +22,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
     Route::get('customer-groups', [CustomerGroupController::class, 'index'])
         ->name('customer-groups');
+    Route::get('coupons', [CouponController::class, 'index'])->name('coupons');
+    Route::post('coupons', [CouponController::class, 'store'])->name('coupons.store');
 });
 
 require __DIR__.'/settings.php';
