@@ -24,6 +24,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('customer-groups');
     Route::get('coupons', [CouponController::class, 'index'])->name('coupons');
     Route::post('coupons', [CouponController::class, 'store'])->name('coupons.store');
+    Route::get('coupons/{coupon}/edit', [CouponController::class, 'edit'])->name('coupons.edit');
+    Route::patch('coupons/{coupon}', [CouponController::class, 'update'])->name('coupons.update');
+    Route::patch('coupons/{coupon}/activate', [CouponController::class, 'activate'])->name('coupons.activate');
+    Route::patch('coupons/{coupon}/deactivate', [CouponController::class, 'deactivate'])->name('coupons.deactivate');
+    Route::delete('coupons/{coupon}', [CouponController::class, 'destroy'])->name('coupons.destroy');
 });
 
 require __DIR__.'/settings.php';
