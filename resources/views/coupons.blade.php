@@ -89,6 +89,52 @@
                 font-size: 11px;
                 font-weight: 600;
             }
+            .nl-action-trigger {
+                border: 1px solid rgba(148, 163, 184, 0.4);
+                padding: 6px 12px;
+                border-radius: 999px;
+                font-size: 11px;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                background: rgba(30, 41, 59, 0.5);
+                color: #e2e8f0;
+            }
+            .nl-action-menu {
+                position: absolute;
+                right: 0;
+                top: calc(100% + 8px);
+                min-width: 160px;
+                padding: 8px;
+                border-radius: 12px;
+                border: 1px solid rgba(148, 163, 184, 0.25);
+                background: rgba(15, 23, 42, 0.95);
+                box-shadow: 0 18px 40px rgba(2, 6, 23, 0.45);
+                opacity: 0;
+                pointer-events: none;
+                transform: translateY(-6px);
+                transition: opacity 120ms ease, transform 120ms ease;
+                z-index: 20;
+            }
+            .nl-action-menu.is-open {
+                opacity: 1;
+                pointer-events: auto;
+                transform: translateY(0);
+            }
+            .nl-action-item {
+                width: 100%;
+                text-align: left;
+                padding: 8px 10px;
+                border-radius: 10px;
+                font-size: 12px;
+                color: #e2e8f0;
+                display: block;
+            }
+            .nl-action-item:hover {
+                background: rgba(30, 41, 59, 0.6);
+            }
+            .nl-action-item-danger {
+                color: #fda4af;
+            }
             .nl-modal-backdrop {
                 position: fixed;
                 inset: 0;
@@ -208,6 +254,21 @@
             .nl-theme-light .nl-product-title {
                 color: #0f172a;
             }
+            .nl-theme-light .nl-action-trigger {
+                background: rgba(226, 232, 240, 0.8);
+                color: #0f172a;
+            }
+            .nl-theme-light .nl-action-menu {
+                background: rgba(255, 255, 255, 0.96);
+                border-color: rgba(148, 163, 184, 0.4);
+                color: #0f172a;
+            }
+            .nl-theme-light .nl-action-item {
+                color: #0f172a;
+            }
+            .nl-theme-light .nl-action-item:hover {
+                background: rgba(226, 232, 240, 0.9);
+            }
         </style>
     </head>
     <body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
@@ -304,9 +365,10 @@
                                                 <label class="nl-filter-label uppercase tracking-[0.2em] text-slate-400 nl-text-muted">Status</label>
                                                 <select name="status" class="nl-filter-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200 nl-chip">
                                                     <option value="all" @selected(request('status', 'all') === 'all')>All</option>
+                                                    <option value="draft" @selected(request('status') === 'draft')>Draft</option>
                                                     <option value="active" @selected(request('status') === 'active')>Active</option>
-                                                    <option value="scheduled" @selected(request('status') === 'scheduled')>Scheduled</option>
                                                     <option value="paused" @selected(request('status') === 'paused')>Paused</option>
+                                                    <option value="scheduled" @selected(request('status') === 'scheduled')>Scheduled</option>
                                                     <option value="expired" @selected(request('status') === 'expired')>Expired</option>
                                                 </select>
                                             </div>
@@ -378,12 +440,14 @@
                                             'free-shipping' => 'Free shipping',
                                         ];
                                         $statusLabels = [
+                                            'draft' => 'Draft',
                                             'active' => 'Active',
                                             'scheduled' => 'Scheduled',
                                             'paused' => 'Paused',
                                             'expired' => 'Expired',
                                         ];
                                         $statusClasses = [
+                                            'draft' => 'bg-slate-500/20 text-slate-200',
                                             'active' => 'bg-emerald-500/20 text-emerald-200',
                                             'scheduled' => 'bg-sky-500/20 text-sky-200',
                                             'paused' => 'bg-amber-500/20 text-amber-200',
@@ -403,6 +467,7 @@
                                                     <th class="px-4 py-3 font-semibold">Start</th>
                                                     <th class="px-4 py-3 font-semibold">End</th>
                                                     <th class="px-4 py-3 font-semibold">Status</th>
+                                                    <th class="px-4 py-3 font-semibold">Actions</th>
                                                 </tr>
                                             </thead>
                                                                                         <tbody class="divide-y divide-slate-800/80 text-slate-200">
@@ -417,7 +482,10 @@
                                                     @endphp
                                                     <tr class="nl-table-row">
                                                         <td class="px-4 py-4">
-                                                            <div class="font-semibold text-slate-100">{{ $coupon->title }}</div>
+                                                        <div class="font-semibold text-slate-100">{{ $coupon->title }}</div>
+                                                        @if ($coupon->code)
+                                                            <div class="text-slate-400">{{ $coupon->code }}</div>
+                                                        @endif
                                                         </td>
                                                         <td class="px-4 py-4 text-slate-300">{{ $typeLabels[$coupon->type] ?? $coupon->type }}</td>
                                                         <td class="px-4 py-4 text-slate-300">{{ $valueLabel }}</td>
@@ -432,10 +500,42 @@
                                                             @endphp
                                                             <span class="nl-badge {{ $statusClass }}">{{ $statusLabel }}</span>
                                                         </td>
+                                                        <td class="px-4 py-4">
+                                                            <div class="relative inline-flex">
+                                                                <button class="nl-action-trigger" type="button" data-action-toggle>
+                                                                    Actions
+                                                                </button>
+                                                                <div class="nl-action-menu" data-action-menu>
+                                                                    @if ($coupon->status === 'draft')
+                                                                        <a class="nl-action-item" href="{{ route('coupons.edit', $coupon) }}">Edit</a>
+                                                                    @else
+                                                                        <span class="nl-action-item text-slate-500 cursor-not-allowed">Edit (locked)</span>
+                                                                    @endif
+                                                                    @if (in_array($coupon->status, ['draft', 'paused'], true))
+                                                                        <form method="POST" action="{{ route('coupons.activate', $coupon) }}">
+                                                                            @csrf
+                                                                            @method('PATCH')
+                                                                            <button class="nl-action-item" type="submit">Activate</button>
+                                                                        </form>
+                                                                    @elseif ($coupon->status === 'active')
+                                                                        <form method="POST" action="{{ route('coupons.deactivate', $coupon) }}">
+                                                                            @csrf
+                                                                            @method('PATCH')
+                                                                            <button class="nl-action-item" type="submit">Deactivate</button>
+                                                                        </form>
+                                                                    @endif
+                                                                    <form method="POST" action="{{ route('coupons.destroy', $coupon) }}">
+                                                                        @csrf
+                                                                        @method('DELETE')
+                                                                        <button class="nl-action-item nl-action-item-danger" type="submit">Delete</button>
+                                                                    </form>
+                                                                </div>
+                                                            </div>
+                                                        </td>
                                                     </tr>
                                                 @empty
                                                     <tr>
-                                                        <td colspan="8" class="px-4 py-10 text-center text-slate-400">No coupons yet. Create your first reward to start.</td>
+                                                        <td colspan="9" class="px-4 py-10 text-center text-slate-400">No coupons yet. Create your first reward to start.</td>
                                                     </tr>
                                                 @endforelse
                                             </tbody>
@@ -726,6 +826,27 @@
 
                 updateTypeSections();
 
+                const actionMenus = document.querySelectorAll('[data-action-menu]');
+                const actionToggles = document.querySelectorAll('[data-action-toggle]');
+
+                const closeActionMenus = () => {
+                    actionMenus.forEach((menu) => menu.classList.remove('is-open'));
+                };
+
+                actionToggles.forEach((toggle) => {
+                    toggle.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        const menu = toggle.parentElement ? toggle.parentElement.querySelector('[data-action-menu]') : null;
+                        const willOpen = menu && !menu.classList.contains('is-open');
+                        closeActionMenus();
+                        if (menu && willOpen) {
+                            menu.classList.add('is-open');
+                        }
+                    });
+                });
+
+                document.addEventListener('click', () => closeActionMenus());
+
                 const setModalOpen = (isOpen) => {
                     if (!modal) {
                         return;
@@ -752,6 +873,7 @@
 
                 document.addEventListener('keydown', (event) => {
                     if (event.key === 'Escape') {
+                        closeActionMenus();
                         setModalOpen(false);
                     }
                 });

@@ -26,6 +26,9 @@ class Coupon extends Model
         'get_product_ids',
         'buy_quantity',
         'get_quantity',
+        'code',
+        'shopify_price_rule_id',
+        'shopify_discount_code_id',
     ];
 
     protected $casts = [

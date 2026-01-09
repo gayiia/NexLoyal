@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Coupon;
 use App\Models\Tier;
+use App\Services\ShopifyDiscountService;
 use App\Services\ShopifyProductService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 class CouponController extends Controller
 {
@@ -73,7 +75,7 @@ class CouponController extends Controller
         return view('coupons', compact('coupons', 'tiers', 'products', 'productError'));
     }
 
-    public function store(Request $request)
+    public function store(Request $request, ShopifyDiscountService $shopifyDiscounts)
     {
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:160'],
@@ -95,21 +97,19 @@ class CouponController extends Controller
             'get_quantity' => ['required_if:type,buy-x-get-y', 'integer', 'min:1'],
         ]);
 
+        if (in_array($validated['type'], ['amount-order', 'amount-product'], true) && $validated['value_type'] === 'none') {
+            return back()
+                ->withErrors(['value_type' => 'Value type is required for this coupon type.'])
+                ->withInput();
+        }
+
         if ($validated['value_type'] === 'none') {
             $validated['value'] = null;
         }
 
-        $today = Carbon::today();
-        $startDate = Carbon::parse($validated['start_date']);
-        $endDate = Carbon::parse($validated['end_date']);
-        $status = 'scheduled';
-
-        if ($endDate->lt($today)) {
-            $status = 'expired';
-        } elseif ($startDate->gt($today)) {
-            $status = 'scheduled';
-        } else {
-            $status = 'active';
+        if (in_array($validated['type'], ['free-shipping', 'buy-x-get-y'], true)) {
+            $validated['value_type'] = 'percentage';
+            $validated['value'] = 100;
         }
 
         $productIds = [];
@@ -139,7 +139,7 @@ class CouponController extends Controller
             'start_date' => $validated['start_date'],
             'end_date' => $validated['end_date'],
             'description' => $validated['description'] ?? null,
-            'status' => $status,
+            'status' => 'draft',
             'product_ids' => $productIds ?: null,
             'buy_product_ids' => $buyProductIds ?: null,
             'get_product_ids' => $getProductIds ?: null,
@@ -148,5 +148,223 @@ class CouponController extends Controller
         ]);
 
         return redirect()->route('coupons');
+    }
+
+    public function edit(Request $request, Coupon $coupon, ShopifyProductService $shopifyProducts)
+    {
+        if ($coupon->status !== 'draft') {
+            return redirect()->route('coupons')->withErrors(['coupon' => 'Active coupons cannot be edited.']);
+        }
+
+        $tiers = Tier::query()->orderBy('min_points')->get();
+        $products = [];
+        $productError = null;
+        try {
+            $products = $shopifyProducts->listProducts();
+        } catch (\Throwable $exception) {
+            $productError = $exception->getMessage();
+        }
+
+        return view('coupons-edit', compact('coupon', 'tiers', 'products', 'productError'));
+    }
+
+    public function update(Request $request, Coupon $coupon)
+    {
+        if ($coupon->status !== 'draft') {
+            return redirect()->route('coupons')->withErrors(['coupon' => 'Active coupons cannot be edited.']);
+        }
+
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:160'],
+            'type' => ['required', 'in:amount-order,amount-product,buy-x-get-y,free-shipping'],
+            'value_type' => ['required', 'in:percentage,fixed,none'],
+            'value' => ['nullable', 'numeric', 'min:0', 'required_unless:value_type,none'],
+            'points_value' => ['required', 'integer', 'min:0'],
+            'tier_id' => ['nullable', 'exists:tiers,id'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'description' => ['nullable', 'string', 'max:2000'],
+            'product_ids' => ['required_if:type,amount-product', 'array', 'min:1'],
+            'product_ids.*' => ['integer'],
+            'buy_product_ids' => ['required_if:type,buy-x-get-y', 'array', 'min:1'],
+            'buy_product_ids.*' => ['integer'],
+            'get_product_ids' => ['required_if:type,buy-x-get-y', 'array', 'min:1'],
+            'get_product_ids.*' => ['integer'],
+            'buy_quantity' => ['required_if:type,buy-x-get-y', 'integer', 'min:1'],
+            'get_quantity' => ['required_if:type,buy-x-get-y', 'integer', 'min:1'],
+        ]);
+
+        if (in_array($validated['type'], ['amount-order', 'amount-product'], true) && $validated['value_type'] === 'none') {
+            return back()
+                ->withErrors(['value_type' => 'Value type is required for this coupon type.'])
+                ->withInput();
+        }
+
+        if ($validated['value_type'] === 'none') {
+            $validated['value'] = null;
+        }
+
+        if (in_array($validated['type'], ['free-shipping', 'buy-x-get-y'], true)) {
+            $validated['value_type'] = 'percentage';
+            $validated['value'] = 100;
+        }
+
+        $coupon->update([
+            'title' => $validated['title'],
+            'type' => $validated['type'],
+            'value_type' => $validated['value_type'],
+            'value' => $validated['value'],
+            'points_value' => $validated['points_value'],
+            'tier_id' => $validated['tier_id'] ?? null,
+            'start_date' => $validated['start_date'],
+            'end_date' => $validated['end_date'],
+            'description' => $validated['description'] ?? null,
+            'product_ids' => $validated['type'] === 'amount-product' ? array_map('intval', $validated['product_ids'] ?? []) : null,
+            'buy_product_ids' => $validated['type'] === 'buy-x-get-y' ? array_map('intval', $validated['buy_product_ids'] ?? []) : null,
+            'get_product_ids' => $validated['type'] === 'buy-x-get-y' ? array_map('intval', $validated['get_product_ids'] ?? []) : null,
+            'buy_quantity' => $validated['type'] === 'buy-x-get-y' ? (int) $validated['buy_quantity'] : null,
+            'get_quantity' => $validated['type'] === 'buy-x-get-y' ? (int) $validated['get_quantity'] : null,
+        ]);
+
+        return redirect()->route('coupons');
+    }
+
+    public function activate(Coupon $coupon, ShopifyDiscountService $shopifyDiscounts)
+    {
+        if ($coupon->status === 'active') {
+            return redirect()->route('coupons');
+        }
+
+        $startDate = Carbon::now();
+        $endDate = Carbon::parse($coupon->end_date);
+        $code = $coupon->code ?: $this->generateCode($coupon->title);
+
+        $payload = $this->buildPriceRulePayload([
+            'title' => $coupon->title,
+            'type' => $coupon->type,
+            'value_type' => $coupon->value_type,
+            'value' => $coupon->value,
+            'product_ids' => $coupon->product_ids ?? [],
+            'buy_product_ids' => $coupon->buy_product_ids ?? [],
+            'get_product_ids' => $coupon->get_product_ids ?? [],
+            'buy_quantity' => $coupon->buy_quantity ?? 1,
+            'get_quantity' => $coupon->get_quantity ?? 1,
+        ], $startDate, $endDate, $code);
+
+        try {
+            if ($coupon->shopify_price_rule_id) {
+                $shopifyDiscounts->updatePriceRule((int) $coupon->shopify_price_rule_id, [
+                    'starts_at' => $startDate->toIso8601String(),
+                    'ends_at' => $endDate->toIso8601String(),
+                ]);
+            } else {
+                $priceRule = $shopifyDiscounts->createPriceRule($payload);
+                $discountCode = $shopifyDiscounts->createDiscountCode((int) $priceRule['id'], $code);
+                $coupon->shopify_price_rule_id = (string) ($priceRule['id'] ?? '');
+                $coupon->shopify_discount_code_id = (string) ($discountCode['id'] ?? '');
+                $coupon->code = $code;
+            }
+        } catch (\Throwable $exception) {
+            return back()->withErrors(['shopify' => $exception->getMessage()]);
+        }
+
+        $coupon->status = 'active';
+        $coupon->save();
+
+        return redirect()->route('coupons');
+    }
+
+    public function deactivate(Coupon $coupon, ShopifyDiscountService $shopifyDiscounts)
+    {
+        if ($coupon->status !== 'active') {
+            return redirect()->route('coupons');
+        }
+
+        if ($coupon->shopify_price_rule_id) {
+            try {
+                $shopifyDiscounts->updatePriceRule((int) $coupon->shopify_price_rule_id, [
+                    'ends_at' => Carbon::now()->toIso8601String(),
+                ]);
+            } catch (\Throwable $exception) {
+                return back()->withErrors(['shopify' => $exception->getMessage()]);
+            }
+        }
+
+        $coupon->status = 'paused';
+        $coupon->save();
+
+        return redirect()->route('coupons');
+    }
+
+    public function destroy(Coupon $coupon, ShopifyDiscountService $shopifyDiscounts)
+    {
+        if ($coupon->shopify_price_rule_id) {
+            try {
+                $shopifyDiscounts->deletePriceRule((int) $coupon->shopify_price_rule_id);
+            } catch (\Throwable $exception) {
+                return back()->withErrors(['shopify' => $exception->getMessage()]);
+            }
+        }
+
+        $coupon->delete();
+
+        return redirect()->route('coupons');
+    }
+
+    private function generateCode(string $title): string
+    {
+        $prefix = strtoupper(Str::slug($title));
+        $prefix = substr(preg_replace('/[^A-Z0-9]/', '', $prefix), 0, 8);
+        $suffix = strtoupper(Str::random(6));
+
+        return trim($prefix.'-'.$suffix, '-');
+    }
+
+    private function buildPriceRulePayload(array $validated, Carbon $startDate, Carbon $endDate, string $code): array
+    {
+        $type = $validated['type'];
+        $valueType = $validated['value_type'];
+        $value = (float) ($validated['value'] ?? 0);
+
+        $payload = [
+            'title' => $validated['title'].' '.$code,
+            'target_type' => 'line_item',
+            'target_selection' => 'all',
+            'allocation_method' => 'across',
+            'value_type' => $valueType === 'fixed' ? 'fixed_amount' : 'percentage',
+            'value' => $valueType === 'fixed' ? -$value : -$value,
+            'customer_selection' => 'all',
+            'starts_at' => $startDate->toIso8601String(),
+            'ends_at' => $endDate->toIso8601String(),
+            'once_per_customer' => false,
+        ];
+
+        if ($type === 'free-shipping') {
+            $payload['target_type'] = 'shipping_line';
+            $payload['value_type'] = 'percentage';
+            $payload['value'] = -100.0;
+            $payload['allocation_method'] = 'each';
+        }
+
+        if ($type === 'amount-product') {
+            $payload['target_selection'] = 'entitled';
+            $payload['entitled_product_ids'] = array_map('intval', $validated['product_ids'] ?? []);
+            $payload['allocation_method'] = 'each';
+        }
+
+        if ($type === 'buy-x-get-y') {
+            $payload['target_selection'] = 'entitled';
+            $payload['entitled_product_ids'] = array_map('intval', $validated['get_product_ids'] ?? []);
+            $payload['prerequisite_product_ids'] = array_map('intval', $validated['buy_product_ids'] ?? []);
+            $payload['allocation_method'] = 'each';
+            $payload['value_type'] = 'percentage';
+            $payload['value'] = -100.0;
+            $payload['prerequisite_to_entitlement_quantity_ratio'] = [
+                'prerequisite_quantity' => (int) ($validated['buy_quantity'] ?? 1),
+                'entitled_quantity' => (int) ($validated['get_quantity'] ?? 1),
+            ];
+        }
+
+        return $payload;
     }
 }
