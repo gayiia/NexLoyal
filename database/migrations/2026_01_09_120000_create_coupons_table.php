@@ -20,6 +20,9 @@ return new class extends Migration
             $table->date('end_date');
             $table->text('description')->nullable();
             $table->string('status')->index();
+            $table->string('code')->nullable();
+            $table->string('shopify_price_rule_id')->nullable();
+            $table->string('shopify_discount_code_id')->nullable();
             $table->json('product_ids')->nullable();
             $table->json('buy_product_ids')->nullable();
             $table->json('get_product_ids')->nullable();
