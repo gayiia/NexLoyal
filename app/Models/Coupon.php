@@ -26,6 +26,8 @@ class Coupon extends Model
         'get_product_ids',
         'buy_quantity',
         'get_quantity',
+        'buyx_discount_type',
+        'buyx_discount_value',
         'code',
         'shopify_price_rule_id',
         'shopify_discount_code_id',
@@ -41,6 +43,7 @@ class Coupon extends Model
         'get_product_ids' => 'array',
         'buy_quantity' => 'integer',
         'get_quantity' => 'integer',
+        'buyx_discount_value' => 'decimal:2',
     ];
 
     public function tier(): BelongsTo

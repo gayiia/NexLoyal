@@ -75,13 +75,13 @@ class CouponController extends Controller
         return view('coupons', compact('coupons', 'tiers', 'products', 'productError'));
     }
 
-    public function store(Request $request, ShopifyDiscountService $shopifyDiscounts)
+    public function store(Request $request)
     {
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:160'],
             'type' => ['required', 'in:amount-order,amount-product,buy-x-get-y,free-shipping'],
-            'value_type' => ['required', 'in:percentage,fixed,none'],
-            'value' => ['nullable', 'numeric', 'min:0', 'required_unless:value_type,none'],
+            'value_type' => ['nullable', 'in:percentage,fixed,none'],
+            'value' => ['nullable', 'numeric', 'min:0'],
             'points_value' => ['required', 'integer', 'min:0'],
             'tier_id' => ['nullable', 'exists:tiers,id'],
             'start_date' => ['required', 'date'],
@@ -95,7 +95,40 @@ class CouponController extends Controller
             'get_product_ids.*' => ['integer'],
             'buy_quantity' => ['required_if:type,buy-x-get-y', 'integer', 'min:1'],
             'get_quantity' => ['required_if:type,buy-x-get-y', 'integer', 'min:1'],
+            'buyx_discount_type' => ['required_if:type,buy-x-get-y', 'in:percentage,amount,free'],
+            'buyx_discount_value' => ['nullable', 'numeric', 'min:0'],
         ]);
+
+        $validated['value_type'] = $validated['value_type'] ?? null;
+        $validated['value'] = $validated['value'] ?? null;
+        $validated['buyx_discount_type'] = $validated['buyx_discount_type'] ?? null;
+        $validated['buyx_discount_value'] = $validated['buyx_discount_value'] ?? null;
+
+        if (in_array($validated['type'], ['amount-order', 'amount-product'], true)) {
+            if (!$request->filled('value_type') || $validated['value_type'] === 'none') {
+                return back()
+                    ->withErrors(['value_type' => 'Value type is required for this coupon type.'])
+                    ->withInput();
+            }
+            if (!$request->filled('value')) {
+                return back()
+                    ->withErrors(['value' => 'Value is required for this coupon type.'])
+                    ->withInput();
+            }
+        }
+
+        if ($validated['type'] === 'buy-x-get-y') {
+            if (($validated['buyx_discount_type'] ?? '') !== 'free' && !$request->filled('buyx_discount_value')) {
+                return back()
+                    ->withErrors(['buyx_discount_value' => 'Discount value is required for this option.'])
+                    ->withInput();
+            }
+
+            $validated['value_type'] = $validated['buyx_discount_type'] === 'amount' ? 'fixed' : 'percentage';
+            $validated['value'] = $validated['buyx_discount_type'] === 'free'
+                ? 100
+                : (float) $validated['buyx_discount_value'];
+        }
 
         if (in_array($validated['type'], ['amount-order', 'amount-product'], true) && $validated['value_type'] === 'none') {
             return back()
@@ -107,7 +140,7 @@ class CouponController extends Controller
             $validated['value'] = null;
         }
 
-        if (in_array($validated['type'], ['free-shipping', 'buy-x-get-y'], true)) {
+        if ($validated['type'] === 'free-shipping') {
             $validated['value_type'] = 'percentage';
             $validated['value'] = 100;
         }
@@ -145,6 +178,8 @@ class CouponController extends Controller
             'get_product_ids' => $getProductIds ?: null,
             'buy_quantity' => $buyQuantity,
             'get_quantity' => $getQuantity,
+            'buyx_discount_type' => $validated['type'] === 'buy-x-get-y' ? $validated['buyx_discount_type'] : null,
+            'buyx_discount_value' => $validated['type'] === 'buy-x-get-y' ? $validated['buyx_discount_value'] : null,
         ]);
 
         return redirect()->route('coupons');
@@ -177,8 +212,8 @@ class CouponController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:160'],
             'type' => ['required', 'in:amount-order,amount-product,buy-x-get-y,free-shipping'],
-            'value_type' => ['required', 'in:percentage,fixed,none'],
-            'value' => ['nullable', 'numeric', 'min:0', 'required_unless:value_type,none'],
+            'value_type' => ['nullable', 'in:percentage,fixed,none'],
+            'value' => ['nullable', 'numeric', 'min:0'],
             'points_value' => ['required', 'integer', 'min:0'],
             'tier_id' => ['nullable', 'exists:tiers,id'],
             'start_date' => ['required', 'date'],
@@ -192,7 +227,40 @@ class CouponController extends Controller
             'get_product_ids.*' => ['integer'],
             'buy_quantity' => ['required_if:type,buy-x-get-y', 'integer', 'min:1'],
             'get_quantity' => ['required_if:type,buy-x-get-y', 'integer', 'min:1'],
+            'buyx_discount_type' => ['required_if:type,buy-x-get-y', 'in:percentage,amount,free'],
+            'buyx_discount_value' => ['nullable', 'numeric', 'min:0'],
         ]);
+
+        $validated['value_type'] = $validated['value_type'] ?? null;
+        $validated['value'] = $validated['value'] ?? null;
+        $validated['buyx_discount_type'] = $validated['buyx_discount_type'] ?? null;
+        $validated['buyx_discount_value'] = $validated['buyx_discount_value'] ?? null;
+
+        if (in_array($validated['type'], ['amount-order', 'amount-product'], true)) {
+            if (!$request->filled('value_type') || $validated['value_type'] === 'none') {
+                return back()
+                    ->withErrors(['value_type' => 'Value type is required for this coupon type.'])
+                    ->withInput();
+            }
+            if (!$request->filled('value')) {
+                return back()
+                    ->withErrors(['value' => 'Value is required for this coupon type.'])
+                    ->withInput();
+            }
+        }
+
+        if ($validated['type'] === 'buy-x-get-y') {
+            if (($validated['buyx_discount_type'] ?? '') !== 'free' && !$request->filled('buyx_discount_value')) {
+                return back()
+                    ->withErrors(['buyx_discount_value' => 'Discount value is required for this option.'])
+                    ->withInput();
+            }
+
+            $validated['value_type'] = $validated['buyx_discount_type'] === 'amount' ? 'fixed' : 'percentage';
+            $validated['value'] = $validated['buyx_discount_type'] === 'free'
+                ? 100
+                : (float) $validated['buyx_discount_value'];
+        }
 
         if (in_array($validated['type'], ['amount-order', 'amount-product'], true) && $validated['value_type'] === 'none') {
             return back()
@@ -204,7 +272,7 @@ class CouponController extends Controller
             $validated['value'] = null;
         }
 
-        if (in_array($validated['type'], ['free-shipping', 'buy-x-get-y'], true)) {
+        if ($validated['type'] === 'free-shipping') {
             $validated['value_type'] = 'percentage';
             $validated['value'] = 100;
         }
@@ -224,6 +292,8 @@ class CouponController extends Controller
             'get_product_ids' => $validated['type'] === 'buy-x-get-y' ? array_map('intval', $validated['get_product_ids'] ?? []) : null,
             'buy_quantity' => $validated['type'] === 'buy-x-get-y' ? (int) $validated['buy_quantity'] : null,
             'get_quantity' => $validated['type'] === 'buy-x-get-y' ? (int) $validated['get_quantity'] : null,
+            'buyx_discount_type' => $validated['type'] === 'buy-x-get-y' ? $validated['buyx_discount_type'] : null,
+            'buyx_discount_value' => $validated['type'] === 'buy-x-get-y' ? $validated['buyx_discount_value'] : null,
         ]);
 
         return redirect()->route('coupons');
@@ -239,6 +309,10 @@ class CouponController extends Controller
         $endDate = Carbon::parse($coupon->end_date);
         $code = $coupon->code ?: $this->generateCode($coupon->title);
 
+        if ($endDate->lt($startDate)) {
+            return back()->withErrors(['shopify' => 'End date must be in the future to activate this coupon.']);
+        }
+
         $payload = $this->buildPriceRulePayload([
             'title' => $coupon->title,
             'type' => $coupon->type,
@@ -249,6 +323,8 @@ class CouponController extends Controller
             'get_product_ids' => $coupon->get_product_ids ?? [],
             'buy_quantity' => $coupon->buy_quantity ?? 1,
             'get_quantity' => $coupon->get_quantity ?? 1,
+            'buyx_discount_type' => $coupon->buyx_discount_type,
+            'buyx_discount_value' => $coupon->buyx_discount_value,
         ], $startDate, $endDate, $code);
 
         try {
@@ -257,6 +333,11 @@ class CouponController extends Controller
                     'starts_at' => $startDate->toIso8601String(),
                     'ends_at' => $endDate->toIso8601String(),
                 ]);
+                if (!$coupon->shopify_discount_code_id) {
+                    $discountCode = $shopifyDiscounts->createDiscountCode((int) $coupon->shopify_price_rule_id, $code);
+                    $coupon->shopify_discount_code_id = (string) ($discountCode['id'] ?? '');
+                    $coupon->code = $code;
+                }
             } else {
                 $priceRule = $shopifyDiscounts->createPriceRule($payload);
                 $discountCode = $shopifyDiscounts->createDiscountCode((int) $priceRule['id'], $code);
@@ -357,8 +438,18 @@ class CouponController extends Controller
             $payload['entitled_product_ids'] = array_map('intval', $validated['get_product_ids'] ?? []);
             $payload['prerequisite_product_ids'] = array_map('intval', $validated['buy_product_ids'] ?? []);
             $payload['allocation_method'] = 'each';
-            $payload['value_type'] = 'percentage';
-            $payload['value'] = -100.0;
+            $discountType = $validated['buyx_discount_type'] ?? 'free';
+            $discountValue = (float) ($validated['buyx_discount_value'] ?? 0);
+            if ($discountType === 'amount') {
+                $payload['value_type'] = 'fixed_amount';
+                $payload['value'] = -$discountValue;
+            } elseif ($discountType === 'percentage') {
+                $payload['value_type'] = 'percentage';
+                $payload['value'] = -$discountValue;
+            } else {
+                $payload['value_type'] = 'percentage';
+                $payload['value'] = -100.0;
+            }
             $payload['prerequisite_to_entitlement_quantity_ratio'] = [
                 'prerequisite_quantity' => (int) ($validated['buy_quantity'] ?? 1),
                 'entitled_quantity' => (int) ($validated['get_quantity'] ?? 1),

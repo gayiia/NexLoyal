@@ -329,6 +329,12 @@
                             </x-page-header>
 
                             <section class="mt-6 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel">
+                                @if ($errors->has('shopify') || $errors->has('coupon'))
+                                    <div class="border-b border-slate-800/70 px-6 py-4 text-xs text-rose-200">
+                                        <p class="font-semibold text-rose-100">Action failed.</p>
+                                        <p class="mt-1 text-rose-200">{{ $errors->first('shopify') ?: $errors->first('coupon') }}</p>
+                                    </div>
+                                @endif
                                 <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/70 px-6 py-4">
                                     <div>
                                         <p class="text-sm font-semibold text-slate-100">Coupons list</p>
@@ -455,7 +461,7 @@
                                         ];
                                     @endphp
 
-                                    <div class="mt-4 overflow-x-auto">
+                                    <div class="mt-4">
                                         <table class="w-full text-left text-xs">
                                             <thead class="nl-table-head text-slate-300">
                                                 <tr>
@@ -615,9 +621,9 @@
                         <p class="text-xs text-rose-300" data-error-message>{{ $message }}</p>
                     @enderror
                 </div>
-                <div class="flex flex-col gap-2">
+                <div class="flex flex-col gap-2" data-type-section="amount-order,amount-product">
                     <label class="nl-modal-label uppercase text-slate-400">Value type</label>
-                    <select class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" name="value_type" required>
+                    <select class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" name="value_type" data-required>
                         <option value="" disabled @selected(!old('value_type'))>Select</option>
                         <option value="percentage" @selected(old('value_type') === 'percentage')>Percentage</option>
                         <option value="fixed" @selected(old('value_type') === 'fixed')>Fixed amount</option>
@@ -627,9 +633,9 @@
                         <p class="text-xs text-rose-300" data-error-message>{{ $message }}</p>
                     @enderror
                 </div>
-                <div class="flex flex-col gap-2">
+                <div class="flex flex-col gap-2" data-type-section="amount-order,amount-product">
                     <label class="nl-modal-label uppercase text-slate-400">Value</label>
-                    <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="text" name="value" value="{{ old('value') }}" placeholder="e.g. 10% or 25.00">
+                    <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="text" name="value" value="{{ old('value') }}" placeholder="e.g. 10% or 25.00" data-required>
                     @error('value')
                         <p class="text-xs text-rose-300" data-error-message>{{ $message }}</p>
                     @enderror
@@ -726,6 +732,32 @@
                     @error('get_product_ids')
                         <p class="text-xs text-rose-300" data-error-message>{{ $message }}</p>
                     @enderror
+                </div>
+                <div class="flex flex-col gap-3 sm:col-span-2" data-type-section="buy-x-get-y">
+                    <label class="nl-modal-label uppercase text-slate-400">At a discounted value</label>
+                    <div class="flex flex-wrap gap-4 text-sm text-slate-200">
+                        <label class="inline-flex items-center gap-2">
+                            <input type="radio" name="buyx_discount_type" value="percentage" @checked(old('buyx_discount_type') === 'percentage') data-buyx-discount>
+                            <span>Percentage</span>
+                        </label>
+                        <label class="inline-flex items-center gap-2">
+                            <input type="radio" name="buyx_discount_type" value="amount" @checked(old('buyx_discount_type') === 'amount') data-buyx-discount>
+                            <span>Amount off each</span>
+                        </label>
+                        <label class="inline-flex items-center gap-2">
+                            <input type="radio" name="buyx_discount_type" value="free" @checked(old('buyx_discount_type', 'free') === 'free') data-buyx-discount>
+                            <span>Free</span>
+                        </label>
+                    </div>
+                    <div>
+                        <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" step="0.01" min="0" name="buyx_discount_value" value="{{ old('buyx_discount_value') }}" placeholder="Discount value" data-buyx-value>
+                        @error('buyx_discount_type')
+                            <p class="text-xs text-rose-300" data-error-message>{{ $message }}</p>
+                        @enderror
+                        @error('buyx_discount_value')
+                            <p class="text-xs text-rose-300" data-error-message>{{ $message }}</p>
+                        @enderror
+                    </div>
                 </div>
                 <div class="flex flex-col gap-2">
                     <label class="nl-modal-label uppercase text-slate-400">Start date</label>
@@ -826,6 +858,26 @@
 
                 updateTypeSections();
 
+                const discountRadios = modal ? modal.querySelectorAll('[data-buyx-discount]') : [];
+                const discountValueInput = modal ? modal.querySelector('[data-buyx-value]') : null;
+                const updateBuyXDiscount = () => {
+                    if (!discountValueInput) {
+                        return;
+                    }
+                    const selected = modal ? modal.querySelector('[data-buyx-discount]:checked') : null;
+                    const isFree = selected && selected.value === 'free';
+                    discountValueInput.disabled = Boolean(isFree);
+                    discountValueInput.required = !isFree;
+                    if (isFree) {
+                        discountValueInput.value = '';
+                    }
+                };
+
+                discountRadios.forEach((radio) => {
+                    radio.addEventListener('change', updateBuyXDiscount);
+                });
+                updateBuyXDiscount();
+
                 const actionMenus = document.querySelectorAll('[data-action-menu]');
                 const actionToggles = document.querySelectorAll('[data-action-toggle]');
 
@@ -878,7 +930,7 @@
                     }
                 });
 
-                const shouldOpen = {{ $errors->any() ? 'true' : 'false' }};
+                const shouldOpen = {{ $errors->any() && old('title') ? 'true' : 'false' }};
                 if (shouldOpen) {
                     setModalOpen(true);
                 }
