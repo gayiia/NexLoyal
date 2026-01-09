@@ -20,6 +20,11 @@ return new class extends Migration
             $table->date('end_date');
             $table->text('description')->nullable();
             $table->string('status')->index();
+            $table->json('product_ids')->nullable();
+            $table->json('buy_product_ids')->nullable();
+            $table->json('get_product_ids')->nullable();
+            $table->unsignedInteger('buy_quantity')->nullable();
+            $table->unsignedInteger('get_quantity')->nullable();
             $table->timestamps();
 
             $table->index(['type', 'value_type']);

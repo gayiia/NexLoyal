@@ -21,6 +21,11 @@ class Coupon extends Model
         'end_date',
         'description',
         'status',
+        'product_ids',
+        'buy_product_ids',
+        'get_product_ids',
+        'buy_quantity',
+        'get_quantity',
     ];
 
     protected $casts = [
@@ -28,6 +33,11 @@ class Coupon extends Model
         'points_value' => 'integer',
         'start_date' => 'date',
         'end_date' => 'date',
+        'product_ids' => 'array',
+        'buy_product_ids' => 'array',
+        'get_product_ids' => 'array',
+        'buy_quantity' => 'integer',
+        'get_quantity' => 'integer',
     ];
 
     public function tier(): BelongsTo

@@ -113,6 +113,9 @@
                 background: linear-gradient(160deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.95));
                 border: 1px solid rgba(148, 163, 184, 0.2);
                 box-shadow: 0 30px 80px rgba(2, 6, 23, 0.55);
+                display: flex;
+                flex-direction: column;
+                max-height: calc(100vh - 48px);
             }
             .nl-modal-divider {
                 border-color: rgba(148, 163, 184, 0.16);
@@ -125,11 +128,63 @@
                 height: 42px;
                 font-size: 13px;
             }
+            .nl-modal-form {
+                display: flex;
+                flex-direction: column;
+                flex: 1 1 auto;
+                min-height: 0;
+            }
+            .nl-modal-body {
+                flex: 1 1 auto;
+                min-height: 0;
+                overflow: auto;
+                padding: 24px;
+            }
             .nl-modal-primary {
                 background: linear-gradient(135deg, #38bdf8, #2563eb);
                 color: #020617;
                 font-weight: 600;
                 box-shadow: 0 12px 24px rgba(37, 99, 235, 0.4);
+            }
+            .nl-product-shell {
+                border: 1px solid rgba(148, 163, 184, 0.35);
+                border-radius: 14px;
+                background: rgba(2, 6, 23, 0.5);
+                padding: 12px;
+            }
+            .nl-product-scroll {
+                max-height: 220px;
+                overflow: auto;
+            }
+            .nl-product-grid {
+                display: grid;
+                gap: 10px;
+            }
+            @media (min-width: 640px) {
+                .nl-product-grid {
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
+            }
+            @media (min-width: 1024px) {
+                .nl-product-grid {
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                }
+            }
+            .nl-product-card {
+                border: 1px solid rgba(148, 163, 184, 0.25);
+                background: rgba(15, 23, 42, 0.55);
+                border-radius: 12px;
+                padding: 10px 12px;
+                display: flex;
+                gap: 10px;
+                align-items: flex-start;
+            }
+            .nl-product-card input {
+                margin-top: 3px;
+            }
+            .nl-product-title {
+                font-size: 12px;
+                line-height: 1.4;
             }
             .nl-theme-light .nl-modal-backdrop {
                 background: rgba(148, 163, 184, 0.55);
@@ -142,14 +197,25 @@
             .nl-theme-light .nl-modal-divider {
                 border-color: rgba(148, 163, 184, 0.3);
             }
+            .nl-theme-light .nl-product-shell {
+                background: rgba(241, 245, 249, 0.7);
+                border-color: rgba(148, 163, 184, 0.4);
+            }
+            .nl-theme-light .nl-product-card {
+                background: rgba(255, 255, 255, 0.8);
+                border-color: rgba(148, 163, 184, 0.4);
+            }
+            .nl-theme-light .nl-product-title {
+                color: #0f172a;
+            }
         </style>
     </head>
     <body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
         <div class="min-h-screen bg-[radial-gradient(900px_circle_at_top,rgba(56,189,248,0.18),transparent_60%)]">
             <div class="min-h-screen bg-[radial-gradient(700px_circle_at_bottom,rgba(30,64,175,0.22),transparent_60%)]">
                 <div class="min-h-screen bg-[linear-gradient(120deg,rgba(15,23,42,0.9),rgba(2,6,23,0.95))] nl-shell">
-                    <div class="flex min-h-screen">
-                        <aside class="w-72 border-r border-slate-800/70 bg-slate-950/80 px-6 py-8 nl-panel">
+                    <div class="flex min-h-screen flex-col lg:flex-row">
+                        <aside class="w-full border-b border-slate-800/70 bg-slate-950/80 px-6 py-6 lg:w-72 lg:border-b-0 lg:border-r lg:py-8 nl-panel">
                             <div class="flex items-center gap-3">
                                 <div class="flex items-center gap-4 nl-animate-up nl-delay-1">
                                     <div class="flex w-40 items-center justify-center">
@@ -192,7 +258,7 @@
                             </nav>
                         </aside>
 
-                        <main class="flex-1 px-10 py-8">
+                        <main class="flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
                             <x-page-header eyebrow="" title="Coupons" breadcrumb="Rewards / Coupons">
                                 <x-slot name="actions">
                                     <button id="theme-toggle" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-200 nl-panel-muted" type="button">
@@ -413,15 +479,22 @@
                 Close
             </button>
         </div>
-                <form id="create-coupon-form" class="px-6 py-6" method="POST" action="{{ route('coupons.store') }}">
+        <form id="create-coupon-form" class="nl-modal-form" method="POST" action="{{ route('coupons.store') }}">
             @csrf
-            @if ($errors->any())
-                <div class="mb-5 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-xs text-rose-200" data-error-banner>
-                    <p class="font-semibold text-rose-100">Fix the highlighted fields to continue.</p>
-                    <p class="mt-1 text-rose-200">{{ $errors->first() }}</p>
-                </div>
-            @endif
-            <div class="grid gap-4 sm:grid-cols-2">
+            <div class="nl-modal-body">
+                @if ($errors->any())
+                    <div class="mb-5 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-xs text-rose-200" data-error-banner>
+                        <p class="font-semibold text-rose-100">Fix the highlighted fields to continue.</p>
+                        <p class="mt-1 text-rose-200">{{ $errors->first() }}</p>
+                    </div>
+                @endif
+                @if ($productError)
+                    <div class="mb-5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
+                        <p class="font-semibold text-amber-100">Shopify products unavailable.</p>
+                        <p class="mt-1 text-amber-200">{{ $productError }}</p>
+                    </div>
+                @endif
+                <div class="grid gap-4 sm:grid-cols-2">
                 <div class="flex flex-col gap-2 sm:col-span-2">
                     <label class="nl-modal-label uppercase text-slate-400">Title</label>
                     <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="text" name="title" value="{{ old('title') }}" placeholder="e.g. Welcome 10" required>
@@ -480,6 +553,80 @@
                         <p class="text-xs text-rose-300" data-error-message>{{ $message }}</p>
                     @enderror
                 </div>
+                <div class="flex flex-col gap-2 sm:col-span-2" data-type-section="amount-product">
+                    <label class="nl-modal-label uppercase text-slate-400">Eligible products</label>
+                    <div class="nl-product-shell">
+                        <div class="nl-product-scroll">
+                            <div class="nl-product-grid">
+                                @forelse ($products as $product)
+                                    <label class="nl-product-card">
+                                        <input type="checkbox" name="product_ids[]" value="{{ $product['id'] }}" @checked(in_array($product['id'], old('product_ids', []), true))>
+                                        <span class="nl-product-title text-slate-200">{{ $product['title'] }}</span>
+                                    </label>
+                                @empty
+                                    <p class="text-xs text-slate-400">No products found.</p>
+                                @endforelse
+                            </div>
+                        </div>
+                    </div>
+                    @error('product_ids')
+                        <p class="text-xs text-rose-300" data-error-message>{{ $message }}</p>
+                    @enderror
+                </div>
+                <div class="flex flex-col gap-2 sm:col-span-2" data-type-section="buy-x-get-y">
+                    <label class="nl-modal-label uppercase text-slate-400">Buy products</label>
+                    <div class="nl-product-shell">
+                        <div class="nl-product-scroll">
+                            <div class="nl-product-grid">
+                                @forelse ($products as $product)
+                                    <label class="nl-product-card">
+                                        <input type="checkbox" name="buy_product_ids[]" value="{{ $product['id'] }}" @checked(in_array($product['id'], old('buy_product_ids', []), true))>
+                                        <span class="nl-product-title text-slate-200">{{ $product['title'] }}</span>
+                                    </label>
+                                @empty
+                                    <p class="text-xs text-slate-400">No products found.</p>
+                                @endforelse
+                            </div>
+                        </div>
+                    </div>
+                    @error('buy_product_ids')
+                        <p class="text-xs text-rose-300" data-error-message>{{ $message }}</p>
+                    @enderror
+                </div>
+                <div class="flex flex-col gap-2" data-type-section="buy-x-get-y">
+                    <label class="nl-modal-label uppercase text-slate-400">Buy quantity</label>
+                    <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="buy_quantity" min="1" value="{{ old('buy_quantity', 1) }}" data-required>
+                    @error('buy_quantity')
+                        <p class="text-xs text-rose-300" data-error-message>{{ $message }}</p>
+                    @enderror
+                </div>
+                <div class="flex flex-col gap-2" data-type-section="buy-x-get-y">
+                    <label class="nl-modal-label uppercase text-slate-400">Get quantity</label>
+                    <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="get_quantity" min="1" value="{{ old('get_quantity', 1) }}" data-required>
+                    @error('get_quantity')
+                        <p class="text-xs text-rose-300" data-error-message>{{ $message }}</p>
+                    @enderror
+                </div>
+                <div class="flex flex-col gap-2 sm:col-span-2" data-type-section="buy-x-get-y">
+                    <label class="nl-modal-label uppercase text-slate-400">Get products</label>
+                    <div class="nl-product-shell">
+                        <div class="nl-product-scroll">
+                            <div class="nl-product-grid">
+                                @forelse ($products as $product)
+                                    <label class="nl-product-card">
+                                        <input type="checkbox" name="get_product_ids[]" value="{{ $product['id'] }}" @checked(in_array($product['id'], old('get_product_ids', []), true))>
+                                        <span class="nl-product-title text-slate-200">{{ $product['title'] }}</span>
+                                    </label>
+                                @empty
+                                    <p class="text-xs text-slate-400">No products found.</p>
+                                @endforelse
+                            </div>
+                        </div>
+                    </div>
+                    @error('get_product_ids')
+                        <p class="text-xs text-rose-300" data-error-message>{{ $message }}</p>
+                    @enderror
+                </div>
                 <div class="flex flex-col gap-2">
                     <label class="nl-modal-label uppercase text-slate-400">Start date</label>
                     <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="date" name="start_date" value="{{ old('start_date') }}" required>
@@ -501,8 +648,9 @@
                         <p class="text-xs text-rose-300" data-error-message>{{ $message }}</p>
                     @enderror
                 </div>
+                </div>
             </div>
-            <div class="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-slate-800 pt-5 nl-modal-divider">
+            <div class="flex flex-wrap items-center justify-end gap-3 border-t border-slate-800 px-6 py-5 nl-modal-divider">
                 <button type="button" class="rounded-xl border border-slate-700 px-4 py-2 text-xs text-slate-200" data-modal-close>
                     Cancel
                 </button>
@@ -556,6 +704,27 @@
                         settingsMenu.classList.toggle('hidden');
                     });
                 }
+
+                const typeSelect = modal ? modal.querySelector('[name="type"]') : null;
+                const typeSections = modal ? modal.querySelectorAll('[data-type-section]') : [];
+
+                const updateTypeSections = () => {
+                    const activeType = typeSelect ? typeSelect.value : '';
+                    typeSections.forEach((section) => {
+                        const types = (section.dataset.typeSection || '').split(',');
+                        const isActive = types.includes(activeType);
+                        section.classList.toggle('hidden', !isActive);
+                        section.querySelectorAll('[data-required]').forEach((input) => {
+                            input.required = isActive;
+                        });
+                    });
+                };
+
+                if (typeSelect) {
+                    typeSelect.addEventListener('change', updateTypeSections);
+                }
+
+                updateTypeSections();
 
                 const setModalOpen = (isOpen) => {
                     if (!modal) {

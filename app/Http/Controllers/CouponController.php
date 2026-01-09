@@ -4,12 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Coupon;
 use App\Models\Tier;
+use App\Services\ShopifyProductService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 class CouponController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, ShopifyProductService $shopifyProducts)
     {
         $query = Coupon::query()->with('tier');
 
@@ -61,7 +62,15 @@ class CouponController extends Controller
         $coupons = $query->orderByDesc('id')->paginate($perPage)->withQueryString();
         $tiers = Tier::query()->orderBy('min_points')->get();
 
-        return view('coupons', compact('coupons', 'tiers'));
+        $products = [];
+        $productError = null;
+        try {
+            $products = $shopifyProducts->listProducts();
+        } catch (\Throwable $exception) {
+            $productError = $exception->getMessage();
+        }
+
+        return view('coupons', compact('coupons', 'tiers', 'products', 'productError'));
     }
 
     public function store(Request $request)
@@ -76,6 +85,14 @@ class CouponController extends Controller
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'description' => ['nullable', 'string', 'max:2000'],
+            'product_ids' => ['required_if:type,amount-product', 'array', 'min:1'],
+            'product_ids.*' => ['integer'],
+            'buy_product_ids' => ['required_if:type,buy-x-get-y', 'array', 'min:1'],
+            'buy_product_ids.*' => ['integer'],
+            'get_product_ids' => ['required_if:type,buy-x-get-y', 'array', 'min:1'],
+            'get_product_ids.*' => ['integer'],
+            'buy_quantity' => ['required_if:type,buy-x-get-y', 'integer', 'min:1'],
+            'get_quantity' => ['required_if:type,buy-x-get-y', 'integer', 'min:1'],
         ]);
 
         if ($validated['value_type'] === 'none') {
@@ -95,6 +112,23 @@ class CouponController extends Controller
             $status = 'active';
         }
 
+        $productIds = [];
+        $buyProductIds = [];
+        $getProductIds = [];
+        $buyQuantity = null;
+        $getQuantity = null;
+
+        if ($validated['type'] === 'amount-product') {
+            $productIds = array_map('intval', $validated['product_ids'] ?? []);
+        }
+
+        if ($validated['type'] === 'buy-x-get-y') {
+            $buyProductIds = array_map('intval', $validated['buy_product_ids'] ?? []);
+            $getProductIds = array_map('intval', $validated['get_product_ids'] ?? []);
+            $buyQuantity = (int) $validated['buy_quantity'];
+            $getQuantity = (int) $validated['get_quantity'];
+        }
+
         Coupon::create([
             'title' => $validated['title'],
             'type' => $validated['type'],
@@ -106,6 +140,11 @@ class CouponController extends Controller
             'end_date' => $validated['end_date'],
             'description' => $validated['description'] ?? null,
             'status' => $status,
+            'product_ids' => $productIds ?: null,
+            'buy_product_ids' => $buyProductIds ?: null,
+            'get_product_ids' => $getProductIds ?: null,
+            'buy_quantity' => $buyQuantity,
+            'get_quantity' => $getQuantity,
         ]);
 
         return redirect()->route('coupons');
