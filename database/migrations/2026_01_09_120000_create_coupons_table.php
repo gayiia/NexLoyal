@@ -1,0 +1,34 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('coupons', function (Blueprint $table) {
+            $table->id();
+            $table->string('title');
+            $table->string('type');
+            $table->string('value_type');
+            $table->decimal('value', 10, 2)->nullable();
+            $table->unsignedInteger('points_value');
+            $table->foreignId('tier_id')->nullable()->constrained('tiers')->nullOnDelete();
+            $table->date('start_date');
+            $table->date('end_date');
+            $table->text('description')->nullable();
+            $table->string('status')->index();
+            $table->timestamps();
+
+            $table->index(['type', 'value_type']);
+            $table->index(['start_date', 'end_date']);
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('coupons');
+    }
+};
