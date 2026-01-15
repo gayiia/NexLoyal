@@ -179,7 +179,8 @@
                                         <p class="text-xs text-slate-400">Set how many points customers earn for the core actions in your store.</p>
                                     </div>
 
-                                    <div class="space-y-3 px-6 py-4">
+                                    <form method="POST" action="{{ route('point-rules.update') }}" class="space-y-3 px-6 py-4">
+                                        @csrf
                                         <div class="nl-row grid gap-3 sm:grid-cols-[220px_1fr] sm:items-center">
                                             <div>
                                                 <p class="nl-row-title">Welcome bonus points</p>
@@ -192,14 +193,14 @@
                                                 <p class="nl-row-title">Birthday reward points</p>
                                                 <p class="nl-row-help">Applied once per year.</p>
                                             </div>
-                                            <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" min="0" placeholder="250">
+                                            <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="birthday_points" min="0" value="{{ old('birthday_points', $rule->birthday_points ?? 0) }}" placeholder="250" required>
                                         </div>
                                         <div class="nl-row grid gap-3 sm:grid-cols-[220px_1fr] sm:items-center">
                                             <div>
                                                 <p class="nl-row-title">Profile completion points</p>
                                                 <p class="nl-row-help">Reward for finishing required fields.</p>
                                             </div>
-                                            <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" min="0" placeholder="75">
+                                            <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="profile_completion_points" min="0" value="{{ old('profile_completion_points', $rule->profile_completion_points ?? 0) }}" placeholder="75" required>
                                         </div>
                                         <div class="nl-row grid gap-3 sm:grid-cols-[220px_1fr] sm:items-center">
                                             <div>
@@ -215,12 +216,12 @@
                                             </div>
                                             <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" placeholder="https://yourbrand.com/newsletter">
                                         </div>
-                                    </div>
-                                    <div class="flex items-center justify-end px-6 pb-6">
-                                        <button type="button" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900">
-                                            Save general settings
-                                        </button>
-                                    </div>
+                                        <div class="flex items-center justify-end pb-2">
+                                            <button type="submit" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900">
+                                                Save general settings
+                                            </button>
+                                        </div>
+                                    </form>
                                 </section>
 
                                 <section class="mt-6 overflow-hidden nl-section">
