@@ -18,11 +18,19 @@ class Customer extends Model
         'total_spent',
         'currency',
         'shopify_created_at',
+        'loyalty_points',
+        'tier_id',
     ];
 
     protected $casts = [
         'shopify_created_at' => 'datetime',
+        'loyalty_points' => 'integer',
     ];
+
+    public function tier()
+    {
+        return $this->belongsTo(Tier::class);
+    }
 
     public function getFullNameAttribute(): string
     {

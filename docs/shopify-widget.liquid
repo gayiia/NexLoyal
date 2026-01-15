@@ -1,0 +1,606 @@
+<!-- Nexloyal floating widget (paste before </body> in theme.liquid) -->
+<div id="nexloyal-widget">
+  <button id="nexloyal-trigger" type="button" aria-haspopup="dialog" aria-controls="nexloyal-modal" aria-label="Open rewards">
+    <span class="nexloyal-icon">★</span>
+    <span class="nexloyal-label">Rewards</span>
+  </button>
+  <div id="nexloyal-modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div id="nexloyal-panel">
+      <div id="nexloyal-header">
+        <div>
+          <div class="nexloyal-eyebrow">Rewards</div>
+          <div class="nexloyal-title">NexLoyal</div>
+        </div>
+        <button id="nexloyal-close" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div id="nexloyal-content"></div>
+    </div>
+  </div>
+</div>
+
+<style>
+  #nexloyal-widget {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 2147483647;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  #nexloyal-trigger {
+    background: #111827;
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 10px 16px;
+    height: 48px;
+    border-radius: 999px;
+    font-size: 14px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.2);
+  }
+  .nexloyal-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    background: radial-gradient(circle at top, #fbbf24, #f97316);
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    color: #111827;
+    line-height: 1;
+  }
+  .nexloyal-label {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  #nexloyal-modal[aria-hidden="true"] {
+    display: none;
+  }
+  #nexloyal-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.35);
+    display: flex;
+    align-items: stretch;
+    justify-content: flex-end;
+    padding: 24px;
+    z-index: 2147483646;
+  }
+  #nexloyal-panel {
+    background: #0c1220;
+    border-radius: 16px;
+    max-width: 360px;
+    width: min(92vw, 360px);
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    box-shadow: 0 24px 48px rgba(2, 6, 23, 0.45);
+    display: flex;
+    flex-direction: column;
+    height: min(78vh, 640px);
+    margin-left: auto;
+  }
+  #nexloyal-header {
+    padding: 16px 20px;
+    background: linear-gradient(135deg, #0b1224, #0f172a);
+    color: #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  }
+  .nexloyal-hero-title {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    opacity: 0.8;
+  }
+  .nexloyal-hero-subtitle {
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .nexloyal-eyebrow {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+  }
+  .nexloyal-title {
+    font-size: 18px;
+    font-weight: 700;
+  }
+  #nexloyal-close {
+    background: transparent;
+    border: none;
+    font-size: 26px;
+    cursor: pointer;
+    color: #e2e8f0;
+  }
+  #nexloyal-content {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    color: #e2e8f0;
+  }
+  #nexloyal-content h3 {
+    margin: 0 0 6px;
+    font-size: 18px;
+  }
+  #nexloyal-content p {
+    margin: 0 0 16px;
+    color: #94a3b8;
+  }
+  .nexloyal-card {
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 14px;
+    padding: 18px;
+    background: #0f172a;
+    box-shadow: 0 18px 30px rgba(2, 6, 23, 0.35);
+    margin-bottom: 14px;
+  }
+  .nexloyal-card h4 {
+    margin: 0 0 8px;
+    font-size: 16px;
+  }
+  .nexloyal-card p {
+    margin: 0 0 14px;
+    color: #94a3b8;
+  }
+  .nexloyal-card .nexloyal-cta {
+    background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+    color: #04111f;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    cursor: pointer;
+    width: 100%;
+  }
+  .nexloyal-link {
+    display: inline-block;
+    color: #38bdf8;
+    text-decoration: underline;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .nexloyal-muted {
+    color: #94a3b8;
+    font-size: 13px;
+    text-align: center;
+  }
+  .nexloyal-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .nexloyal-welcome h2 {
+    margin: 0 0 6px;
+    font-size: 20px;
+    color: #e2e8f0;
+  }
+  .nexloyal-welcome p {
+    margin: 0;
+    font-size: 13px;
+    color: #94a3b8;
+  }
+  .nexloyal-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 12px;
+    background: #0b1324;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 14px;
+    box-shadow: inset 0 1px 0 rgba(56, 189, 248, 0.08);
+  }
+  .nexloyal-stat {
+    text-align: left;
+  }
+  .nexloyal-stat label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: #94a3b8;
+    margin-bottom: 6px;
+  }
+  .nexloyal-stat span {
+    font-size: 22px;
+    font-weight: 700;
+    color: #e2e8f0;
+  }
+  .nexloyal-tier-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 0px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #7dd3fc;
+  }
+  .nexloyal-section-title {
+    margin: 6px 0 0;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #94a3b8;
+  }
+  .nexloyal-list {
+    display: grid;
+    gap: 10px;
+  }
+  .nexloyal-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #0f172a;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 12px;
+    padding: 12px 14px;
+  }
+  .nexloyal-row-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e2e8f0;
+  }
+  .nexloyal-row-sub {
+    font-size: 12px;
+    color: #94a3b8;
+  }
+  .nexloyal-row-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .nexloyal-row-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    background: #0b1324;
+    display: grid;
+    place-items: center;
+    color: #38bdf8;
+  }
+  .nexloyal-row-icon svg,
+  .nexloyal-row-chevron svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+  }
+  .nexloyal-row-chevron {
+    width: 18px;
+    height: 18px;
+    color: #64748b;
+  }
+  .nexloyal-footer {
+    background: #0b1324;
+    border-top: 1px solid rgba(148, 163, 184, 0.18);
+    padding: 14px 20px 18px;
+  }
+  .nexloyal-footer button {
+    width: 100%;
+    background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+    color: #04111f;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .nexloyal-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 180px;
+    color: #e2e8f0;
+  }
+  .nexloyal-spinner {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 3px solid rgba(148, 163, 184, 0.35);
+    border-top-color: #38bdf8;
+    animation: nexloyal-spin 1s linear infinite;
+  }
+  @keyframes nexloyal-spin {
+    to { transform: rotate(360deg); }
+  }
+  #nexloyal-content button {
+    background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+    color: #04111f;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    cursor: pointer;
+    width: 100%;
+  }
+  @media (max-width: 600px) {
+    #nexloyal-widget {
+      right: 16px;
+      bottom: 16px;
+    }
+    #nexloyal-modal {
+      padding: 12px;
+      align-items: flex-end;
+    }
+    #nexloyal-panel {
+      width: 100%;
+      max-width: none;
+      height: min(82vh, 620px);
+      border-radius: 14px;
+    }
+  }
+</style>
+
+<script>
+  (function() {
+    var config = {
+      customer: {{ customer | json }},
+      customerId: {{ customer.id | json }},
+      customerEmail: {{ customer.email | json }},
+      shopDomain: "{{ shop.domain }}",
+      loginUrl: "{{ routes.account_login_url }}",
+      tokenUrl: "https://wednesday-letter-documentation-diving.trycloudflare.com/loyalty/token",
+      dataUrl: "https://wednesday-letter-documentation-diving.trycloudflare.com/loyalty/data"
+    };
+
+    var trigger = document.getElementById('nexloyal-trigger');
+    var modal = document.getElementById('nexloyal-modal');
+    var closeButton = document.getElementById('nexloyal-close');
+    var content = document.getElementById('nexloyal-content');
+
+    function openModal() {
+      modal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeModal() {
+      modal.setAttribute('aria-hidden', 'true');
+    }
+
+    function renderLoggedOut() {
+      content.innerHTML = '' +
+        '<div class="nexloyal-card">' +
+          '<h4>Become a member</h4>' +
+          '<p>Unlock exclusive rewards and start earning points today.</p>' +
+          '<button id="nexloyal-join" class="nexloyal-cta">Join now</button>' +
+          '<p class="nexloyal-muted" style="margin-top:10px;">Already have an account? <span id="nexloyal-login" class="nexloyal-link">Sign in</span></p>' +
+        '</div>' +
+        '<div class="nexloyal-card">' +
+          '<h4>Rewards Points</h4>' +
+          '<p>Earn points for purchases and redeem them for perks.</p>' +
+          '<div class="nexloyal-muted">Powered by NexLoyal</div>' +
+        '</div>';
+
+      function goToLogin() {
+        var returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = config.loginUrl + '?return_url=' + returnUrl;
+      }
+
+      document.getElementById('nexloyal-join').addEventListener('click', goToLogin);
+      document.getElementById('nexloyal-login').addEventListener('click', goToLogin);
+    }
+
+    function renderDashboard(data) {
+      var tierLabel = data.tier ? data.tier : 'No tier yet';
+      var displayName = data.name ? data.name : (data.email || 'Customer');
+      content.innerHTML = '' +
+        '<div class="nexloyal-dashboard">' +
+          '<div class="nexloyal-welcome">' +
+            '<h2>Welcome back!</h2>' +
+            '<p>' + displayName + '</p>' +
+          '</div>' +
+          '<div class="nexloyal-stats">' +
+            '<div class="nexloyal-stat">' +
+              '<label>Points</label>' +
+              '<span>' + (data.points || 0) + '</span>' +
+            '</div>' +
+            '<div class="nexloyal-stat">' +
+              '<label>Tier</label>' +
+              '<span class="nexloyal-tier-badge">' + tierLabel + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="nexloyal-section-title">Your Loyalty Hub</div>' +
+          '<div class="nexloyal-list">' +
+            '<div class="nexloyal-row">' +
+              '<div class="nexloyal-row-left">' +
+            '<div class="nexloyal-row-icon">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                '<path d="M20 21a8 8 0 0 0-16 0"></path>' +
+                '<circle cx="12" cy="7" r="4"></circle>' +
+              '</svg>' +
+            '</div>' +
+                '<div>' +
+                  '<div class="nexloyal-row-title">Complete your profile</div>' +
+                  '<div class="nexloyal-row-sub">Unlock profile rewards</div>' +
+                '</div>' +
+              '</div>' +
+            '<div class="nexloyal-row-chevron">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                '<path d="M9 18l6-6-6-6"></path>' +
+              '</svg>' +
+            '</div>' +
+            '</div>' +
+            '<div class="nexloyal-row">' +
+              '<div class="nexloyal-row-left">' +
+                '<div class="nexloyal-row-icon">' +
+                  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                    '<rect x="3" y="8" width="18" height="4"></rect>' +
+                    '<path d="M12 8v13"></path>' +
+                    '<path d="M3 12h18"></path>' +
+                    '<path d="M7 8a2.5 2.5 0 0 1 0-5c2 0 3 2 5 5-2 0-3-0.5-5 0z"></path>' +
+                    '<path d="M17 8a2.5 2.5 0 0 0 0-5c-2 0-3 2-5 5 2 0 3-0.5 5 0z"></path>' +
+                  '</svg>' +
+                '</div>' +
+                '<div>' +
+                  '<div class="nexloyal-row-title">Redeem points</div>' +
+                  '<div class="nexloyal-row-sub">Use points for perks</div>' +
+                '</div>' +
+              '</div>' +
+              '<div class="nexloyal-row-chevron">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                  '<path d="M9 18l6-6-6-6"></path>' +
+                '</svg>' +
+              '</div>' +
+            '</div>' +
+            '<div class="nexloyal-row">' +
+              '<div class="nexloyal-row-left">' +
+                '<div class="nexloyal-row-icon">' +
+                  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                    '<path d="M8 2h8l4 4v16l-4-2-4 2-4-2-4 2V6z"></path>' +
+                    '<path d="M9 10h6"></path>' +
+                    '<path d="M9 14h6"></path>' +
+                  '</svg>' +
+                '</div>' +
+                '<div>' +
+                  '<div class="nexloyal-row-title">Point history</div>' +
+                  '<div class="nexloyal-row-sub">Track your activity</div>' +
+                '</div>' +
+              '</div>' +
+              '<div class="nexloyal-row-chevron">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                  '<path d="M9 18l6-6-6-6"></path>' +
+                '</svg>' +
+              '</div>' +
+            '</div>' +
+            '<div class="nexloyal-row">' +
+              '<div class="nexloyal-row-left">' +
+                '<div class="nexloyal-row-icon">' +
+                  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                    '<path d="M20.59 13.41L11 3H4v7l9.59 9.59a2 2 0 0 0 2.82 0l4.18-4.18a2 2 0 0 0 0-2.82z"></path>' +
+                    '<circle cx="7.5" cy="7.5" r="1.5"></circle>' +
+                  '</svg>' +
+                '</div>' +
+                '<div>' +
+                  '<div class="nexloyal-row-title">My coupons</div>' +
+                  '<div class="nexloyal-row-sub">Available reward codes</div>' +
+                '</div>' +
+              '</div>' +
+              '<div class="nexloyal-row-chevron">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                  '<path d="M9 18l6-6-6-6"></path>' +
+                '</svg>' +
+              '</div>' +
+            '</div>' +
+            '<div class="nexloyal-row">' +
+              '<div class="nexloyal-row-left">' +
+                '<div class="nexloyal-row-icon">' +
+                  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                    '<path d="M12 3l1.8 3.6L18 8l-3.6 1.8L12 14l-1.8-4.2L6 8l4.2-1.4L12 3z"></path>' +
+                  '</svg>' +
+                '</div>' +
+                '<div>' +
+                  '<div class="nexloyal-row-title">Earn points</div>' +
+                  '<div class="nexloyal-row-sub">Ways to earn more</div>' +
+                '</div>' +
+              '</div>' +
+              '<div class="nexloyal-row-chevron">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                  '<path d="M9 18l6-6-6-6"></path>' +
+                '</svg>' +
+              '</div>' +
+            '</div>' +
+            '<div class="nexloyal-row">' +
+              '<div class="nexloyal-row-left">' +
+                '<div class="nexloyal-row-icon">' +
+                  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                    '<rect x="3" y="3" width="18" height="18" rx="2"></rect>' +
+                    '<circle cx="8" cy="8" r="1"></circle>' +
+                    '<circle cx="16" cy="16" r="1"></circle>' +
+                    '<circle cx="8" cy="16" r="1"></circle>' +
+                    '<circle cx="16" cy="8" r="1"></circle>' +
+                  '</svg>' +
+                '</div>' +
+                '<div>' +
+                  '<div class="nexloyal-row-title">Mystery box</div>' +
+                  '<div class="nexloyal-row-sub">Surprise rewards</div>' +
+                '</div>' +
+              '</div>' +
+              '<div class="nexloyal-row-chevron">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                  '<path d="M9 18l6-6-6-6"></path>' +
+                '</svg>' +
+              '</div>' +
+            '</div>' +
+            '<div class="nexloyal-row">' +
+              '<div class="nexloyal-row-left">' +
+                '<div class="nexloyal-row-icon">' +
+                  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                    '<path d="M21 15a4 4 0 0 1-4 4H7l-4 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path>' +
+                  '</svg>' +
+                '</div>' +
+                '<div>' +
+                  '<div class="nexloyal-row-title">Exclusive chat</div>' +
+                  '<div class="nexloyal-row-sub">VIP support access</div>' +
+                '</div>' +
+              '</div>' +
+              '<div class="nexloyal-row-chevron">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                  '<path d="M9 18l6-6-6-6"></path>' +
+                '</svg>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="nexloyal-footer">' +
+          '<button type="button">Go to Loyalty Page</button>' +
+        '</div>';
+    }
+
+    function loadDashboard(token) {
+      var dataUrl = config.dataUrl + '?token=' + encodeURIComponent(token);
+      fetch(dataUrl, { method: 'GET', mode: 'cors' })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+          if (!data || typeof data.points === 'undefined') {
+            throw new Error('Data missing');
+          }
+          renderDashboard(data);
+        })
+        .catch(function() {
+          content.innerHTML = '<p>Unable to load your rewards right now. Please try again.</p>';
+        });
+    }
+
+    function renderLoggedIn(customer) {
+      content.innerHTML = '' +
+        '<div class="nexloyal-loading">' +
+          '<div class="nexloyal-spinner" aria-label="Loading"></div>' +
+        '</div>';
+
+      var tokenUrl = config.tokenUrl +
+        '?customer_id=' + encodeURIComponent(config.customerId || customer.id || '') +
+        '&email=' + encodeURIComponent(config.customerEmail || customer.email || '') +
+        '&shop_domain=' + encodeURIComponent(config.shopDomain);
+
+      fetch(tokenUrl, { method: 'GET', mode: 'cors' })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+          if (!data || !data.token) {
+            throw new Error('Token missing');
+          }
+          loadDashboard(data.token);
+        })
+        .catch(function() {
+          content.innerHTML = '<p>Unable to open the dashboard right now. Please try again.</p>';
+        });
+    }
+
+    trigger.addEventListener('click', function() {
+      openModal();
+      if (!config.customerId || !config.customerEmail) {
+        renderLoggedOut();
+        return;
+      }
+      renderLoggedIn(config.customer);
+    });
+
+    closeButton.addEventListener('click', closeModal);
+    modal.addEventListener('click', function(event) {
+      if (event.target === modal) {
+        closeModal();
+      }
+    });
+  })();
+</script>
