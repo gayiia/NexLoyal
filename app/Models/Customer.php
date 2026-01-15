@@ -20,11 +20,17 @@ class Customer extends Model
         'shopify_created_at',
         'loyalty_points',
         'tier_id',
+        'birthday',
+        'profile_completed_at',
+        'birthday_rewarded_at',
     ];
 
     protected $casts = [
         'shopify_created_at' => 'datetime',
         'loyalty_points' => 'integer',
+        'birthday' => 'date',
+        'profile_completed_at' => 'datetime',
+        'birthday_rewarded_at' => 'date',
     ];
 
     public function tier()

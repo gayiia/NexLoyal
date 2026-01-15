@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\PointRule;
 use App\Models\Tier;
 use App\Services\ShopifyCustomerService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -118,13 +120,110 @@ class LoyaltyWidgetController extends Controller
                 'email' => $customer->email,
                 'points' => $points,
                 'tier' => $tier?->title,
-                'total_spent' => (float) $customer->total_spent,
-                'currency' => $customer->currency,
+                'birthday' => $customer->birthday?->format('Y-m-d'),
             ])
         );
     }
 
     public function dataOptions(Request $request): Response
+    {
+        return $this->corsResponse($request, response()->noContent());
+    }
+
+    public function profile(Request $request): Response
+    {
+        $token = (string) $request->query('token', '');
+        [$customer, $error] = $this->customerFromToken($token);
+
+        if (!$customer) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => $error ?? 'Unauthorized.'], 401)
+            );
+        }
+
+        return $this->corsResponse(
+            $request,
+            response()->json([
+                'first_name' => $customer->first_name,
+                'last_name' => $customer->last_name,
+                'email' => $customer->email,
+                'birthday' => $customer->birthday?->format('Y-m-d'),
+            ])
+        );
+    }
+
+    public function updateProfile(Request $request): Response
+    {
+        $token = (string) $request->query('token', '');
+        [$customer, $error] = $this->customerFromToken($token);
+
+        if (!$customer) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => $error ?? 'Unauthorized.'], 401)
+            );
+        }
+
+        $validated = $request->validate([
+            'first_name' => ['nullable', 'string', 'max:100'],
+            'last_name' => ['nullable', 'string', 'max:100'],
+            'email' => ['required', 'email'],
+            'birthday' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
+        $customer->fill([
+            'first_name' => $validated['first_name'] ?? $customer->first_name,
+            'last_name' => $validated['last_name'] ?? $customer->last_name,
+            'email' => $validated['email'],
+            'birthday' => $validated['birthday'] ?? null,
+        ]);
+
+        $awardedProfilePoints = false;
+        $rule = $this->pointRule();
+        $profilePoints = (int) ($rule?->profile_completion_points ?? 0);
+
+        if (!$customer->profile_completed_at
+            && $customer->first_name
+            && $customer->last_name
+            && $customer->email
+            && $customer->birthday
+        ) {
+            if ($profilePoints > 0) {
+                $customer->loyalty_points += $profilePoints;
+                $awardedProfilePoints = true;
+            }
+            $customer->profile_completed_at = now();
+        }
+
+        $awardedBirthdayPoints = false;
+        $birthdayPoints = (int) ($rule?->birthday_points ?? 0);
+        if ($birthdayPoints > 0 && $customer->birthday) {
+            $today = now()->toDateString();
+            if ($customer->birthday->format('m-d') === now()->format('m-d')) {
+                $lastReward = $customer->birthday_rewarded_at?->format('Y');
+                if ($lastReward !== now()->format('Y')) {
+                    $customer->loyalty_points += $birthdayPoints;
+                    $customer->birthday_rewarded_at = $today;
+                    $awardedBirthdayPoints = true;
+                    $this->sendBirthdayEmail($customer, $birthdayPoints);
+                }
+            }
+        }
+
+        $customer->save();
+
+        return $this->corsResponse(
+            $request,
+            response()->json([
+                'message' => 'Profile updated.',
+                'awarded_profile_points' => $awardedProfilePoints,
+                'awarded_birthday_points' => $awardedBirthdayPoints,
+            ])
+        );
+    }
+
+    public function profileOptions(Request $request): Response
     {
         return $this->corsResponse($request, response()->noContent());
     }
@@ -174,13 +273,36 @@ class LoyaltyWidgetController extends Controller
 
         if ($origin) {
             $response->headers->set('Access-Control-Allow-Origin', $origin);
-            $response->headers->set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+            $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
             $response->headers->set('Access-Control-Allow-Headers', 'Content-Type, Accept');
             $response->headers->set('Access-Control-Max-Age', '600');
             $response->headers->set('Vary', 'Origin');
         }
 
         return $response;
+    }
+
+    private function pointRule(): PointRule
+    {
+        return PointRule::query()->firstOrCreate([], [
+            'birthday_points' => 0,
+            'profile_completion_points' => 0,
+        ]);
+    }
+
+    private function sendBirthdayEmail(Customer $customer, int $points): void
+    {
+        if (!$customer->email) {
+            return;
+        }
+
+        Mail::send('emails.birthday', [
+            'customer' => $customer,
+            'points' => $points,
+        ], function ($message) use ($customer): void {
+            $message->to($customer->email, $customer->full_name ?: $customer->email)
+                ->subject('Happy Birthday from NexLoyal');
+        });
     }
 
     private function allowedOrigin(Request $request): ?string

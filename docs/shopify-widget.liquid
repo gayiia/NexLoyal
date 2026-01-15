@@ -288,6 +288,36 @@
     font-weight: 600;
     cursor: pointer;
   }
+  .nexloyal-form {
+    display: grid;
+    gap: 12px;
+  }
+  .nexloyal-form label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: #94a3b8;
+    margin-bottom: 6px;
+    display: block;
+  }
+  .nexloyal-input {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: #0b1324;
+    color: #e2e8f0;
+    font-size: 13px;
+  }
+  .nexloyal-form-actions {
+    display: flex;
+    gap: 10px;
+  }
+  .nexloyal-secondary {
+    background: transparent;
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+  }
   .nexloyal-loading {
     display: flex;
     align-items: center;
@@ -306,7 +336,7 @@
   @keyframes nexloyal-spin {
     to { transform: rotate(360deg); }
   }
-  #nexloyal-content button {
+  #nexloyal-content button:not(.nexloyal-secondary) {
     background: linear-gradient(135deg, #0ea5e9, #38bdf8);
     color: #04111f;
     border: none;
@@ -403,7 +433,7 @@
           '</div>' +
           '<div class="nexloyal-section-title">Your Loyalty Hub</div>' +
           '<div class="nexloyal-list">' +
-            '<div class="nexloyal-row">' +
+            '<div class="nexloyal-row" data-action="profile">' +
               '<div class="nexloyal-row-left">' +
             '<div class="nexloyal-row-icon">' +
               '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -546,6 +576,13 @@
         '<div class="nexloyal-footer">' +
           '<button type="button">Go to Loyalty Page</button>' +
         '</div>';
+
+      var profileRow = content.querySelector('[data-action="profile"]');
+      if (profileRow) {
+        profileRow.addEventListener('click', function () {
+          renderProfileForm();
+        });
+      }
     }
 
     function loadDashboard(token) {
@@ -580,11 +617,92 @@
           if (!data || !data.token) {
             throw new Error('Token missing');
           }
+          config.currentToken = data.token;
           loadDashboard(data.token);
         })
         .catch(function() {
           content.innerHTML = '<p>Unable to open the dashboard right now. Please try again.</p>';
         });
+    }
+
+    function renderProfileForm() {
+      if (!config.currentToken) {
+        content.innerHTML = '<p>Missing token. Please reopen the widget.</p>';
+        return;
+      }
+
+      content.innerHTML = '' +
+        '<div class="nexloyal-dashboard">' +
+          '<div class="nexloyal-welcome">' +
+            '<h2>Complete your profile</h2>' +
+            '<p>Update your details to earn rewards.</p>' +
+          '</div>' +
+          '<form id="nexloyal-profile-form" class="nexloyal-form">' +
+            '<div>' +
+              '<label for="nexloyal-first-name">First name</label>' +
+              '<input id="nexloyal-first-name" class="nexloyal-input" type="text" name="first_name" autocomplete="given-name">' +
+            '</div>' +
+            '<div>' +
+              '<label for="nexloyal-last-name">Last name</label>' +
+              '<input id="nexloyal-last-name" class="nexloyal-input" type="text" name="last_name" autocomplete="family-name">' +
+            '</div>' +
+            '<div>' +
+              '<label for="nexloyal-email">Email</label>' +
+              '<input id="nexloyal-email" class="nexloyal-input" type="email" name="email" autocomplete="email" required>' +
+            '</div>' +
+            '<div>' +
+              '<label for="nexloyal-birthday">Birthday</label>' +
+              '<input id="nexloyal-birthday" class="nexloyal-input" type="date" name="birthday">' +
+            '</div>' +
+            '<div class="nexloyal-form-actions">' +
+              '<button type="submit">Save profile</button>' +
+              '<button type="button" id="nexloyal-profile-cancel" class="nexloyal-secondary">Back</button>' +
+            '</div>' +
+          '</form>' +
+        '</div>';
+
+      var profileUrl = config.dataUrl.replace('/loyalty/data', '/loyalty/profile') +
+        '?token=' + encodeURIComponent(config.currentToken);
+
+      fetch(profileUrl, { method: 'GET', mode: 'cors' })
+        .then(function(response) { return response.json(); })
+        .then(function(profile) {
+          document.getElementById('nexloyal-first-name').value = profile.first_name || '';
+          document.getElementById('nexloyal-last-name').value = profile.last_name || '';
+          document.getElementById('nexloyal-email').value = profile.email || '';
+          document.getElementById('nexloyal-birthday').value = profile.birthday || '';
+        });
+
+      document.getElementById('nexloyal-profile-cancel').addEventListener('click', function () {
+        loadDashboard(config.currentToken);
+      });
+
+      document.getElementById('nexloyal-profile-form').addEventListener('submit', function (event) {
+        event.preventDefault();
+        var payload = {
+          first_name: document.getElementById('nexloyal-first-name').value,
+          last_name: document.getElementById('nexloyal-last-name').value,
+          email: document.getElementById('nexloyal-email').value,
+          birthday: document.getElementById('nexloyal-birthday').value || null
+        };
+
+        fetch(profileUrl, {
+          method: 'POST',
+          mode: 'cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+          .then(function(response) { return response.json(); })
+          .then(function(data) {
+            if (!data || data.message !== 'Profile updated.') {
+              throw new Error('Profile update failed');
+            }
+            loadDashboard(config.currentToken);
+          })
+          .catch(function() {
+            content.innerHTML = '<p>Unable to save your profile right now. Please try again.</p>';
+          });
+      });
     }
 
     trigger.addEventListener('click', function() {
