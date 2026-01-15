@@ -78,6 +78,86 @@ Artisan::command('shopify:backfill-customers {--since_id=0}', function () {
     return 0;
 })->purpose('Backfill customers from Shopify Admin API');
 
+Artisan::command('shopify:sync-customers {--prune}', function () {
+    $shopDomain = config('services.shopify.shop_domain');
+    $token = config('services.shopify.admin_token');
+    $apiVersion = config('services.shopify.api_version');
+
+    if (!$shopDomain || !$token) {
+        $this->error('Missing Shopify credentials. Set SHOPIFY_SHOP_DOMAIN and SHOPIFY_ADMIN_TOKEN.');
+        return 1;
+    }
+
+    $baseUrl = "https://{$shopDomain}/admin/api/{$apiVersion}/customers.json";
+    $fields = 'id,first_name,last_name,email,phone,state,orders_count,total_spent,currency,created_at';
+    $nextUrl = "{$baseUrl}?limit=250&fields={$fields}";
+    $imported = 0;
+    $page = 0;
+    $shopifyIds = [];
+
+    $this->info('Starting Shopify customer sync...');
+
+    while ($nextUrl) {
+        $response = Http::withHeaders([
+            'X-Shopify-Access-Token' => $token,
+        ])->get($nextUrl);
+
+        if (!$response->ok()) {
+            $this->error("Shopify request failed ({$response->status()}): ".$response->body());
+            return 1;
+        }
+
+        $customers = $response->json('customers', []);
+        foreach ($customers as $customer) {
+            if (empty($customer['id'])) {
+                continue;
+            }
+
+            $shopifyIds[] = (string) $customer['id'];
+
+            Customer::updateOrCreate(
+                ['shopify_id' => (string) $customer['id']],
+                [
+                    'first_name' => $customer['first_name'] ?? null,
+                    'last_name' => $customer['last_name'] ?? null,
+                    'email' => $customer['email'] ?? null,
+                    'phone' => $customer['phone'] ?? null,
+                    'status' => $customer['state'] ?? null,
+                    'orders_count' => (int) ($customer['orders_count'] ?? 0),
+                    'total_spent' => (float) ($customer['total_spent'] ?? 0),
+                    'currency' => $customer['currency'] ?? null,
+                    'shopify_created_at' => $customer['created_at'] ?? null,
+                ]
+            );
+        }
+
+        $page++;
+        $imported += count($customers);
+        $this->info("Synced {$imported} customers (page {$page}).");
+
+        $nextUrl = null;
+        $linkHeader = $response->header('Link');
+        if ($linkHeader && preg_match('/<([^>]+)>;\\s*rel=\"next\"/', $linkHeader, $matches)) {
+            $nextUrl = $matches[1];
+        }
+    }
+
+    if ($this->option('prune')) {
+        if (count($shopifyIds) === 0) {
+            $this->warn('Skipping prune because no Shopify customers were fetched.');
+        } else {
+            $deleted = Customer::whereNotNull('shopify_id')
+                ->where('shopify_id', '!=', '')
+                ->whereNotIn('shopify_id', $shopifyIds)
+                ->delete();
+            $this->info("Pruned {$deleted} local customers not found in Shopify.");
+        }
+    }
+
+    $this->info("Sync complete. Total synced: {$imported}.");
+    return 0;
+})->purpose('Sync customers from Shopify and optionally prune locals');
+
 Artisan::command('shopify:register-webhooks', function () {
     $shopDomain = config('services.shopify.shop_domain');
     $token = config('services.shopify.admin_token');
@@ -94,7 +174,7 @@ Artisan::command('shopify:register-webhooks', function () {
         return 1;
     }
 
-    $topics = ['customers/create', 'customers/update'];
+    $topics = ['customers/create', 'customers/update', 'customers/delete'];
     $endpoint = "https://{$shopDomain}/admin/api/{$apiVersion}/webhooks.json";
 
     foreach ($topics as $topic) {

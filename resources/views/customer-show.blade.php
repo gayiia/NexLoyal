@@ -135,6 +135,10 @@
                                             <p class="text-xs text-slate-400">Status</p>
                                             <p class="text-slate-100">{{ $customer->status ?: '—' }}</p>
                                         </div>
+                                        <div>
+                                            <p class="text-xs text-slate-400">Birthday</p>
+                                            <p class="text-slate-100">{{ $customer->birthday ? $customer->birthday->format('M d, Y') : '—' }}</p>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">

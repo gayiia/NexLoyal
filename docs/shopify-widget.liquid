@@ -651,6 +651,10 @@
               '<input id="nexloyal-email" class="nexloyal-input" type="email" name="email" autocomplete="email" required>' +
             '</div>' +
             '<div>' +
+              '<label for="nexloyal-phone">Phone</label>' +
+              '<input id="nexloyal-phone" class="nexloyal-input" type="tel" name="phone" autocomplete="tel">' +
+            '</div>' +
+            '<div>' +
               '<label for="nexloyal-birthday">Birthday</label>' +
               '<input id="nexloyal-birthday" class="nexloyal-input" type="date" name="birthday">' +
             '</div>' +
@@ -666,12 +670,13 @@
 
       fetch(profileUrl, { method: 'GET', mode: 'cors' })
         .then(function(response) { return response.json(); })
-        .then(function(profile) {
-          document.getElementById('nexloyal-first-name').value = profile.first_name || '';
-          document.getElementById('nexloyal-last-name').value = profile.last_name || '';
-          document.getElementById('nexloyal-email').value = profile.email || '';
-          document.getElementById('nexloyal-birthday').value = profile.birthday || '';
-        });
+          .then(function(profile) {
+            document.getElementById('nexloyal-first-name').value = profile.first_name || '';
+            document.getElementById('nexloyal-last-name').value = profile.last_name || '';
+            document.getElementById('nexloyal-email').value = profile.email || '';
+            document.getElementById('nexloyal-phone').value = profile.phone || '';
+            document.getElementById('nexloyal-birthday').value = profile.birthday || '';
+          });
 
       document.getElementById('nexloyal-profile-cancel').addEventListener('click', function () {
         loadDashboard(config.currentToken);
@@ -683,6 +688,7 @@
           first_name: document.getElementById('nexloyal-first-name').value,
           last_name: document.getElementById('nexloyal-last-name').value,
           email: document.getElementById('nexloyal-email').value,
+          phone: document.getElementById('nexloyal-phone').value,
           birthday: document.getElementById('nexloyal-birthday').value || null
         };
 

@@ -24,13 +24,18 @@ class ShopifyWebhookController extends Controller
         }
 
         $topic = $request->header('X-Shopify-Topic');
-        if (!in_array($topic, ['customers/create', 'customers/update'], true)) {
+        if (!in_array($topic, ['customers/create', 'customers/update', 'customers/delete'], true)) {
             return response('Ignored', 202);
         }
 
         $data = json_decode($payload, true);
         if (!is_array($data) || empty($data['id'])) {
             return response('Invalid payload', 400);
+        }
+
+        if ($topic === 'customers/delete') {
+            Customer::where('shopify_id', (string) $data['id'])->delete();
+            return response('OK', 200);
         }
 
         Customer::updateOrCreate(

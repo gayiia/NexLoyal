@@ -148,12 +148,13 @@ class LoyaltyWidgetController extends Controller
                 'first_name' => $customer->first_name,
                 'last_name' => $customer->last_name,
                 'email' => $customer->email,
+                'phone' => $customer->phone,
                 'birthday' => $customer->birthday?->format('Y-m-d'),
             ])
         );
     }
 
-    public function updateProfile(Request $request): Response
+    public function updateProfile(Request $request, ShopifyCustomerService $shopify): Response
     {
         $token = (string) $request->query('token', '');
         [$customer, $error] = $this->customerFromToken($token);
@@ -170,14 +171,44 @@ class LoyaltyWidgetController extends Controller
             'last_name' => ['nullable', 'string', 'max:100'],
             'email' => ['required', 'email'],
             'birthday' => ['nullable', 'date_format:Y-m-d'],
+            'phone' => ['nullable', 'string', 'max:40'],
         ]);
 
-        $customer->fill([
+        $updates = [
             'first_name' => $validated['first_name'] ?? $customer->first_name,
             'last_name' => $validated['last_name'] ?? $customer->last_name,
             'email' => $validated['email'],
             'birthday' => $validated['birthday'] ?? null,
-        ]);
+            'phone' => $validated['phone'] ?? $customer->phone,
+        ];
+
+        if (array_key_exists('phone', $validated) && $updates['phone'] !== null) {
+            $updates['phone'] = trim((string) $updates['phone']);
+            if ($updates['phone'] === '') {
+                $updates['phone'] = null;
+            }
+        }
+
+        $shopifyPayload = [
+            'first_name' => $updates['first_name'],
+            'last_name' => $updates['last_name'],
+            'email' => $updates['email'],
+        ];
+
+        if (array_key_exists('phone', $validated)) {
+            $shopifyPayload['phone'] = $updates['phone'];
+        }
+
+        try {
+            $shopify->updateCustomer((string) $customer->shopify_id, $shopifyPayload);
+        } catch (\Throwable $exception) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => $exception->getMessage()], 502)
+            );
+        }
+
+        $customer->fill($updates);
 
         $awardedProfilePoints = false;
         $rule = $this->pointRule();
