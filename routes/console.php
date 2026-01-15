@@ -4,6 +4,9 @@ use App\Models\Customer;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schedule;
+use App\Models\PointRule;
+use Illuminate\Support\Facades\Mail;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -118,3 +121,49 @@ Artisan::command('shopify:register-webhooks', function () {
 
     return 0;
 })->purpose('Register Shopify customer webhooks');
+
+Artisan::command('loyalty:award-birthday', function () {
+    $rule = PointRule::query()->first();
+    $points = (int) ($rule?->birthday_points ?? 0);
+    if ($points <= 0) {
+        $this->info('Birthday points are not configured.');
+        return 0;
+    }
+
+    $today = now();
+    $monthDay = $today->format('m-d');
+
+    $customers = Customer::query()
+        ->whereNotNull('birthday')
+        ->whereRaw("DATE_FORMAT(birthday, '%m-%d') = ?", [$monthDay])
+        ->get();
+
+    $awarded = 0;
+    foreach ($customers as $customer) {
+        $lastYear = $customer->birthday_rewarded_at?->format('Y');
+        if ($lastYear === $today->format('Y')) {
+            continue;
+        }
+
+        $customer->loyalty_points += $points;
+        $customer->birthday_rewarded_at = $today->toDateString();
+        $customer->save();
+
+        if ($customer->email) {
+            Mail::send('emails.birthday', [
+                'customer' => $customer,
+                'points' => $points,
+            ], function ($message) use ($customer): void {
+                $message->to($customer->email, $customer->full_name ?: $customer->email)
+                    ->subject('Happy Birthday from NexLoyal');
+            });
+        }
+
+        $awarded++;
+    }
+
+    $this->info("Awarded birthday points to {$awarded} customers.");
+    return 0;
+})->purpose('Award birthday points and send birthday emails');
+
+Schedule::command('loyalty:award-birthday')->dailyAt('00:10');

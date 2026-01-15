@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Settings\PasswordController;
+use App\Http\Controllers\Settings\PointRuleController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\TierRuleController;
 use App\Http\Controllers\Settings\TwoFactorAuthenticationController;
@@ -23,9 +24,8 @@ Route::middleware('auth')->group(function () {
         return view('settings.appearance');
     })->name('appearance.edit');
 
-    Route::get('settings/point-rules', function () {
-        return view('settings.point-rules');
-    })->name('point-rules');
+    Route::get('settings/point-rules', [PointRuleController::class, 'edit'])->name('point-rules');
+    Route::post('settings/point-rules', [PointRuleController::class, 'update'])->name('point-rules.update');
 
     Route::get('settings/tier-rules', [TierRuleController::class, 'index'])->name('tier-rules');
     Route::post('settings/tier-rules', [TierRuleController::class, 'store'])->name('tier-rules.store');

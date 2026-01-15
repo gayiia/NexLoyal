@@ -3,11 +3,21 @@
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerGroupController;
 use App\Http\Controllers\CouponController;
+use App\Http\Controllers\LoyaltyWidgetController;
 use App\Http\Controllers\ShopifyWebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('webhooks/shopify/customers', [ShopifyWebhookController::class, 'handleCustomers'])
     ->name('webhooks.shopify.customers');
+
+Route::get('loyalty/token', [LoyaltyWidgetController::class, 'token'])->name('loyalty.token');
+Route::options('loyalty/token', [LoyaltyWidgetController::class, 'tokenOptions']);
+Route::get('loyalty/data', [LoyaltyWidgetController::class, 'data'])->name('loyalty.data');
+Route::options('loyalty/data', [LoyaltyWidgetController::class, 'dataOptions']);
+Route::get('loyalty/profile', [LoyaltyWidgetController::class, 'profile'])->name('loyalty.profile');
+Route::post('loyalty/profile', [LoyaltyWidgetController::class, 'updateProfile'])->name('loyalty.profile.update');
+Route::options('loyalty/profile', [LoyaltyWidgetController::class, 'profileOptions']);
+Route::get('loyalty/dashboard', [LoyaltyWidgetController::class, 'dashboard'])->name('loyalty.dashboard');
 
 Route::get('/', function () {
     return redirect()->route('login');
@@ -32,5 +42,3 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 require __DIR__.'/settings.php';
-
-
