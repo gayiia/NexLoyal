@@ -17,6 +17,12 @@ Route::options('loyalty/data', [LoyaltyWidgetController::class, 'dataOptions']);
 Route::get('loyalty/profile', [LoyaltyWidgetController::class, 'profile'])->name('loyalty.profile');
 Route::post('loyalty/profile', [LoyaltyWidgetController::class, 'updateProfile'])->name('loyalty.profile.update');
 Route::options('loyalty/profile', [LoyaltyWidgetController::class, 'profileOptions']);
+Route::get('loyalty/coupons', [LoyaltyWidgetController::class, 'coupons'])->name('loyalty.coupons');
+Route::options('loyalty/coupons', [LoyaltyWidgetController::class, 'couponsOptions']);
+Route::post('loyalty/coupons/{coupon}/redeem', [LoyaltyWidgetController::class, 'redeemCoupon'])
+    ->name('loyalty.coupons.redeem');
+Route::get('loyalty/my-coupons', [LoyaltyWidgetController::class, 'myCoupons'])->name('loyalty.my-coupons');
+Route::options('loyalty/my-coupons', [LoyaltyWidgetController::class, 'myCouponsOptions']);
 Route::get('loyalty/dashboard', [LoyaltyWidgetController::class, 'dashboard'])->name('loyalty.dashboard');
 
 Route::get('/', function () {

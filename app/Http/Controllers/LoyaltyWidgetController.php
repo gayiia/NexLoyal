@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Coupon;
 use App\Models\Customer;
+use App\Models\CustomerCoupon;
 use App\Models\PointRule;
 use App\Models\Tier;
 use App\Services\ShopifyCustomerService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
@@ -95,6 +98,7 @@ class LoyaltyWidgetController extends Controller
             'customer' => $customer,
             'points' => $points,
             'tier' => $tier,
+            'token' => $token,
         ]);
     }
 
@@ -257,6 +261,209 @@ class LoyaltyWidgetController extends Controller
     public function profileOptions(Request $request): Response
     {
         return $this->corsResponse($request, response()->noContent());
+    }
+
+    public function coupons(Request $request): Response
+    {
+        $token = (string) $request->query('token', '');
+        [$customer, $error] = $this->customerFromToken($token);
+
+        if (!$customer) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => $error ?? 'Unauthorized.'], 401)
+            );
+        }
+
+        $points = (int) ($customer->loyalty_points ?? 0);
+        $tier = $customer->tier ?? $this->resolveTier($points);
+        $today = now()->toDateString();
+
+        $coupons = Coupon::query()
+            ->where('status', 'active')
+            ->where(function ($query) use ($today) {
+                $query->whereNull('start_date')
+                    ->orWhere('start_date', '<=', $today);
+            })
+            ->where(function ($query) use ($today) {
+                $query->whereNull('end_date')
+                    ->orWhere('end_date', '>=', $today);
+            })
+            ->where(function ($query) use ($tier) {
+                if ($tier) {
+                    $query->whereNull('tier_id')
+                        ->orWhere('tier_id', $tier->id);
+                } else {
+                    $query->whereNull('tier_id');
+                }
+            })
+            ->orderBy('points_value')
+            ->get()
+            ->map(function (Coupon $coupon) {
+                return [
+                    'id' => $coupon->id,
+                    'title' => $coupon->title,
+                    'points_value' => (int) ($coupon->points_value ?? 0),
+                    'description' => (string) ($coupon->description ?? ''),
+                ];
+            })
+            ->values();
+
+        return $this->corsResponse(
+            $request,
+            response()->json([
+                'points' => $points,
+                'tier' => $tier?->title,
+                'coupons' => $coupons,
+            ])
+        );
+    }
+
+    public function couponsOptions(Request $request): Response
+    {
+        return $this->corsResponse($request, response()->noContent());
+    }
+
+    public function myCoupons(Request $request): Response
+    {
+        $token = (string) $request->query('token', '');
+        [$customer, $error] = $this->customerFromToken($token);
+
+        if (!$customer) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => $error ?? 'Unauthorized.'], 401)
+            );
+        }
+
+        $coupons = CustomerCoupon::query()
+            ->with('coupon')
+            ->where('customer_id', $customer->id)
+            ->orderByDesc('redeemed_at')
+            ->get()
+            ->map(function (CustomerCoupon $record) {
+                $couponTitle = $record->coupon?->title ?? 'Coupon';
+                return [
+                    'id' => $record->id,
+                    'title' => $couponTitle,
+                    'points_spent' => (int) ($record->points_spent ?? 0),
+                    'code' => $record->code,
+                    'redeemed_at' => optional($record->redeemed_at)->toIso8601String(),
+                    'used_at' => optional($record->used_at)->toIso8601String(),
+                ];
+            })
+            ->values();
+
+        return $this->corsResponse(
+            $request,
+            response()->json([
+                'coupons' => $coupons,
+            ])
+        );
+    }
+
+    public function myCouponsOptions(Request $request): Response
+    {
+        return $this->corsResponse($request, response()->noContent());
+    }
+
+    public function redeemCoupon(Request $request, Coupon $coupon): Response
+    {
+        $token = (string) $request->query('token', '');
+        [$customer, $error] = $this->customerFromToken($token);
+
+        if (!$customer) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => $error ?? 'Unauthorized.'], 401)
+            );
+        }
+
+        $today = now()->toDateString();
+        $pointsCost = (int) ($coupon->points_value ?? 0);
+        $tier = $customer->tier ?? $this->resolveTier((int) ($customer->loyalty_points ?? 0));
+        $tierId = $tier?->id;
+
+        if ($coupon->status !== 'active') {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => 'Coupon is not active.'], 422)
+            );
+        }
+
+        if ($coupon->start_date && $coupon->start_date->format('Y-m-d') > $today) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => 'Coupon is not available yet.'], 422)
+            );
+        }
+
+        if ($coupon->end_date && $coupon->end_date->format('Y-m-d') < $today) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => 'Coupon has expired.'], 422)
+            );
+        }
+
+        if ($coupon->tier_id && $coupon->tier_id !== $tierId) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => 'Coupon is not available for your tier.'], 403)
+            );
+        }
+
+        if (!$coupon->code) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => 'Coupon code is not available yet.'], 422)
+            );
+        }
+
+        $updated = DB::transaction(function () use ($customer, $pointsCost, $coupon) {
+            $lockedCustomer = Customer::query()
+                ->whereKey($customer->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$lockedCustomer) {
+                return [null, 'Customer not found.', null];
+            }
+
+            $currentPoints = (int) ($lockedCustomer->loyalty_points ?? 0);
+            if ($currentPoints < $pointsCost) {
+                return [null, 'Not enough points to redeem this coupon.', null];
+            }
+
+            $lockedCustomer->loyalty_points = $currentPoints - $pointsCost;
+            $lockedCustomer->save();
+
+            $record = CustomerCoupon::create([
+                'customer_id' => $lockedCustomer->id,
+                'coupon_id' => $coupon->id,
+                'points_spent' => $pointsCost,
+                'code' => $coupon->code,
+                'redeemed_at' => now(),
+            ]);
+
+            return [$lockedCustomer, null, $record];
+        });
+
+        [$updatedCustomer, $message] = $updated;
+        if (!$updatedCustomer) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => $message ?? 'Unable to redeem coupon.'], 422)
+            );
+        }
+
+        return $this->corsResponse(
+            $request,
+            response()->json([
+                'message' => 'Coupon redeemed.',
+                'code' => $coupon->code,
+                'points' => (int) ($updatedCustomer->loyalty_points ?? 0),
+            ])
+        );
     }
 
     private function resolveTier(int $points): ?Tier

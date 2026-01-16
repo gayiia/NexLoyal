@@ -318,6 +318,45 @@
     color: #94a3b8;
     border: 1px solid rgba(148, 163, 184, 0.25);
   }
+  .nexloyal-action {
+    background: transparent;
+    color: #e2e8f0;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .nexloyal-badge {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    color: #e2e8f0;
+  }
+  .nexloyal-badge.is-used {
+    color: #fda4af;
+    border-color: rgba(252, 165, 165, 0.45);
+  }
+  .nexloyal-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .nexloyal-code {
+    font-family: "Courier New", Courier, monospace;
+    background: #0b1324;
+    border: 1px dashed rgba(148, 163, 184, 0.35);
+    color: #e2e8f0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    text-align: center;
+    letter-spacing: 0.16em;
+    font-weight: 700;
+  }
   .nexloyal-loading {
     display: flex;
     align-items: center;
@@ -346,6 +385,14 @@
     cursor: pointer;
     width: 100%;
   }
+  #nexloyal-content button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  .nexloyal-error {
+    color: #fca5a5;
+    font-size: 13px;
+  }
   @media (max-width: 600px) {
     #nexloyal-widget {
       right: 16px;
@@ -372,8 +419,10 @@
       customerEmail: {{ customer.email | json }},
       shopDomain: "{{ shop.domain }}",
       loginUrl: "{{ routes.account_login_url }}",
-      tokenUrl: "https://wednesday-letter-documentation-diving.trycloudflare.com/loyalty/token",
-      dataUrl: "https://wednesday-letter-documentation-diving.trycloudflare.com/loyalty/data"
+      tokenUrl: "https://comp-minority-lbs-facility.trycloudflare.com/loyalty/token",
+      dataUrl: "https://comp-minority-lbs-facility.trycloudflare.com/loyalty/data",
+      couponsUrl: "https://comp-minority-lbs-facility.trycloudflare.com/loyalty/coupons",
+      myCouponsUrl: "https://comp-minority-lbs-facility.trycloudflare.com/loyalty/my-coupons"
     };
 
     var trigger = document.getElementById('nexloyal-trigger');
@@ -452,7 +501,7 @@
               '</svg>' +
             '</div>' +
             '</div>' +
-            '<div class="nexloyal-row">' +
+            '<div class="nexloyal-row" data-action="redeem">' +
               '<div class="nexloyal-row-left">' +
                 '<div class="nexloyal-row-icon">' +
                   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -474,7 +523,7 @@
                 '</svg>' +
               '</div>' +
             '</div>' +
-            '<div class="nexloyal-row">' +
+            '<div class="nexloyal-row" data-action="my-coupons">' +
               '<div class="nexloyal-row-left">' +
                 '<div class="nexloyal-row-icon">' +
                   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -484,8 +533,8 @@
                   '</svg>' +
                 '</div>' +
                 '<div>' +
-                  '<div class="nexloyal-row-title">Point history</div>' +
-                  '<div class="nexloyal-row-sub">Track your activity</div>' +
+                  '<div class="nexloyal-row-title">My coupons</div>' +
+                  '<div class="nexloyal-row-sub">View redeemed rewards</div>' +
                 '</div>' +
               '</div>' +
               '<div class="nexloyal-row-chevron">' +
@@ -581,6 +630,18 @@
       if (profileRow) {
         profileRow.addEventListener('click', function () {
           renderProfileForm();
+        });
+      }
+      var redeemRow = content.querySelector('[data-action="redeem"]');
+      if (redeemRow) {
+        redeemRow.addEventListener('click', function () {
+          renderCouponsList();
+        });
+      }
+      var myCouponsRow = content.querySelector('[data-action="my-coupons"]');
+      if (myCouponsRow) {
+        myCouponsRow.addEventListener('click', function () {
+          renderMyCouponsList();
         });
       }
     }
@@ -707,6 +768,309 @@
           })
           .catch(function() {
             content.innerHTML = '<p>Unable to save your profile right now. Please try again.</p>';
+        });
+      });
+    }
+
+    function getCouponsUrl() {
+      return config.couponsUrl + '?token=' + encodeURIComponent(config.currentToken);
+    }
+
+    function getRedeemUrl(couponId) {
+      return config.couponsUrl + '/' + encodeURIComponent(couponId) + '/redeem?token=' + encodeURIComponent(config.currentToken);
+    }
+
+    function getMyCouponsUrl() {
+      return config.myCouponsUrl + '?token=' + encodeURIComponent(config.currentToken);
+    }
+
+    function copyToClipboard(text, button) {
+      if (!text) {
+        return;
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () {
+          if (button) {
+            button.textContent = 'Copied';
+          }
+        });
+        return;
+      }
+
+      var tempInput = document.createElement('input');
+      tempInput.value = text;
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      document.execCommand('copy');
+      document.body.removeChild(tempInput);
+      if (button) {
+        button.textContent = 'Copied';
+      }
+    }
+
+    function renderMyCouponsList() {
+      if (!config.currentToken) {
+        content.innerHTML = '<p>Missing token. Please reopen the widget.</p>';
+        return;
+      }
+
+      content.innerHTML = '' +
+        '<div class="nexloyal-dashboard">' +
+          '<div class="nexloyal-welcome">' +
+            '<h2>My coupons</h2>' +
+            '<p>Your redeemed rewards.</p>' +
+          '</div>' +
+          '<div id="nexloyal-my-coupon-list" class="nexloyal-list"></div>' +
+          '<div class="nexloyal-form-actions">' +
+            '<button type="button" id="nexloyal-my-coupon-back" class="nexloyal-secondary">Back</button>' +
+          '</div>' +
+        '</div>';
+
+      document.getElementById('nexloyal-my-coupon-back').addEventListener('click', function () {
+        loadDashboard(config.currentToken);
+      });
+
+      var listEl = document.getElementById('nexloyal-my-coupon-list');
+      listEl.innerHTML = '<div class="nexloyal-loading"><div class="nexloyal-spinner" aria-label="Loading"></div></div>';
+
+      fetch(getMyCouponsUrl(), { method: 'GET', mode: 'cors' })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+          if (!data || !Array.isArray(data.coupons)) {
+            throw new Error('My coupon data missing');
+          }
+
+          if (!data.coupons.length) {
+            listEl.innerHTML = '<div class="nexloyal-muted">No redeemed coupons yet.</div>';
+            return;
+          }
+
+          var couponIndex = {};
+          var rows = data.coupons.map(function (coupon) {
+            couponIndex[coupon.id] = coupon;
+            var statusLabel = coupon.used_at ? 'Used' : 'Unused';
+            var statusClass = coupon.used_at ? 'nexloyal-badge is-used' : 'nexloyal-badge';
+            return '' +
+              '<div class="nexloyal-row" data-coupon-id="' + coupon.id + '">' +
+                '<div>' +
+                  '<div class="nexloyal-row-title">' + coupon.title + '</div>' +
+                  '<div class="nexloyal-row-sub">' + coupon.points_spent + ' points</div>' +
+                '</div>' +
+                '<div class="nexloyal-row-actions">' +
+                  '<span class="' + statusClass + '">' + statusLabel + '</span>' +
+                  '<button type="button" class="nexloyal-action" data-view-my-coupon="' + coupon.id + '">View</button>' +
+                '</div>' +
+              '</div>';
+          }).join('');
+
+          config.myCouponIndex = couponIndex;
+          listEl.innerHTML = rows;
+
+          listEl.querySelectorAll('[data-view-my-coupon]').forEach(function (button) {
+            button.addEventListener('click', function () {
+              var couponId = button.getAttribute('data-view-my-coupon');
+              renderMyCouponDetail(config.myCouponIndex ? config.myCouponIndex[couponId] : null);
+            });
+          });
+        })
+        .catch(function() {
+          listEl.innerHTML = '<div class="nexloyal-error">Unable to load coupons right now. Please try again.</div>';
+        });
+    }
+
+    function renderMyCouponDetail(coupon) {
+      if (!coupon) {
+        renderMyCouponsList();
+        return;
+      }
+
+      var statusLabel = coupon.used_at ? 'Used' : 'Unused';
+      var statusClass = coupon.used_at ? 'nexloyal-badge is-used' : 'nexloyal-badge';
+      var codeLabel = coupon.code || 'Code unavailable';
+
+      content.innerHTML = '' +
+        '<div class="nexloyal-dashboard">' +
+          '<div class="nexloyal-welcome">' +
+            '<h2>' + coupon.title + '</h2>' +
+            '<p>Redeemed for ' + coupon.points_spent + ' points.</p>' +
+          '</div>' +
+          '<div class="nexloyal-card">' +
+            '<div class="' + statusClass + '">' + statusLabel + '</div>' +
+            '<div class="nexloyal-code" style="margin-top:12px;">' + codeLabel + '</div>' +
+          '</div>' +
+          '<div class="nexloyal-form-actions">' +
+            '<button type="button" id="nexloyal-copy-code"' + (coupon.code ? '' : ' disabled') + '>Copy code</button>' +
+            '<button type="button" id="nexloyal-my-coupon-back" class="nexloyal-secondary">Back</button>' +
+          '</div>' +
+        '</div>';
+
+      document.getElementById('nexloyal-my-coupon-back').addEventListener('click', function () {
+        renderMyCouponsList();
+      });
+
+      var copyButton = document.getElementById('nexloyal-copy-code');
+      if (copyButton) {
+        copyButton.addEventListener('click', function () {
+          copyToClipboard(coupon.code, copyButton);
+        });
+      }
+    }
+
+    function renderCouponsList() {
+      if (!config.currentToken) {
+        content.innerHTML = '<p>Missing token. Please reopen the widget.</p>';
+        return;
+      }
+
+      content.innerHTML = '' +
+        '<div class="nexloyal-dashboard">' +
+          '<div class="nexloyal-welcome">' +
+            '<h2>Redeem points</h2>' +
+            '<p>Choose a reward to spend your points.</p>' +
+          '</div>' +
+          '<div class="nexloyal-muted">You have <span id="nexloyal-coupon-points">0</span> points.</div>' +
+          '<div id="nexloyal-coupon-list" class="nexloyal-list"></div>' +
+          '<div class="nexloyal-form-actions">' +
+            '<button type="button" id="nexloyal-coupon-back" class="nexloyal-secondary">Back</button>' +
+          '</div>' +
+        '</div>';
+
+      document.getElementById('nexloyal-coupon-back').addEventListener('click', function () {
+        loadDashboard(config.currentToken);
+      });
+
+      var listEl = document.getElementById('nexloyal-coupon-list');
+      listEl.innerHTML = '<div class="nexloyal-loading"><div class="nexloyal-spinner" aria-label="Loading"></div></div>';
+
+      fetch(getCouponsUrl(), { method: 'GET', mode: 'cors' })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+          if (!data || !Array.isArray(data.coupons)) {
+            throw new Error('Coupon data missing');
+          }
+
+          config.currentPoints = data.points || 0;
+          var pointsEl = document.getElementById('nexloyal-coupon-points');
+          if (pointsEl) {
+            pointsEl.textContent = config.currentPoints;
+          }
+
+          if (!data.coupons.length) {
+            listEl.innerHTML = '<div class="nexloyal-muted">No coupons available for your tier right now.</div>';
+            return;
+          }
+
+          var couponIndex = {};
+          var rows = data.coupons.map(function (coupon) {
+            couponIndex[coupon.id] = coupon;
+            return '' +
+              '<div class="nexloyal-row" data-coupon-id="' + coupon.id + '">' +
+                '<div>' +
+                  '<div class="nexloyal-row-title">' + coupon.title + '</div>' +
+                  '<div class="nexloyal-row-sub">' + coupon.points_value + ' points</div>' +
+                '</div>' +
+                '<div class="nexloyal-row-actions">' +
+                  '<button type="button" class="nexloyal-action" data-view-coupon="' + coupon.id + '">View</button>' +
+                '</div>' +
+              '</div>';
+          }).join('');
+
+          config.couponIndex = couponIndex;
+          listEl.innerHTML = rows;
+
+          listEl.querySelectorAll('[data-view-coupon]').forEach(function (button) {
+            button.addEventListener('click', function () {
+              var couponId = button.getAttribute('data-view-coupon');
+              renderCouponDetail(config.couponIndex ? config.couponIndex[couponId] : null);
+            });
+          });
+        })
+        .catch(function() {
+          listEl.innerHTML = '<div class="nexloyal-error">Unable to load coupons right now. Please try again.</div>';
+        });
+    }
+
+    function renderCouponDetail(coupon) {
+      if (!coupon) {
+        renderCouponsList();
+        return;
+      }
+
+      var pointsCost = coupon.points_value || 0;
+      var remainingPoints = typeof config.currentPoints === 'number' ? config.currentPoints : 0;
+      var canRedeem = remainingPoints >= pointsCost;
+
+      content.innerHTML = '' +
+        '<div class="nexloyal-dashboard">' +
+          '<div class="nexloyal-welcome">' +
+            '<h2>' + coupon.title + '</h2>' +
+            '<p>Redeem for ' + pointsCost + ' points.</p>' +
+          '</div>' +
+          '<div class="nexloyal-card">' +
+            '<h4>About this coupon</h4>' +
+            '<p>' + (coupon.description || 'No description available.') + '</p>' +
+            '<div class="nexloyal-muted">You have ' + remainingPoints + ' points.</div>' +
+          '</div>' +
+          '<div id="nexloyal-redeem-error" class="nexloyal-error"></div>' +
+          '<div class="nexloyal-form-actions">' +
+            '<button type="button" id="nexloyal-redeem-button"' + (canRedeem ? '' : ' disabled') + '>Redeem for ' + pointsCost + ' points</button>' +
+            '<button type="button" id="nexloyal-redeem-back" class="nexloyal-secondary">Back</button>' +
+          '</div>' +
+        '</div>';
+
+      document.getElementById('nexloyal-redeem-back').addEventListener('click', function () {
+        renderCouponsList();
+      });
+
+      var redeemButton = document.getElementById('nexloyal-redeem-button');
+      redeemButton.addEventListener('click', function () {
+        if (redeemButton.disabled) {
+          return;
+        }
+
+        redeemButton.disabled = true;
+        redeemButton.textContent = 'Redeeming...';
+
+        fetch(getRedeemUrl(coupon.id), { method: 'POST', mode: 'cors' })
+          .then(function(response) { return response.json(); })
+          .then(function(data) {
+            if (!data || !data.code) {
+              throw new Error((data && data.message) || 'Redeem failed');
+            }
+
+            config.currentPoints = data.points || 0;
+            content.innerHTML = '' +
+              '<div class="nexloyal-dashboard">' +
+                '<div class="nexloyal-welcome">' +
+                  '<h2>Coupon unlocked</h2>' +
+                  '<p>Use this code at checkout.</p>' +
+                '</div>' +
+                '<div class="nexloyal-card">' +
+                  '<h4>' + coupon.title + '</h4>' +
+                  '<div class="nexloyal-code">' + data.code + '</div>' +
+                  '<p class="nexloyal-muted" style="margin-top:12px;">Remaining points: ' + config.currentPoints + '</p>' +
+                '</div>' +
+                '<div class="nexloyal-form-actions">' +
+                  '<button type="button" id="nexloyal-coupon-more">View more coupons</button>' +
+                  '<button type="button" id="nexloyal-coupon-done" class="nexloyal-secondary">Back to rewards</button>' +
+                '</div>' +
+              '</div>';
+
+            document.getElementById('nexloyal-coupon-more').addEventListener('click', function () {
+              renderCouponsList();
+            });
+            document.getElementById('nexloyal-coupon-done').addEventListener('click', function () {
+              loadDashboard(config.currentToken);
+            });
+          })
+          .catch(function(error) {
+            var errorEl = document.getElementById('nexloyal-redeem-error');
+            if (errorEl) {
+              errorEl.textContent = error.message || 'Unable to redeem this coupon. Please try again.';
+            }
+            redeemButton.disabled = false;
+            redeemButton.textContent = 'Redeem for ' + pointsCost + ' points';
           });
       });
     }
