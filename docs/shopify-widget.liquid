@@ -518,6 +518,81 @@
     letter-spacing: 0.16em;
     font-weight: 700;
   }
+  .nexloyal-chat-card {
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 14px;
+    padding: 16px;
+    background: #0f172a;
+    display: grid;
+    gap: 10px;
+  }
+  .nexloyal-chat-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #e2e8f0;
+  }
+  .nexloyal-chat-body {
+    font-size: 13px;
+    color: #cbd5f5;
+  }
+  .nexloyal-chat-meta {
+    font-size: 11px;
+    color: #94a3b8;
+  }
+  .nexloyal-chat-images {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .nexloyal-chat-image {
+    border-radius: 10px;
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+    cursor: pointer;
+  }
+  .nexloyal-poll-options {
+    display: grid;
+    gap: 8px;
+  }
+  .nexloyal-poll-option {
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    border-radius: 10px;
+    padding: 8px 12px;
+    background: transparent;
+    color: #e2e8f0;
+    font-size: 13px;
+    cursor: pointer;
+    text-align: left;
+  }
+  .nexloyal-poll-option.is-selected {
+    border-color: rgba(56, 189, 248, 0.7);
+    background: rgba(56, 189, 248, 0.15);
+    color: #e2e8f0;
+  }
+  .nexloyal-poll-option:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .nexloyal-lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 6, 23, 0.78);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2147483647;
+    padding: 24px;
+  }
+  .nexloyal-lightbox.is-open {
+    display: flex;
+  }
+  .nexloyal-lightbox img {
+    max-width: min(92vw, 520px);
+    max-height: 70vh;
+    border-radius: 16px;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+  }
   .nexloyal-loading {
     display: flex;
     align-items: center;
@@ -588,16 +663,18 @@
       customerEmail: {{ customer.email | json }},
       shopDomain: "{{ shop.domain }}",
       loginUrl: "{{ routes.account_login_url }}",
-      tokenUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/loyalty/token",
-      dataUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/loyalty/data",
-      couponsUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/loyalty/coupons",
-      myCouponsUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/loyalty/my-coupons",
-      earnRulesUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/api/widget/earn/rules",
-      earnStatusUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/api/widget/earn/status",
-      earnSocialUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/api/widget/earn/social",
-      mysteryBoxActiveUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/api/widget/mystery-box/active",
-      mysteryBoxClaimUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/api/widget/mystery-box",
-      pointsHistoryUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/api/widget/points/history"
+      tokenUrl: "https://result-positioning-radios-fireplace.trycloudflare.com/loyalty/token",
+      dataUrl: "https://result-positioning-radios-fireplace.trycloudflare.com/loyalty/data",
+      couponsUrl: "https://result-positioning-radios-fireplace.trycloudflare.com/loyalty/coupons",
+      myCouponsUrl: "https://result-positioning-radios-fireplace.trycloudflare.com/loyalty/my-coupons",
+      earnRulesUrl: "https://result-positioning-radios-fireplace.trycloudflare.com/api/widget/earn/rules",
+      earnStatusUrl: "https://result-positioning-radios-fireplace.trycloudflare.com/api/widget/earn/status",
+      earnSocialUrl: "https://result-positioning-radios-fireplace.trycloudflare.com/api/widget/earn/social",
+      mysteryBoxActiveUrl: "https://result-positioning-radios-fireplace.trycloudflare.com/api/widget/mystery-box/active",
+      mysteryBoxClaimUrl: "https://result-positioning-radios-fireplace.trycloudflare.com/api/widget/mystery-box",
+      chatMessagesUrl: "https://result-positioning-radios-fireplace.trycloudflare.com/api/widget/chat/messages",
+      chatVoteUrl: "https://result-positioning-radios-fireplace.trycloudflare.com/api/widget/chat/polls",
+      pointsHistoryUrl: "https://result-positioning-radios-fireplace.trycloudflare.com/api/widget/points/history"
     };
 
     var trigger = document.getElementById('nexloyal-trigger');
@@ -780,7 +857,7 @@
                 '</svg>' +
               '</div>' +
             '</div>' +
-            '<div class="nexloyal-row">' +
+            '<div class="nexloyal-row" data-action="chat">' +
               '<div class="nexloyal-row-left">' +
                 '<div class="nexloyal-row-icon">' +
                   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -839,6 +916,13 @@
         mysteryRow.addEventListener('click', function () {
           renderMysteryBox();
         });
+      }
+      var chatRow = content.querySelector('[data-action="chat"]');
+      if (chatRow) {
+        chatRow.addEventListener('click', function () {
+          renderChat();
+        });
+        checkChatEligibility(chatRow);
       }
     }
 
@@ -1010,6 +1094,16 @@
       return config.mysteryBoxClaimUrl + '/' + encodeURIComponent(boxId) + '/claim?token=' + encodeURIComponent(config.currentToken);
     }
 
+    function getChatMessagesUrl(cursor, limit) {
+      var query = cursor ? ('&cursor=' + encodeURIComponent(cursor)) : '';
+      var limitQuery = limit ? ('&limit=' + encodeURIComponent(limit)) : '';
+      return config.chatMessagesUrl + '?token=' + encodeURIComponent(config.currentToken) + query + limitQuery;
+    }
+
+    function getChatVoteUrl(pollId) {
+      return config.chatVoteUrl + '/' + encodeURIComponent(pollId) + '/vote?token=' + encodeURIComponent(config.currentToken);
+    }
+
     function parseJsonResponse(response) {
       return response.text().then(function (text) {
         if (!text) {
@@ -1132,6 +1226,22 @@
           toast.parentElement.removeChild(toast);
         }
       }, 2200);
+    }
+
+    function checkChatEligibility(row) {
+      if (!row || !config.currentToken) {
+        return;
+      }
+
+      fetch(getChatMessagesUrl(null, 1), { method: 'GET', mode: 'cors' })
+        .then(function(response) { return response.json(); })
+        .then(function(payload) {
+          var meta = payload && payload.meta ? payload.meta : {};
+          if (meta.enabled === false || meta.allowed === false) {
+            row.style.display = 'none';
+          }
+        })
+        .catch(function() {});
     }
 
     function renderEarnPoints() {
@@ -1492,6 +1602,199 @@
         })
         .catch(function() {
           content.innerHTML = '<p>Unable to load Mystery Box right now. Please try again.</p>';
+        });
+    }
+
+    function renderChat() {
+      if (!config.currentToken) {
+        content.innerHTML = '<p>Missing token. Please reopen the widget.</p>';
+        return;
+      }
+
+      content.innerHTML = '' +
+        '<div class="nexloyal-loading">' +
+          '<div class="nexloyal-spinner" aria-label="Loading"></div>' +
+        '</div>';
+
+      fetch(getChatMessagesUrl(), { method: 'GET', mode: 'cors' })
+        .then(function(response) { return response.json(); })
+        .then(function(payload) {
+          var meta = payload && payload.meta ? payload.meta : {};
+          if (meta.enabled === false || meta.allowed === false) {
+            content.innerHTML = '' +
+              '<div class="nexloyal-dashboard">' +
+                '<div class="nexloyal-welcome">' +
+                  '<h2>Exclusive Chat</h2>' +
+                  '<p>This channel is available to select tiers only.</p>' +
+                '</div>' +
+                '<div class="nexloyal-form-actions">' +
+                  '<button type="button" id="nexloyal-chat-back" class="nexloyal-secondary">Back</button>' +
+                '</div>' +
+              '</div>';
+            document.getElementById('nexloyal-chat-back').addEventListener('click', function () {
+              loadDashboard(config.currentToken);
+            });
+            return;
+          }
+
+          var messages = payload && Array.isArray(payload.data) ? payload.data : [];
+          if (!messages.length) {
+            content.innerHTML = '' +
+              '<div class="nexloyal-dashboard">' +
+                '<div class="nexloyal-welcome">' +
+                  '<h2>Exclusive Chat</h2>' +
+                  '<p>No updates yet. Check back soon.</p>' +
+                '</div>' +
+                '<div class="nexloyal-form-actions">' +
+                  '<button type="button" id="nexloyal-chat-back" class="nexloyal-secondary">Back</button>' +
+                '</div>' +
+              '</div>';
+            document.getElementById('nexloyal-chat-back').addEventListener('click', function () {
+              loadDashboard(config.currentToken);
+            });
+            return;
+          }
+
+          var cards = messages.map(function (message) {
+            var sentAt = message.sent_at ? new Date(message.sent_at) : null;
+            var sentLabel = sentAt && !isNaN(sentAt.getTime()) ? sentAt.toISOString().replace('T', ' ').slice(0, 16) : '';
+            var images = Array.isArray(message.attachments) ? message.attachments.filter(function (item) { return item.url; }) : [];
+            var imagesHtml = images.length
+              ? '<div class="nexloyal-chat-images">' +
+                  images.map(function (item) {
+                    return '<img class="nexloyal-chat-image" src="' + item.url + '" data-chat-image="' + item.url + '" alt="Chat image">';
+                  }).join('') +
+                '</div>'
+              : '';
+
+            var pollHtml = '';
+            if (message.poll && message.poll.options) {
+              var poll = message.poll;
+              var closed = poll.closes_at ? (new Date(poll.closes_at) < new Date()) : false;
+              var myVote = poll.my_vote_option_id;
+              var myVoteLabel = '';
+              if (myVote) {
+                poll.options.forEach(function (option) {
+                  if (option.id === myVote) {
+                    myVoteLabel = option.label;
+                  }
+                });
+              }
+              var statusLabel = closed
+                ? 'Poll closed'
+                : (myVote ? ('You voted: ' + myVoteLabel) : 'Cast your vote');
+
+              var optionsHtml = poll.options.map(function (option) {
+                var isSelected = myVote && option.id === myVote;
+                var disabled = myVote || closed;
+                return '' +
+                  '<button type="button" class="nexloyal-poll-option' + (isSelected ? ' is-selected' : '') + '"' +
+                    ' data-poll-id="' + poll.poll_id + '"' +
+                    ' data-option-id="' + option.id + '"' +
+                    (disabled ? ' disabled' : '') +
+                  '>' + option.label + '</button>';
+              }).join('');
+
+              pollHtml = '' +
+                '<div class="nexloyal-chat-meta" data-poll-status="' + poll.poll_id + '">' + statusLabel + '</div>' +
+                '<div class="nexloyal-poll-options" data-poll-container="' + poll.poll_id + '">' + optionsHtml + '</div>';
+            }
+
+            return '' +
+              '<div class="nexloyal-chat-card">' +
+                (message.title ? '<div class="nexloyal-chat-title">' + message.title + '</div>' : '') +
+                '<div class="nexloyal-chat-body">' + (message.body || '') + '</div>' +
+                imagesHtml +
+                pollHtml +
+                (sentLabel ? '<div class="nexloyal-chat-meta">' + sentLabel + '</div>' : '') +
+              '</div>';
+          }).join('');
+
+          content.innerHTML = '' +
+            '<div class="nexloyal-dashboard">' +
+              '<div class="nexloyal-welcome">' +
+                '<h2>Exclusive Chat</h2>' +
+                '<p>Updates from the store team.</p>' +
+              '</div>' +
+              '<div class="nexloyal-list">' + cards + '</div>' +
+              '<div class="nexloyal-form-actions">' +
+                '<button type="button" id="nexloyal-chat-back" class="nexloyal-secondary">Back</button>' +
+              '</div>' +
+            '</div>' +
+            '<div id="nexloyal-lightbox" class="nexloyal-lightbox" aria-hidden="true">' +
+              '<img id="nexloyal-lightbox-img" alt="Preview">' +
+            '</div>';
+
+          document.getElementById('nexloyal-chat-back').addEventListener('click', function () {
+            loadDashboard(config.currentToken);
+          });
+
+          var lightbox = document.getElementById('nexloyal-lightbox');
+          var lightboxImg = document.getElementById('nexloyal-lightbox-img');
+          if (lightbox && lightboxImg) {
+            content.querySelectorAll('[data-chat-image]').forEach(function (img) {
+              img.addEventListener('click', function () {
+                var url = img.getAttribute('data-chat-image');
+                if (url) {
+                  lightboxImg.src = url;
+                  lightbox.classList.add('is-open');
+                  lightbox.setAttribute('aria-hidden', 'false');
+                }
+              });
+            });
+
+            lightbox.addEventListener('click', function () {
+              lightbox.classList.remove('is-open');
+              lightbox.setAttribute('aria-hidden', 'true');
+            });
+          }
+
+          content.querySelectorAll('[data-poll-id][data-option-id]').forEach(function (button) {
+            if (button.disabled) {
+              return;
+            }
+            button.addEventListener('click', function () {
+              var pollId = button.getAttribute('data-poll-id');
+              var optionId = button.getAttribute('data-option-id');
+              if (!pollId || !optionId) {
+                return;
+              }
+
+              fetch(getChatVoteUrl(pollId), {
+                method: 'POST',
+                mode: 'cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ option_id: Number(optionId) })
+              })
+                .then(function(response) { return response.json(); })
+                .then(function(result) {
+                  if (!result || !result.success) {
+                    showToast((result && result.message) ? result.message : 'Unable to vote right now');
+                    return;
+                  }
+
+                  var container = content.querySelector('[data-poll-container="' + pollId + '"]');
+                  var status = content.querySelector('[data-poll-status="' + pollId + '"]');
+                  if (container) {
+                    container.querySelectorAll('button').forEach(function (optionButton) {
+                      optionButton.disabled = true;
+                      if (optionButton.getAttribute('data-option-id') === String(result.my_vote_option_id)) {
+                        optionButton.classList.add('is-selected');
+                        if (status) {
+                          status.textContent = 'You voted: ' + optionButton.textContent;
+                        }
+                      }
+                    });
+                  }
+                })
+                .catch(function() {
+                  showToast('Unable to vote right now');
+                });
+            });
+          });
+        })
+        .catch(function() {
+          content.innerHTML = '<p>Unable to load chat right now. Please try again.</p>';
         });
     }
 

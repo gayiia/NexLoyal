@@ -458,13 +458,18 @@
                                                         <td class="px-4 py-4 text-slate-300">{{ $coupon->tier?->title ?? 'All tiers' }}</td>
                                                         <td class="px-4 py-4 text-slate-300">{{ optional($coupon->start_date)->format('Y-m-d') }}</td>
                                                         <td class="px-4 py-4 text-slate-300">{{ optional($coupon->end_date)->format('Y-m-d') }}</td>
-                                                        <td class="px-4 py-4">
-                                                            @php
-                                                                $statusLabel = $statusLabels[$coupon->status] ?? $coupon->status;
-                                                                $statusClass = $statusClasses[$coupon->status] ?? 'bg-slate-500/20 text-slate-200';
-                                                            @endphp
-                                                            <span class="nl-badge {{ $statusClass }}">{{ $statusLabel }}</span>
-                                                        </td>
+                                                          <td class="px-4 py-4">
+                                                              @php
+                                                                  if ($coupon->is_mystery_box_coupon) {
+                                                                      $statusLabel = 'Mystery Box';
+                                                                      $statusClass = 'bg-cyan-500/20 text-cyan-200';
+                                                                  } else {
+                                                                      $statusLabel = $statusLabels[$coupon->status] ?? $coupon->status;
+                                                                      $statusClass = $statusClasses[$coupon->status] ?? 'bg-slate-500/20 text-slate-200';
+                                                                  }
+                                                              @endphp
+                                                              <span class="nl-badge {{ $statusClass }}">{{ $statusLabel }}</span>
+                                                          </td>
                                                         <td class="px-4 py-4">
                                                             <div class="relative inline-flex">
                                                                 <button class="nl-action-trigger" type="button" data-action-toggle>

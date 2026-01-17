@@ -8,6 +8,10 @@
         request()->routeIs('customer-groups') ||
         request()->routeIs('tier-rules') ||
         request()->routeIs('point-rules');
+    $isNotifications =
+        request()->routeIs('exclusive-chat') ||
+        request()->routeIs('exclusive-chat.settings') ||
+        request()->routeIs('exclusive-chat.view');
 @endphp
 
 <aside class="w-72 border-r border-slate-800/70 bg-slate-950/80 px-5 py-6 text-slate-100 nl-panel">
@@ -54,10 +58,15 @@
             <span>Mystery Box</span>
             <span class="text-xs text-slate-500 nl-text-muted">Coupons</span>
         </a>
-        <a href="#" class="flex items-center justify-between rounded-lg border border-transparent px-3 py-2 text-slate-300 transition hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
-            <span>Notifications</span>
-            <span class="text-xs text-slate-500 nl-text-muted">Engage</span>
-        </a>
+        <details class="group" @if($isNotifications) open @endif>
+            <summary class="flex cursor-pointer items-center justify-between rounded-lg border border-transparent px-3 py-2 text-slate-300 transition hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
+                <span>Notifications</span>
+                <span class="text-xs text-slate-500 nl-text-muted">Engage</span>
+            </summary>
+            <div class="mt-2 space-y-1 pl-3 text-xs">
+                <a href="{{ route('exclusive-chat') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Exclusive Chat</a>
+            </div>
+        </details>
         <div>
             <button id="settings-toggle"
                     type="button"

@@ -3,6 +3,8 @@
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerGroupController;
 use App\Http\Controllers\CouponController;
+use App\Http\Controllers\ExclusiveChatAdminApiController;
+use App\Http\Controllers\ExclusiveChatController;
 use App\Http\Controllers\LoyaltyWidgetController;
 use App\Http\Controllers\MysteryBoxController;
 use App\Http\Controllers\ShopifyWebhookController;
@@ -58,6 +60,11 @@ Route::get('api/widget/mystery-box/active', [LoyaltyWidgetController::class, 'my
 Route::post('api/widget/mystery-box/{mysteryBox}/claim', [LoyaltyWidgetController::class, 'mysteryBoxClaim'])
     ->name('widget.mystery-box.claim');
 Route::options('api/widget/mystery-box/{mysteryBox}/claim', [LoyaltyWidgetController::class, 'mysteryBoxClaimOptions']);
+Route::get('api/widget/chat/messages', [LoyaltyWidgetController::class, 'chatMessages'])
+    ->name('widget.chat.messages');
+Route::post('api/widget/chat/polls/{poll}/vote', [LoyaltyWidgetController::class, 'chatPollVote'])
+    ->name('widget.chat.polls.vote');
+Route::options('api/widget/chat/polls/{poll}/vote', [LoyaltyWidgetController::class, 'chatPollVoteOptions']);
 Route::get('api/widget/points/history', [LoyaltyWidgetController::class, 'pointsHistory'])
     ->name('widget.points.history');
 
@@ -94,6 +101,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('coupons/mystery-box/{mysteryBox}/activate', [MysteryBoxController::class, 'activate'])->name('mystery-boxes.activate');
     Route::patch('coupons/mystery-box/{mysteryBox}/deactivate', [MysteryBoxController::class, 'deactivate'])->name('mystery-boxes.deactivate');
     Route::delete('coupons/mystery-box/{mysteryBox}', [MysteryBoxController::class, 'destroy'])->name('mystery-boxes.destroy');
+
+    Route::prefix('admin/notifications/exclusive-chat')->group(function () {
+        Route::get('/', [ExclusiveChatController::class, 'index'])->name('exclusive-chat');
+        Route::post('messages', [ExclusiveChatController::class, 'storeMessage'])->name('exclusive-chat.messages.store');
+        Route::get('settings', [ExclusiveChatController::class, 'settings'])->name('exclusive-chat.settings');
+        Route::post('settings', [ExclusiveChatController::class, 'updateSettings'])->name('exclusive-chat.settings.update');
+        Route::get('{message}/view', [ExclusiveChatController::class, 'view'])->name('exclusive-chat.view');
+        Route::delete('{message}', [ExclusiveChatController::class, 'destroy'])->name('exclusive-chat.destroy');
+    });
+
+    Route::prefix('admin/api/chat')->group(function () {
+        Route::get('polls/{poll}/analytics', [ExclusiveChatAdminApiController::class, 'analytics'])
+            ->name('exclusive-chat.polls.analytics');
+        Route::get('polls/{poll}/options/{option}/voters', [ExclusiveChatAdminApiController::class, 'voters'])
+            ->name('exclusive-chat.polls.voters');
+    });
 });
 
 require __DIR__.'/settings.php';

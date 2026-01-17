@@ -3,6 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Coupon;
+use App\Models\ChatMessage;
+use App\Models\ChatPoll;
+use App\Models\ChatPollVote;
+use App\Models\ChatSetting;
 use App\Models\Customer;
 use App\Models\CustomerCoupon;
 use App\Models\MysteryBox;
@@ -1084,6 +1088,237 @@ class LoyaltyWidgetController extends Controller
                 ],
             ])
         );
+    }
+
+    public function chatMessages(Request $request): Response
+    {
+        $token = (string) $request->query('token', '');
+        [$customer, $error] = $this->customerFromToken($token);
+
+        if (!$customer) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => $error ?? 'Unauthorized.'], 401)
+            );
+        }
+
+        $settings = ChatSetting::firstOrCreate(
+            ['store_id' => null],
+            ['enabled' => false, 'allowed_tiers' => []]
+        );
+
+        if (!$settings->enabled) {
+            return $this->corsResponse(
+                $request,
+                response()->json([
+                    'data' => [],
+                    'meta' => ['enabled' => false, 'allowed' => false],
+                ])
+            );
+        }
+
+        $points = (int) ($customer->loyalty_points ?? 0);
+        $tier = $customer->tier ?? $this->resolveTier($points);
+        $tierId = (int) ($tier?->id ?? 0);
+
+        $allowedTiers = array_map('intval', $settings->allowed_tiers ?? []);
+        if (!$tierId || ($allowedTiers && !in_array($tierId, $allowedTiers, true))) {
+            return $this->corsResponse(
+                $request,
+                response()->json([
+                    'data' => [],
+                    'meta' => ['enabled' => true, 'allowed' => false],
+                ])
+            );
+        }
+
+        $limit = (int) $request->query('limit', 30);
+        $limit = $limit > 0 ? min($limit, 50) : 30;
+        $cursor = (int) $request->query('cursor', 0);
+
+        $query = ChatMessage::query()
+            ->whereNotNull('sent_at')
+            ->where(function ($query) use ($tierId) {
+                $query->whereNull('tier_visibility')
+                    ->orWhereJsonLength('tier_visibility', 0)
+                    ->orWhereJsonContains('tier_visibility', $tierId);
+            })
+            ->orderByDesc('sent_at')
+            ->orderByDesc('id');
+
+        if ($cursor > 0) {
+            $query->where('id', '<', $cursor);
+        }
+
+        $messages = $query->with(['attachments', 'poll.options'])->limit($limit)->get();
+        $pollIds = $messages->pluck('poll.id')->filter()->values()->all();
+
+        $votes = [];
+        if ($pollIds) {
+            $votes = ChatPollVote::query()
+                ->where('customer_id', $customer->id)
+                ->whereIn('chat_poll_id', $pollIds)
+                ->get()
+                ->keyBy('chat_poll_id');
+        }
+
+        $data = $messages->map(function (ChatMessage $message) use ($votes) {
+            $payload = [
+                'id' => $message->id,
+                'type' => $message->type,
+                'title' => $message->title,
+                'body' => $message->body,
+                'sent_at' => $message->sent_at?->toIso8601String(),
+                'attachments' => $message->attachments
+                    ->map(function ($attachment) {
+                        return [
+                            'url' => $attachment->resolved_url,
+                            'type' => $attachment->file_type,
+                        ];
+                    })
+                    ->filter(function ($attachment) {
+                        return !empty($attachment['url']);
+                    })
+                    ->values(),
+            ];
+
+            if ($message->poll) {
+                $vote = $votes[$message->poll->id] ?? null;
+                $payload['poll'] = [
+                    'poll_id' => $message->poll->id,
+                    'closes_at' => $message->poll->closes_at?->toIso8601String(),
+                    'options' => $message->poll->options->map(function ($option) {
+                        return [
+                            'id' => $option->id,
+                            'label' => $option->label,
+                        ];
+                    })->values(),
+                    'my_vote_option_id' => $vote?->option_id,
+                ];
+            }
+
+            return $payload;
+        })->values();
+
+        $nextCursor = $messages->count() === $limit ? $messages->last()?->id : null;
+
+        return $this->corsResponse(
+            $request,
+            response()->json([
+                'data' => $data,
+                'meta' => [
+                    'next_cursor' => $nextCursor,
+                    'enabled' => true,
+                    'allowed' => true,
+                ],
+            ])
+        );
+    }
+
+    public function chatPollVote(Request $request, ChatPoll $poll): Response
+    {
+        $token = (string) $request->query('token', '');
+        [$customer, $error] = $this->customerFromToken($token);
+
+        if (!$customer) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => $error ?? 'Unauthorized.'], 401)
+            );
+        }
+
+        $validated = $request->validate([
+            'option_id' => ['required', 'integer', 'exists:chat_poll_options,id'],
+        ]);
+
+        $poll->load('message');
+        if (!$poll->message) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => 'Poll not found.'], 404)
+            );
+        }
+
+        $settings = ChatSetting::firstOrCreate(
+            ['store_id' => null],
+            ['enabled' => false, 'allowed_tiers' => []]
+        );
+        if (!$settings->enabled) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => 'Chat is disabled.'], 403)
+            );
+        }
+
+        $points = (int) ($customer->loyalty_points ?? 0);
+        $tier = $customer->tier ?? $this->resolveTier($points);
+        $tierId = (int) ($tier?->id ?? 0);
+        $allowedTiers = array_map('intval', $settings->allowed_tiers ?? []);
+        if (!$tierId || ($allowedTiers && !in_array($tierId, $allowedTiers, true))) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => 'Not eligible.'], 403)
+            );
+        }
+
+        $visibility = array_map('intval', $poll->message->tier_visibility ?? []);
+        if ($visibility && !in_array($tierId, $visibility, true)) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => 'Not eligible.'], 403)
+            );
+        }
+
+        if ($poll->closes_at && $poll->closes_at->isPast()) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => 'Poll closed.'], 422)
+            );
+        }
+
+        $existing = ChatPollVote::query()
+            ->where('chat_poll_id', $poll->id)
+            ->where('customer_id', $customer->id)
+            ->first();
+
+        if ($existing) {
+            return $this->corsResponse(
+                $request,
+                response()->json([
+                    'success' => true,
+                    'my_vote_option_id' => (int) $existing->option_id,
+                ])
+            );
+        }
+
+        $optionId = (int) $validated['option_id'];
+        if (!$poll->options()->where('id', $optionId)->exists()) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => 'Invalid option.'], 422)
+            );
+        }
+
+        ChatPollVote::create([
+            'store_id' => null,
+            'chat_poll_id' => $poll->id,
+            'option_id' => $optionId,
+            'customer_id' => $customer->id,
+            'voted_at' => now(),
+        ]);
+
+        return $this->corsResponse(
+            $request,
+            response()->json([
+                'success' => true,
+                'my_vote_option_id' => $optionId,
+            ])
+        );
+    }
+
+    public function chatPollVoteOptions(Request $request): Response
+    {
+        return $this->corsResponse($request, response()->noContent());
     }
 
     private function sendBirthdayEmail(Customer $customer, int $points): void
