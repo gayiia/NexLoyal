@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\Coupon;
 use App\Models\Customer;
 use App\Models\CustomerCoupon;
+use App\Models\PointsTransaction;
 use App\Models\PointRule;
 use App\Models\Tier;
 use App\Services\ShopifyCustomerService;
 use App\Services\ShopifyDiscountService;
+use App\Support\PointsHistoryFormatter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -59,6 +61,8 @@ class LoyaltyWidgetController extends Controller
                 'shopify_created_at' => $shopifyCustomer['created_at'] ?? null,
             ]
         );
+
+        $this->awardWelcomePoints($customer);
 
         $expiresAt = now()->addMinutes(30);
         $payload = [
@@ -117,6 +121,7 @@ class LoyaltyWidgetController extends Controller
         }
 
         $points = (int) ($customer->loyalty_points ?? 0);
+        $pendingPoints = (int) ($customer->points_pending ?? 0);
         $tier = $customer->tier ?? $this->resolveTier($points);
 
         return $this->corsResponse(
@@ -125,6 +130,7 @@ class LoyaltyWidgetController extends Controller
                 'name' => $customer->full_name ?: 'Customer',
                 'email' => $customer->email,
                 'points' => $points,
+                'points_pending' => $pendingPoints,
                 'tier' => $tier?->title,
                 'birthday' => $customer->birthday?->format('Y-m-d'),
             ])
@@ -229,6 +235,16 @@ class LoyaltyWidgetController extends Controller
             if ($profilePoints > 0) {
                 $customer->loyalty_points += $profilePoints;
                 $awardedProfilePoints = true;
+                PointsTransaction::create([
+                    'customer_id' => $customer->id,
+                    'points' => $profilePoints,
+                    'status' => 'APPROVED',
+                    'source' => 'RULE',
+                    'source_type' => 'PROFILE',
+                    'type' => 'EARN',
+                    'event_key' => 'profile_completion',
+                    'reason' => 'Profile completed',
+                ]);
             }
             $customer->profile_completed_at = now();
         }
@@ -243,6 +259,16 @@ class LoyaltyWidgetController extends Controller
                     $customer->loyalty_points += $birthdayPoints;
                     $customer->birthday_rewarded_at = $today;
                     $awardedBirthdayPoints = true;
+                    PointsTransaction::create([
+                        'customer_id' => $customer->id,
+                        'points' => $birthdayPoints,
+                        'status' => 'APPROVED',
+                        'source' => 'RULE',
+                        'source_type' => 'BIRTHDAY',
+                        'type' => 'EARN',
+                        'event_key' => 'birthday_reward:'.now()->format('Y'),
+                        'reason' => 'Birthday reward',
+                    ]);
                     $this->sendBirthdayEmail($customer, $birthdayPoints);
                 }
             }
@@ -361,6 +387,11 @@ class LoyaltyWidgetController extends Controller
         return $this->corsResponse($request, response()->noContent());
     }
 
+    public function earnSocialOptions(Request $request): Response
+    {
+        return $this->corsResponse($request, response()->noContent());
+    }
+
     public function redeemCoupon(Request $request, Coupon $coupon, ShopifyDiscountService $shopifyDiscounts): Response
     {
         $token = (string) $request->query('token', '');
@@ -447,6 +478,23 @@ class LoyaltyWidgetController extends Controller
                 'status' => 'active',
                 'redeemed_at' => now(),
                 'expires_at' => $coupon->end_date,
+            ]);
+
+            PointsTransaction::create([
+                'customer_id' => $lockedCustomer->id,
+                'points' => $pointsCost,
+                'status' => 'APPROVED',
+                'source' => 'COUPON',
+                'source_type' => 'COUPON',
+                'type' => 'SPEND',
+                'event_key' => 'coupon_redeem:'.$record->id,
+                'reason' => 'Coupon redeemed',
+                'reference_type' => 'CustomerCoupon',
+                'reference_id' => (string) $record->id,
+                'meta' => [
+                    'coupon_title' => $coupon->title,
+                    'coupon_id' => $coupon->id,
+                ],
             ]);
 
             return [$lockedCustomer, null, $record];
@@ -584,9 +632,278 @@ class LoyaltyWidgetController extends Controller
     private function pointRule(): PointRule
     {
         return PointRule::query()->firstOrCreate([], [
+            'welcome_points' => 0,
             'birthday_points' => 0,
             'profile_completion_points' => 0,
+            'amount_per_point' => 100,
         ]);
+    }
+
+    private function awardWelcomePoints(Customer $customer): void
+    {
+        $rule = $this->pointRule();
+        $points = (int) ($rule->welcome_points ?? 0);
+        if ($points <= 0) {
+            return;
+        }
+
+        DB::transaction(function () use ($customer, $points): void {
+            $lockedCustomer = Customer::query()
+                ->whereKey($customer->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$lockedCustomer) {
+                return;
+            }
+
+            $exists = PointsTransaction::query()
+                ->where('customer_id', $lockedCustomer->id)
+                ->where('event_key', 'welcome_bonus')
+                ->exists();
+
+            if ($exists) {
+                return;
+            }
+
+            PointsTransaction::create([
+                'customer_id' => $lockedCustomer->id,
+                'points' => $points,
+                'status' => 'APPROVED',
+                'source' => 'RULE',
+                'source_type' => 'REGISTER',
+                'type' => 'EARN',
+                'event_key' => 'welcome_bonus',
+                'reason' => 'Welcome bonus',
+            ]);
+
+            $lockedCustomer->loyalty_points = (int) ($lockedCustomer->loyalty_points ?? 0) + $points;
+            $lockedCustomer->save();
+        });
+    }
+
+    public function earnRules(Request $request): Response
+    {
+        $rule = $this->pointRule();
+
+        return $this->corsResponse(
+            $request,
+            response()->json([
+                'general' => [
+                    'welcome_points' => (int) ($rule->welcome_points ?? 0),
+                    'birthday_points' => (int) ($rule->birthday_points ?? 0),
+                    'profile_completion_points' => (int) ($rule->profile_completion_points ?? 0),
+                    'amount_per_point' => (int) ($rule->amount_per_point ?? 100),
+                ],
+                'social' => [
+                    'linkedin' => [
+                        'url' => (string) ($rule->social_linkedin_url ?? ''),
+                        'points' => (int) ($rule->social_linkedin_points ?? 0),
+                    ],
+                    'tiktok' => [
+                        'url' => (string) ($rule->social_tiktok_url ?? ''),
+                        'points' => (int) ($rule->social_tiktok_points ?? 0),
+                    ],
+                    'facebook' => [
+                        'url' => (string) ($rule->social_facebook_url ?? ''),
+                        'points' => (int) ($rule->social_facebook_points ?? 0),
+                    ],
+                    'x' => [
+                        'url' => (string) ($rule->social_x_url ?? ''),
+                        'points' => (int) ($rule->social_x_points ?? 0),
+                    ],
+                    'instagram' => [
+                        'url' => (string) ($rule->social_instagram_url ?? ''),
+                        'points' => (int) ($rule->social_instagram_points ?? 0),
+                    ],
+                    'youtube' => [
+                        'url' => (string) ($rule->social_youtube_url ?? ''),
+                        'points' => (int) ($rule->social_youtube_points ?? 0),
+                    ],
+                ],
+            ])
+        );
+    }
+
+    public function earnStatus(Request $request): Response
+    {
+        $token = (string) $request->query('token', '');
+        [$customer, $error] = $this->customerFromToken($token);
+
+        if (!$customer) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => $error ?? 'Unauthorized.'], 401)
+            );
+        }
+
+        $socialPlatforms = ['linkedin', 'tiktok', 'facebook', 'x', 'instagram', 'youtube'];
+        $socialAwarded = [];
+        foreach ($socialPlatforms as $platform) {
+            $eventKey = "social:{$platform}";
+            $socialAwarded[$platform] = PointsTransaction::query()
+                ->where('customer_id', $customer->id)
+                ->where('event_key', $eventKey)
+                ->exists();
+        }
+
+        $welcomeAwarded = PointsTransaction::query()
+            ->where('customer_id', $customer->id)
+            ->where('event_key', 'welcome_bonus')
+            ->exists();
+
+        $birthdayAwarded = false;
+        if ($customer->birthday_rewarded_at) {
+            $birthdayAwarded = $customer->birthday_rewarded_at->format('Y') === now()->format('Y');
+        }
+
+        return $this->corsResponse(
+            $request,
+            response()->json([
+                'welcome_awarded' => $welcomeAwarded,
+                'birthday_awarded_this_year' => $birthdayAwarded,
+                'profile_completion_awarded' => (bool) $customer->profile_completed_at,
+                'social_awarded' => $socialAwarded,
+                'points_available' => (int) ($customer->loyalty_points ?? 0),
+                'points_pending' => (int) ($customer->points_pending ?? 0),
+            ])
+        );
+    }
+
+    public function earnSocial(Request $request): Response
+    {
+        $token = (string) $request->query('token', '');
+        [$customer, $error] = $this->customerFromToken($token);
+
+        if (!$customer) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => $error ?? 'Unauthorized.'], 401)
+            );
+        }
+
+        $validated = $request->validate([
+            'platform' => ['required', 'in:linkedin,tiktok,facebook,x,instagram,youtube'],
+        ]);
+
+        $rule = $this->pointRule();
+        $platform = $validated['platform'];
+
+        $platformConfig = [
+            'linkedin' => ['url' => $rule->social_linkedin_url, 'points' => $rule->social_linkedin_points],
+            'tiktok' => ['url' => $rule->social_tiktok_url, 'points' => $rule->social_tiktok_points],
+            'facebook' => ['url' => $rule->social_facebook_url, 'points' => $rule->social_facebook_points],
+            'x' => ['url' => $rule->social_x_url, 'points' => $rule->social_x_points],
+            'instagram' => ['url' => $rule->social_instagram_url, 'points' => $rule->social_instagram_points],
+            'youtube' => ['url' => $rule->social_youtube_url, 'points' => $rule->social_youtube_points],
+        ];
+
+        $config = $platformConfig[$platform] ?? null;
+        $points = (int) ($config['points'] ?? 0);
+        $url = trim((string) ($config['url'] ?? ''));
+
+        if ($points <= 0 || $url === '') {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => 'Reward not configured.'], 422)
+            );
+        }
+
+        $eventKey = "social:{$platform}";
+
+        $awarded = false;
+        DB::transaction(function () use ($customer, $eventKey, $points, $platform, &$awarded) {
+            $lockedCustomer = Customer::query()
+                ->whereKey($customer->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$lockedCustomer) {
+                return;
+            }
+
+            $exists = PointsTransaction::query()
+                ->where('customer_id', $lockedCustomer->id)
+                ->where('event_key', $eventKey)
+                ->exists();
+
+            if ($exists) {
+                return;
+            }
+
+            PointsTransaction::create([
+                'customer_id' => $lockedCustomer->id,
+                'points' => $points,
+                'status' => 'APPROVED',
+                'source' => 'RULE',
+                'source_type' => 'SOCIAL',
+                'type' => 'EARN',
+                'event_key' => $eventKey,
+                'reason' => "Social reward: {$platform}",
+                'meta' => [
+                    'platform' => ucfirst($platform),
+                ],
+            ]);
+
+            $lockedCustomer->loyalty_points += $points;
+            $lockedCustomer->save();
+            $awarded = true;
+        });
+
+        $customer->refresh();
+
+        return $this->corsResponse(
+            $request,
+            response()->json([
+                'awarded' => $awarded,
+                'points' => (int) ($customer->loyalty_points ?? 0),
+                'pending_points' => (int) ($customer->points_pending ?? 0),
+            ])
+        );
+    }
+
+    public function pointsHistory(Request $request): Response
+    {
+        $token = (string) $request->query('token', '');
+        [$customer, $error] = $this->customerFromToken($token);
+
+        if (!$customer) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => $error ?? 'Unauthorized.'], 401)
+            );
+        }
+
+        $filter = strtolower((string) $request->query('filter', 'all'));
+        $perPage = (int) $request->query('per_page', 20);
+        $perPage = $perPage > 0 ? min($perPage, 50) : 20;
+
+        $query = PointsTransaction::query()
+            ->where('customer_id', $customer->id)
+            ->orderByDesc('created_at');
+
+        if ($filter === 'earned') {
+            $query->where('type', 'EARN');
+        } elseif ($filter === 'redeemed') {
+            $query->where('type', 'SPEND');
+        }
+
+        $paginator = $query->paginate($perPage)->withQueryString();
+        $data = $paginator->getCollection()->map(function (PointsTransaction $transaction) {
+            return PointsHistoryFormatter::format($transaction);
+        })->values();
+
+        return $this->corsResponse(
+            $request,
+            response()->json([
+                'data' => $data,
+                'meta' => [
+                    'page' => $paginator->currentPage(),
+                    'per_page' => $paginator->perPage(),
+                    'has_more' => $paginator->hasMorePages(),
+                ],
+            ])
+        );
     }
 
     private function sendBirthdayEmail(Customer $customer, int $points): void

@@ -144,7 +144,17 @@
                                                 <p class="nl-row-title">Welcome bonus points</p>
                                                 <p class="nl-row-help">Granted when a customer joins.</p>
                                             </div>
-                                            <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" min="0" placeholder="100">
+                                            <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="welcome_points" min="0" value="{{ old('welcome_points', $rule->welcome_points ?? 0) }}" placeholder="100" required>
+                                        </div>
+                                        <div class="nl-row grid gap-3 sm:grid-cols-[220px_1fr] sm:items-center">
+                                            <div>
+                                                <p class="nl-row-title">Earning rate</p>
+                                                <p class="nl-row-help">Customer earns 1 point for every (Rs).</p>
+                                            </div>
+                                            <div class="space-y-1">
+                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="amount_per_point" min="1" value="{{ old('amount_per_point', $rule->amount_per_point ?? 100) }}" placeholder="100" required>
+                                                <p class="text-[11px] text-slate-400">Example: 100 means 1 point per Rs 100 spent.</p>
+                                            </div>
                                         </div>
                                         <div class="nl-row grid gap-3 sm:grid-cols-[220px_1fr] sm:items-center">
                                             <div>
@@ -165,14 +175,14 @@
                                                 <p class="nl-row-title">Newsletter sign up points</p>
                                                 <p class="nl-row-help">One-time reward on signup.</p>
                                             </div>
-                                            <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" min="0" placeholder="50">
+                                            <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" min="0" placeholder="50" disabled>
                                         </div>
                                         <div class="nl-row grid gap-3 sm:grid-cols-[220px_1fr] sm:items-center">
                                             <div>
                                                 <p class="nl-row-title">Newsletter sign up link</p>
                                                 <p class="nl-row-help">Where customers opt in.</p>
                                             </div>
-                                            <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" placeholder="https://yourbrand.com/newsletter">
+                                            <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" placeholder="https://yourbrand.com/newsletter" disabled>
                                         </div>
                                         <div class="flex items-center justify-end pb-2">
                                             <button type="submit" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900">
@@ -188,7 +198,8 @@
                                         <p class="text-xs text-slate-400">Add the profile links customers should visit and the points earned once per platform.</p>
                                     </div>
 
-                                    <div class="space-y-3 px-6 py-4">
+                                    <form method="POST" action="{{ route('point-rules.update') }}" class="space-y-3 px-6 py-4">
+                                        @csrf
                                         <div class="nl-row grid gap-3 sm:grid-cols-[140px_1fr_120px] sm:items-center">
                                             <div>
                                                 <p class="nl-row-title">LinkedIn</p>
@@ -196,11 +207,11 @@
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Link</label>
-                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" placeholder="https://linkedin.com/company/yourbrand">
+                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" name="social_linkedin_url" value="{{ old('social_linkedin_url', $rule->social_linkedin_url ?? '') }}" placeholder="https://linkedin.com/company/yourbrand">
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Points</label>
-                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" min="0" placeholder="25">
+                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="social_linkedin_points" min="0" value="{{ old('social_linkedin_points', $rule->social_linkedin_points ?? 0) }}" placeholder="25">
                                             </div>
                                         </div>
                                         <div class="nl-row grid gap-3 sm:grid-cols-[140px_1fr_120px] sm:items-center">
@@ -210,11 +221,11 @@
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Link</label>
-                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" placeholder="https://www.tiktok.com/@yourbrand">
+                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" name="social_tiktok_url" value="{{ old('social_tiktok_url', $rule->social_tiktok_url ?? '') }}" placeholder="https://www.tiktok.com/@yourbrand">
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Points</label>
-                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" min="0" placeholder="30">
+                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="social_tiktok_points" min="0" value="{{ old('social_tiktok_points', $rule->social_tiktok_points ?? 0) }}" placeholder="30">
                                             </div>
                                         </div>
                                         <div class="nl-row grid gap-3 sm:grid-cols-[140px_1fr_120px] sm:items-center">
@@ -224,11 +235,11 @@
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Link</label>
-                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" placeholder="https://facebook.com/yourbrand">
+                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" name="social_facebook_url" value="{{ old('social_facebook_url', $rule->social_facebook_url ?? '') }}" placeholder="https://facebook.com/yourbrand">
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Points</label>
-                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" min="0" placeholder="20">
+                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="social_facebook_points" min="0" value="{{ old('social_facebook_points', $rule->social_facebook_points ?? 0) }}" placeholder="20">
                                             </div>
                                         </div>
                                         <div class="nl-row grid gap-3 sm:grid-cols-[140px_1fr_120px] sm:items-center">
@@ -238,11 +249,11 @@
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Link</label>
-                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" placeholder="https://x.com/yourbrand">
+                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" name="social_x_url" value="{{ old('social_x_url', $rule->social_x_url ?? '') }}" placeholder="https://x.com/yourbrand">
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Points</label>
-                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" min="0" placeholder="15">
+                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="social_x_points" min="0" value="{{ old('social_x_points', $rule->social_x_points ?? 0) }}" placeholder="15">
                                             </div>
                                         </div>
                                         <div class="nl-row grid gap-3 sm:grid-cols-[140px_1fr_120px] sm:items-center">
@@ -252,11 +263,11 @@
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Link</label>
-                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" placeholder="https://instagram.com/yourbrand">
+                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" name="social_instagram_url" value="{{ old('social_instagram_url', $rule->social_instagram_url ?? '') }}" placeholder="https://instagram.com/yourbrand">
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Points</label>
-                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" min="0" placeholder="20">
+                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="social_instagram_points" min="0" value="{{ old('social_instagram_points', $rule->social_instagram_points ?? 0) }}" placeholder="20">
                                             </div>
                                         </div>
                                         <div class="nl-row grid gap-3 sm:grid-cols-[140px_1fr_120px] sm:items-center">
@@ -266,19 +277,19 @@
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Link</label>
-                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" placeholder="https://youtube.com/@yourbrand">
+                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" name="social_youtube_url" value="{{ old('social_youtube_url', $rule->social_youtube_url ?? '') }}" placeholder="https://youtube.com/@yourbrand">
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Points</label>
-                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" min="0" placeholder="40">
+                                                <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="social_youtube_points" min="0" value="{{ old('social_youtube_points', $rule->social_youtube_points ?? 0) }}" placeholder="40">
                                             </div>
                                         </div>
-                                    </div>
-                                    <div class="flex items-center justify-end px-6 pb-6">
-                                        <button type="button" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900">
-                                            Save social rewards
-                                        </button>
-                                    </div>
+                                        <div class="flex items-center justify-end pt-2">
+                                            <button type="submit" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900">
+                                                Save social rewards
+                                            </button>
+                                        </div>
+                                    </form>
                                 </section>
                             </div>
                         </main>

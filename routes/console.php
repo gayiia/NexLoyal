@@ -182,12 +182,14 @@ Artisan::command('shopify:register-webhooks', function () {
         'orders/create',
         'orders/paid',
         'orders/fulfilled',
+        'orders/refunded',
+        'orders/cancelled',
     ];
     $endpoint = "https://{$shopDomain}/admin/api/{$apiVersion}/webhooks.json";
 
     foreach ($topics as $topic) {
-        $address = $topic === 'orders/paid'
-            ? "{$baseAddress}/orders"
+        $address = str_starts_with($topic, 'orders/')
+            ? "{$baseAddress}/orders/".str_replace('orders/', '', $topic)
             : "{$baseAddress}/customers";
         $payload = [
             'webhook' => [

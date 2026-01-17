@@ -8,21 +8,42 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('coupons', function (Blueprint $table) {
-            $table->string('code')->nullable()->after('status');
-            $table->string('shopify_price_rule_id')->nullable()->after('code');
-            $table->string('shopify_discount_code_id')->nullable()->after('shopify_price_rule_id');
-        });
+        if (!Schema::hasColumn('coupons', 'code')) {
+            Schema::table('coupons', function (Blueprint $table) {
+                $table->string('code')->nullable()->after('status');
+            });
+        }
+        if (!Schema::hasColumn('coupons', 'shopify_price_rule_id')) {
+            Schema::table('coupons', function (Blueprint $table) {
+                $table->string('shopify_price_rule_id')->nullable()->after('code');
+            });
+        }
+        if (!Schema::hasColumn('coupons', 'shopify_discount_code_id')) {
+            Schema::table('coupons', function (Blueprint $table) {
+                $table->string('shopify_discount_code_id')->nullable()->after('shopify_price_rule_id');
+            });
+        }
     }
 
     public function down(): void
     {
-        Schema::table('coupons', function (Blueprint $table) {
-            $table->dropColumn([
-                'code',
-                'shopify_price_rule_id',
-                'shopify_discount_code_id',
-            ]);
-        });
+        $columns = [
+            'code',
+            'shopify_price_rule_id',
+            'shopify_discount_code_id',
+        ];
+
+        $toDrop = [];
+        foreach ($columns as $column) {
+            if (Schema::hasColumn('coupons', $column)) {
+                $toDrop[] = $column;
+            }
+        }
+
+        if ($toDrop) {
+            Schema::table('coupons', function (Blueprint $table) use ($toDrop) {
+                $table->dropColumn($toDrop);
+            });
+        }
     }
 };

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\PointsTransaction;
+use App\Support\PointsHistoryFormatter;
 use App\Services\ShopifyCustomerService;
 use Illuminate\Http\Request;
 
@@ -76,7 +78,22 @@ class CustomerController extends Controller
 
     public function show(Customer $customer)
     {
-        return view('customer-show', compact('customer'));
+        $transactions = PointsTransaction::query()
+            ->where('customer_id', $customer->id)
+            ->orderByDesc('created_at')
+            ->paginate(10)
+            ->withQueryString();
+
+        $transactions->setCollection(
+            $transactions->getCollection()->map(function (PointsTransaction $transaction) {
+                return PointsHistoryFormatter::format($transaction);
+            })
+        );
+
+        return view('customer-show', [
+            'customer' => $customer,
+            'transactions' => $transactions,
+        ]);
     }
 
     public function store(Request $request, ShopifyCustomerService $shopify)

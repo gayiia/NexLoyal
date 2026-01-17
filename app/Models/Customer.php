@@ -19,6 +19,7 @@ class Customer extends Model
         'currency',
         'shopify_created_at',
         'loyalty_points',
+        'points_pending',
         'tier_id',
         'birthday',
         'profile_completed_at',
@@ -28,6 +29,7 @@ class Customer extends Model
     protected $casts = [
         'shopify_created_at' => 'datetime',
         'loyalty_points' => 'integer',
+        'points_pending' => 'integer',
         'birthday' => 'date',
         'profile_completed_at' => 'datetime',
         'birthday_rewarded_at' => 'date',

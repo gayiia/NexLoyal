@@ -142,6 +142,7 @@
   .nexloyal-card h4 {
     margin: 0 0 8px;
     font-size: 16px;
+    color: #e2e8f0;
   }
   .nexloyal-card p {
     margin: 0 0 14px;
@@ -365,6 +366,111 @@
   .nexloyal-row.is-clickable {
     cursor: pointer;
   }
+  .nexloyal-earn-card {
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: #0f172a;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .nexloyal-earn-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .nexloyal-earn-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    text-align: right;
+  }
+  .nexloyal-earn-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .nexloyal-earn-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e2e8f0;
+  }
+  .nexloyal-earn-meta {
+    font-size: 12px;
+    color: #94a3b8;
+  }
+  .nexloyal-earn-points {
+    font-size: 11px;
+    font-weight: 600;
+    color: #93c5fd;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .nexloyal-earn-card.is-disabled {
+    opacity: 0.5;
+  }
+  .nexloyal-earn-status {
+    font-size: 10px;
+    padding: 3px 6px;
+    min-width: auto;
+  }
+  .nexloyal-toast {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+    background: rgba(15, 23, 42, 0.92);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    color: #e2e8f0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 12px;
+    z-index: 5;
+  }
+  .nexloyal-tabs {
+    display: inline-flex;
+    gap: 6px;
+    background: #0b1324;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    padding: 4px;
+    border-radius: 999px;
+  }
+  .nexloyal-tab {
+    border: none;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .nexloyal-tab.is-active {
+    background: rgba(56, 189, 248, 0.15);
+    color: #e2e8f0;
+  }
+  .nexloyal-activity-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .nexloyal-activity-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e2e8f0;
+  }
+  .nexloyal-activity-meta {
+    font-size: 11px;
+    color: #94a3b8;
+  }
+  .nexloyal-activity-points {
+    font-size: 12px;
+    font-weight: 600;
+  }
   .nexloyal-code {
     font-family: "Courier New", Courier, monospace;
     background: #0b1324;
@@ -427,6 +533,14 @@
       height: min(82vh, 620px);
       border-radius: 14px;
     }
+    .nexloyal-earn-card {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .nexloyal-earn-right {
+      align-items: flex-start;
+      text-align: left;
+    }
   }
 </style>
 
@@ -441,7 +555,11 @@
       tokenUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/loyalty/token",
       dataUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/loyalty/data",
       couponsUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/loyalty/coupons",
-      myCouponsUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/loyalty/my-coupons"
+      myCouponsUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/loyalty/my-coupons",
+      earnRulesUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/api/widget/earn/rules",
+      earnStatusUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/api/widget/earn/status",
+      earnSocialUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/api/widget/earn/social",
+      pointsHistoryUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/api/widget/points/history"
     };
 
     var trigger = document.getElementById('nexloyal-trigger');
@@ -480,9 +598,12 @@
       document.getElementById('nexloyal-login').addEventListener('click', goToLogin);
     }
 
-    function renderDashboard(data) {
+    function renderDashboard(data, status) {
       var tierLabel = data.tier ? data.tier : 'No tier yet';
       var displayName = data.name ? data.name : (data.email || 'Customer');
+      var availablePoints = status && typeof status.points_available === 'number'
+        ? status.points_available
+        : (data.points || 0);
       content.innerHTML = '' +
         '<div class="nexloyal-dashboard">' +
           '<div class="nexloyal-welcome">' +
@@ -492,7 +613,7 @@
           '<div class="nexloyal-stats">' +
             '<div class="nexloyal-stat">' +
               '<label>Points</label>' +
-              '<span>' + (data.points || 0) + '</span>' +
+              '<span>' + availablePoints + '</span>' +
             '</div>' +
             '<div class="nexloyal-stat">' +
               '<label>Tier</label>' +
@@ -562,17 +683,16 @@
                 '</svg>' +
               '</div>' +
             '</div>' +
-            '<div class="nexloyal-row">' +
+            '<div class="nexloyal-row" data-action="activity">' +
               '<div class="nexloyal-row-left">' +
                 '<div class="nexloyal-row-icon">' +
                   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-                    '<path d="M20.59 13.41L11 3H4v7l9.59 9.59a2 2 0 0 0 2.82 0l4.18-4.18a2 2 0 0 0 0-2.82z"></path>' +
-                    '<circle cx="7.5" cy="7.5" r="1.5"></circle>' +
+                    '<path d="M3 12h3l3-9 4 18 3-9h5"></path>' +
                   '</svg>' +
                 '</div>' +
                 '<div>' +
-                  '<div class="nexloyal-row-title">My coupons</div>' +
-                  '<div class="nexloyal-row-sub">Available reward codes</div>' +
+                  '<div class="nexloyal-row-title">Activity</div>' +
+                  '<div class="nexloyal-row-sub">Points earned and redeemed</div>' +
                 '</div>' +
               '</div>' +
               '<div class="nexloyal-row-chevron">' +
@@ -581,11 +701,12 @@
                 '</svg>' +
               '</div>' +
             '</div>' +
-            '<div class="nexloyal-row">' +
+            '<div class="nexloyal-row" data-action="earn">' +
               '<div class="nexloyal-row-left">' +
                 '<div class="nexloyal-row-icon">' +
                   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-                    '<path d="M12 3l1.8 3.6L18 8l-3.6 1.8L12 14l-1.8-4.2L6 8l4.2-1.4L12 3z"></path>' +
+                    '<path d="M20.59 13.41L11 3H4v7l9.59 9.59a2 2 0 0 0 2.82 0l4.18-4.18a2 2 0 0 0 0-2.82z"></path>' +
+                    '<circle cx="7.5" cy="7.5" r="1.5"></circle>' +
                   '</svg>' +
                 '</div>' +
                 '<div>' +
@@ -663,17 +784,34 @@
           renderMyCouponsList();
         });
       }
+      var activityRow = content.querySelector('[data-action="activity"]');
+      if (activityRow) {
+        activityRow.addEventListener('click', function () {
+          renderActivity('earned');
+        });
+      }
+      var earnRow = content.querySelector('[data-action="earn"]');
+      if (earnRow) {
+        earnRow.addEventListener('click', function () {
+          renderEarnPoints();
+        });
+      }
     }
 
     function loadDashboard(token) {
       var dataUrl = config.dataUrl + '?token=' + encodeURIComponent(token);
-      fetch(dataUrl, { method: 'GET', mode: 'cors' })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
+      var statusUrl = config.earnStatusUrl + '?token=' + encodeURIComponent(token);
+      Promise.all([
+        fetch(dataUrl, { method: 'GET', mode: 'cors' }).then(function(response) { return response.json(); }),
+        fetch(statusUrl, { method: 'GET', mode: 'cors' }).then(function(response) { return response.json(); })
+      ])
+        .then(function(results) {
+          var data = results[0];
+          var status = results[1];
           if (!data || typeof data.points === 'undefined') {
             throw new Error('Data missing');
           }
-          renderDashboard(data);
+          renderDashboard(data, status);
         })
         .catch(function() {
           content.innerHTML = '<p>Unable to load your rewards right now. Please try again.</p>';
@@ -807,6 +945,44 @@
       return config.myCouponsUrl + '/' + encodeURIComponent(redemptionId) + '?token=' + encodeURIComponent(config.currentToken);
     }
 
+    function getPointsHistoryUrl(filter) {
+      var query = filter ? ('&filter=' + encodeURIComponent(filter)) : '';
+      return config.pointsHistoryUrl + '?token=' + encodeURIComponent(config.currentToken) + query;
+    }
+
+    function getEarnRulesUrl() {
+      return config.earnRulesUrl;
+    }
+
+    function getEarnStatusUrl() {
+      return config.earnStatusUrl + '?token=' + encodeURIComponent(config.currentToken);
+    }
+
+    function parseJsonResponse(response) {
+      return response.text().then(function (text) {
+        if (!text) {
+          return { _ok: response.ok, _status: response.status };
+        }
+        try {
+          var json = JSON.parse(text);
+          json._ok = response.ok;
+          json._status = response.status;
+          return json;
+        } catch (error) {
+          return { message: text, _ok: response.ok, _status: response.status };
+        }
+      });
+    }
+
+    function postEarnSocial(platform) {
+      return fetch(config.earnSocialUrl + '?token=' + encodeURIComponent(config.currentToken), {
+        method: 'POST',
+        mode: 'cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: platform })
+      }).then(parseJsonResponse);
+    }
+
     function formatStatusLabel(status) {
       if (!status) {
         return 'Unused';
@@ -881,6 +1057,298 @@
       if (button) {
         button.textContent = 'Copied';
       }
+    }
+
+    function showToast(message) {
+      if (!message) {
+        return;
+      }
+      var existing = document.getElementById('nexloyal-toast');
+      if (existing) {
+        existing.parentElement.removeChild(existing);
+      }
+      var toast = document.createElement('div');
+      toast.id = 'nexloyal-toast';
+      toast.className = 'nexloyal-toast';
+      toast.textContent = message;
+      var panel = document.getElementById('nexloyal-panel');
+      if (panel) {
+        panel.appendChild(toast);
+      }
+      setTimeout(function () {
+        if (toast.parentElement) {
+          toast.parentElement.removeChild(toast);
+        }
+      }, 2200);
+    }
+
+    function renderEarnPoints() {
+      if (!config.currentToken) {
+        content.innerHTML = '<p>Missing token. Please reopen the widget.</p>';
+        return;
+      }
+
+      content.innerHTML = '' +
+        '<div class="nexloyal-loading">' +
+          '<div class="nexloyal-spinner" aria-label="Loading"></div>' +
+        '</div>';
+
+      Promise.all([
+        fetch(getEarnRulesUrl(), { method: 'GET', mode: 'cors' }).then(function(response) { return response.json(); }),
+        fetch(getEarnStatusUrl(), { method: 'GET', mode: 'cors' }).then(function(response) { return response.json(); })
+      ])
+        .then(function(results) {
+          var rules = results[0];
+          var status = results[1];
+          if (!rules || !status) {
+            throw new Error('Earn data missing');
+          }
+
+          var general = rules.general || {};
+          var social = rules.social || {};
+          var socialAwarded = status.social_awarded || {};
+          var earningRate = general.amount_per_point
+            ? ('<div class="nexloyal-muted" style="margin-bottom:12px;">Earning rate: 1 point for every Rs ' + general.amount_per_point + ' spent.</div>')
+            : '';
+
+          var generalRows = '' +
+            '<div class="nexloyal-earn-card">' +
+              '<div class="nexloyal-earn-left">' +
+                '<div class="nexloyal-earn-title">Welcome bonus</div>' +
+                '<div class="nexloyal-earn-meta">Granted when you join</div>' +
+              '</div>' +
+              '<div class="nexloyal-earn-right">' +
+                '<div class="nexloyal-earn-points">+' + (general.welcome_points || 0) + ' points</div>' +
+                '<span class="nexloyal-earn-status ' + (status.welcome_awarded ? 'nexloyal-badge is-used' : 'nexloyal-badge is-unused') + '">' +
+                  (status.welcome_awarded ? 'Claimed' : 'Available') +
+                '</span>' +
+              '</div>' +
+            '</div>' +
+            '<div class="nexloyal-earn-card">' +
+              '<div class="nexloyal-earn-left">' +
+                '<div class="nexloyal-earn-title">Birthday reward</div>' +
+                '<div class="nexloyal-earn-meta">Applied once per year</div>' +
+              '</div>' +
+              '<div class="nexloyal-earn-right">' +
+                '<div class="nexloyal-earn-points">+' + (general.birthday_points || 0) + ' points</div>' +
+                '<span class="nexloyal-earn-status ' + (status.birthday_awarded_this_year ? 'nexloyal-badge is-used' : 'nexloyal-badge is-unused') + '">' +
+                  (status.birthday_awarded_this_year ? 'Claimed' : 'Available') +
+                '</span>' +
+              '</div>' +
+            '</div>' +
+            '<div class="nexloyal-earn-card">' +
+              '<div class="nexloyal-earn-left">' +
+                '<div class="nexloyal-earn-title">Complete profile</div>' +
+                '<div class="nexloyal-earn-meta">Finish required fields</div>' +
+              '</div>' +
+              '<div class="nexloyal-earn-right">' +
+                '<div class="nexloyal-earn-points">+' + (general.profile_completion_points || 0) + ' points</div>' +
+                (status.profile_completion_awarded
+                  ? '<span class="nexloyal-earn-status nexloyal-badge is-used">Completed</span>'
+                  : '<button type="button" id="nexloyal-earn-profile" class="nexloyal-action">Complete profile</button>') +
+              '</div>' +
+            '</div>';
+
+          var socialRows = '';
+          var platforms = [
+            { key: 'linkedin', label: 'LinkedIn' },
+            { key: 'tiktok', label: 'TikTok' },
+            { key: 'facebook', label: 'Facebook' },
+            { key: 'x', label: 'X' },
+            { key: 'instagram', label: 'Instagram' },
+            { key: 'youtube', label: 'YouTube' }
+          ];
+
+          platforms.forEach(function (platform) {
+            var config = social[platform.key] || {};
+            if (!config.url || !config.points) {
+              return;
+            }
+            var completed = !!socialAwarded[platform.key];
+            var rowClass = completed ? 'nexloyal-earn-card is-disabled' : 'nexloyal-earn-card';
+            socialRows += '' +
+              '<div class="' + rowClass + '" data-social-platform="' + platform.key + '" data-social-url="' + config.url + '">' +
+                '<div class="nexloyal-earn-left">' +
+                  '<div class="nexloyal-earn-title">' + platform.label + '</div>' +
+                  '<div class="nexloyal-earn-meta">Visit to earn points</div>' +
+                '</div>' +
+                '<div class="nexloyal-earn-right">' +
+                  '<div class="nexloyal-earn-points">+' + config.points + ' points</div>' +
+                  (completed
+                    ? '<span class="nexloyal-earn-status nexloyal-badge is-used">Completed</span>'
+                    : '<button type="button" class="nexloyal-action">Visit</button>') +
+                '</div>' +
+              '</div>';
+          });
+
+          content.innerHTML = '' +
+            '<div class="nexloyal-dashboard">' +
+              '<div class="nexloyal-welcome">' +
+                '<h2>Earn points</h2>' +
+                '<p>Complete actions to grow your balance.</p>' +
+              '</div>' +
+              '<div class="nexloyal-card">' +
+                '<h4>General rewards</h4>' +
+                earningRate +
+                '<div class="nexloyal-list">' + generalRows + '</div>' +
+              '</div>' +
+              '<div class="nexloyal-card">' +
+                '<h4>Social rewards</h4>' +
+                (socialRows ? '<div class="nexloyal-list">' + socialRows + '</div>' : '<div class="nexloyal-muted">No social rewards configured.</div>') +
+              '</div>' +
+              '<div class="nexloyal-form-actions">' +
+                '<button type="button" id="nexloyal-earn-back" class="nexloyal-secondary">Back</button>' +
+              '</div>' +
+            '</div>';
+
+          var backButton = document.getElementById('nexloyal-earn-back');
+          if (backButton) {
+            backButton.addEventListener('click', function () {
+              loadDashboard(config.currentToken);
+            });
+          }
+
+          var profileButton = document.getElementById('nexloyal-earn-profile');
+          if (profileButton) {
+            profileButton.addEventListener('click', function () {
+              renderProfileForm();
+            });
+          }
+
+          content.querySelectorAll('[data-social-platform]').forEach(function (row) {
+            var button = row.querySelector('button');
+            if (!button) {
+              return;
+            }
+            button.addEventListener('click', function () {
+              var platform = row.getAttribute('data-social-platform');
+              var url = row.getAttribute('data-social-url');
+              postEarnSocial(platform)
+                .then(function(response) {
+                  if (!response || response._ok === false) {
+                    showToast((response && response.message) ? response.message : 'Unable to claim right now');
+                    if (url) {
+                      window.open(url, '_blank', 'noopener');
+                    }
+                    return;
+                  }
+
+                  var awarded = response && response.awarded === true;
+                  var already = response && response.awarded === false;
+
+                  if (awarded) {
+                    showToast('+' + (social[platform].points || 0) + ' points earned');
+                  } else if (already) {
+                    showToast('Already claimed');
+                  } else {
+                    showToast((response && response.message) ? response.message : 'Unable to claim right now');
+                  }
+
+                  if (awarded || already) {
+                    row.classList.add('is-disabled');
+                    row.querySelector('.nexloyal-earn-right').innerHTML =
+                      '<div class="nexloyal-earn-points">+' + (social[platform].points || 0) + ' points</div>' +
+                      '<span class="nexloyal-earn-status nexloyal-badge is-used">Completed</span>';
+                  }
+
+                  if (url) {
+                    window.open(url, '_blank', 'noopener');
+                  }
+                })
+                .catch(function() {
+                  showToast('Unable to claim right now');
+                  if (url) {
+                    window.open(url, '_blank', 'noopener');
+                  }
+                });
+            });
+          });
+        })
+        .catch(function() {
+          content.innerHTML = '<p>Unable to load earn options right now. Please try again.</p>';
+        });
+    }
+
+    function renderActivity(filter) {
+      if (!config.currentToken) {
+        content.innerHTML = '<p>Missing token. Please reopen the widget.</p>';
+        return;
+      }
+
+      var activeFilter = filter || 'earned';
+      content.innerHTML = '' +
+        '<div class="nexloyal-dashboard">' +
+          '<div class="nexloyal-welcome">' +
+            '<h2>Activity</h2>' +
+            '<p>Your points balance may not reflect your latest activity.</p>' +
+          '</div>' +
+          '<div class="nexloyal-tabs" role="tablist">' +
+            '<button type="button" class="nexloyal-tab' + (activeFilter === 'earned' ? ' is-active' : '') + '" data-activity-tab="earned">Earned</button>' +
+            '<button type="button" class="nexloyal-tab' + (activeFilter === 'redeemed' ? ' is-active' : '') + '" data-activity-tab="redeemed">Redeemed</button>' +
+          '</div>' +
+          '<div id="nexloyal-activity-list" class="nexloyal-list"></div>' +
+          '<div class="nexloyal-form-actions">' +
+            '<button type="button" id="nexloyal-activity-back" class="nexloyal-secondary">Back</button>' +
+          '</div>' +
+        '</div>';
+
+      document.getElementById('nexloyal-activity-back').addEventListener('click', function () {
+        loadDashboard(config.currentToken);
+      });
+
+      var listEl = document.getElementById('nexloyal-activity-list');
+      listEl.innerHTML = '<div class="nexloyal-loading"><div class="nexloyal-spinner" aria-label="Loading"></div></div>';
+
+      content.querySelectorAll('[data-activity-tab]').forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          var next = tab.getAttribute('data-activity-tab');
+          renderActivity(next);
+        });
+      });
+
+      fetch(getPointsHistoryUrl(activeFilter), { method: 'GET', mode: 'cors' })
+        .then(function(response) { return response.json(); })
+        .then(function(payload) {
+          if (!payload || !Array.isArray(payload.data)) {
+            throw new Error('History missing');
+          }
+
+          if (!payload.data.length) {
+            listEl.innerHTML = '<div class="nexloyal-muted">No activity yet.</div>';
+            return;
+          }
+
+          var rows = payload.data.map(function (item) {
+            var isEarn = item.direction === 'EARN';
+            var pointsLabel = (isEarn ? '+ ' : '- ') + item.points + ' points';
+            var pointsClass = isEarn ? 'nexloyal-activity-points' : 'nexloyal-activity-points';
+            var statusChip = '';
+            if (item.status === 'PENDING') {
+              statusChip = '<span class="nexloyal-badge">In progress</span>';
+            } else if (item.status === 'REVERSED') {
+              statusChip = '<span class="nexloyal-badge">Reversed</span>';
+            }
+            var created = item.created_at ? new Date(item.created_at) : null;
+            var dateLabel = created && !isNaN(created.getTime()) ? created.toISOString().replace('T', ' ').slice(0, 19) : '';
+
+            return '' +
+              '<div class="nexloyal-earn-card">' +
+                '<div class="nexloyal-earn-left">' +
+                  '<div class="nexloyal-activity-title">' + item.title + '</div>' +
+                  '<div class="nexloyal-activity-meta">' + dateLabel + '</div>' +
+                  '<div class="' + pointsClass + '" style="color:' + (isEarn ? '#86efac' : '#fda4af') + ';">' + pointsLabel + '</div>' +
+                '</div>' +
+                '<div class="nexloyal-row-actions">' +
+                  statusChip +
+                '</div>' +
+              '</div>';
+          }).join('');
+
+          listEl.innerHTML = rows;
+        })
+        .catch(function() {
+          listEl.innerHTML = '<div class="nexloyal-error">Unable to load activity right now. Please try again.</div>';
+        });
     }
 
     function renderMyCouponsList() {

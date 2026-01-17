@@ -17,6 +17,10 @@ Route::post('webhooks/shopify/orders/create', [ShopifyWebhookController::class, 
     ->name('webhooks.shopify.orders.create');
 Route::post('webhooks/shopify/orders/fulfilled', [ShopifyWebhookController::class, 'handleOrders'])
     ->name('webhooks.shopify.orders.fulfilled');
+Route::post('webhooks/shopify/orders/refunded', [ShopifyWebhookController::class, 'handleOrders'])
+    ->name('webhooks.shopify.orders.refunded');
+Route::post('webhooks/shopify/orders/cancelled', [ShopifyWebhookController::class, 'handleOrders'])
+    ->name('webhooks.shopify.orders.cancelled');
 
 Route::get('loyalty/token', [LoyaltyWidgetController::class, 'token'])->name('loyalty.token');
 Route::options('loyalty/token', [LoyaltyWidgetController::class, 'tokenOptions']);
@@ -39,6 +43,15 @@ Route::get('api/widget/my-coupons', [LoyaltyWidgetController::class, 'widgetMyCo
     ->name('widget.my-coupons');
 Route::get('api/widget/my-coupons/{redemption}', [LoyaltyWidgetController::class, 'widgetMyCouponDetail'])
     ->name('widget.my-coupons.show');
+Route::get('api/widget/earn/rules', [LoyaltyWidgetController::class, 'earnRules'])
+    ->name('widget.earn.rules');
+Route::get('api/widget/earn/status', [LoyaltyWidgetController::class, 'earnStatus'])
+    ->name('widget.earn.status');
+Route::post('api/widget/earn/social', [LoyaltyWidgetController::class, 'earnSocial'])
+    ->name('widget.earn.social');
+Route::options('api/widget/earn/social', [LoyaltyWidgetController::class, 'earnSocialOptions']);
+Route::get('api/widget/points/history', [LoyaltyWidgetController::class, 'pointsHistory'])
+    ->name('widget.points.history');
 
 Route::get('/', function () {
     return redirect()->route('login');

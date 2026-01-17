@@ -59,6 +59,27 @@
             .nl-theme-light .text-slate-500 {
                 color: #475569;
             }
+            .nl-history-badge {
+                border-radius: 999px;
+                padding: 4px 10px;
+                font-size: 11px;
+                font-weight: 600;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .nl-history-earned {
+                background: rgba(34, 197, 94, 0.18);
+                color: #bbf7d0;
+            }
+            .nl-history-redeemed {
+                background: rgba(248, 113, 113, 0.18);
+                color: #fecaca;
+            }
+            .nl-history-pending {
+                background: rgba(148, 163, 184, 0.2);
+                color: #e2e8f0;
+            }
         </style>
     </head>
     <body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
@@ -124,6 +145,79 @@
                                     <p class="mt-4 text-sm text-slate-300">
                                         Syncs via Shopify webhooks. Loyalty tiering and notes can be added after profile enrichment.
                                     </p>
+                                </div>
+                            </section>
+
+                            <section class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-sm font-semibold text-slate-100">Point history</p>
+                                        <p class="text-xs text-slate-400">Latest earn and redeem activity.</p>
+                                    </div>
+                                </div>
+
+                                <div class="mt-4 overflow-x-auto">
+                                    <table class="w-full text-left text-xs">
+                                        <thead class="text-slate-400">
+                                            <tr class="border-b border-slate-800/60">
+                                                <th class="px-3 py-2">Status</th>
+                                                <th class="px-3 py-2">Points</th>
+                                                <th class="px-3 py-2">Title</th>
+                                                <th class="px-3 py-2">Type</th>
+                                                <th class="px-3 py-2">Time</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-800/60">
+                                            @forelse ($transactions as $transaction)
+                                                @php
+                                                    $isEarn = $transaction['direction'] === 'EARN';
+                                                    $statusLabel = $isEarn ? 'Earned' : 'Redeemed';
+                                                    $pointsLabel = ($isEarn ? '+' : '-') . $transaction['points'];
+                                                @endphp
+                                                <tr>
+                                                    <td class="px-3 py-3">
+                                                        <span class="nl-history-badge {{ $isEarn ? 'nl-history-earned' : 'nl-history-redeemed' }}">
+                                                            {{ $statusLabel }}
+                                                        </span>
+                                                        @if ($transaction['status'] === 'PENDING')
+                                                            <span class="ml-2 nl-history-badge nl-history-pending">In progress</span>
+                                                        @endif
+                                                    </td>
+                                                    <td class="px-3 py-3">
+                                                        <span class="{{ $isEarn ? 'text-emerald-300' : 'text-rose-300' }}">{{ $pointsLabel }}</span>
+                                                    </td>
+                                                    <td class="px-3 py-3 text-slate-200">{{ $transaction['title'] }}</td>
+                                                    <td class="px-3 py-3 text-slate-300">{{ $transaction['type'] }}</td>
+                                                    <td class="px-3 py-3 text-slate-400">
+                                                        {{ \Carbon\Carbon::parse($transaction['created_at'])->format('Y-m-d H:i:s') }}
+                                                    </td>
+                                                </tr>
+                                            @empty
+                                                <tr>
+                                                    <td colspan="5" class="px-3 py-6 text-center text-slate-400">No point activity yet.</td>
+                                                </tr>
+                                            @endforelse
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div class="mt-4 flex items-center justify-between text-xs text-slate-400">
+                                    <div>
+                                        Showing {{ $transactions->firstItem() ?? 0 }} to {{ $transactions->lastItem() ?? 0 }} of {{ $transactions->total() }} entries
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        @php
+                                            $current = $transactions->currentPage();
+                                            $last = $transactions->lastPage();
+                                            $start = max($current - 1, 1);
+                                            $end = min($current + 1, $last);
+                                        @endphp
+                                        <a class="rounded-lg border border-slate-700 px-3 py-1 {{ $transactions->onFirstPage() ? 'pointer-events-none text-slate-600' : 'text-slate-200' }}" href="{{ $transactions->previousPageUrl() ?? '#' }}">Prev</a>
+                                        @for ($page = $start; $page <= $end; $page++)
+                                            <a class="rounded-lg border border-slate-700 px-3 py-1 {{ $page === $current ? 'bg-slate-800 text-slate-100' : 'text-slate-300' }}" href="{{ $transactions->url($page) }}">{{ $page }}</a>
+                                        @endfor
+                                        <a class="rounded-lg border border-slate-700 px-3 py-1 {{ $current === $last ? 'pointer-events-none text-slate-600' : 'text-slate-200' }}" href="{{ $transactions->nextPageUrl() ?? '#' }}">Next</a>
+                                    </div>
                                 </div>
                             </section>
                         </main>
