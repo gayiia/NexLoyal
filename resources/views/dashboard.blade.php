@@ -175,23 +175,23 @@
                             <section class="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5">
                                     <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Points outstanding</p>
-                                    <p class="mt-3 text-2xl font-semibold text-slate-50">1,284,300</p>
-                                    <p class="mt-1 text-xs text-slate-400">+8.2% this month</p>
+                                    <p class="mt-3 text-2xl font-semibold text-slate-50">{{ number_format($stats['points_outstanding']) }}</p>
+                                    <p class="mt-1 text-xs text-slate-400">Current customer balances.</p>
                                 </div>
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5">
                                     <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Redemption rate</p>
-                                    <p class="mt-3 text-2xl font-semibold text-slate-50">37.4%</p>
-                                    <p class="mt-1 text-xs text-slate-400">+4.1% since last week</p>
+                                    <p class="mt-3 text-2xl font-semibold text-slate-50">{{ number_format($stats['redemption_rate'], 1) }}%</p>
+                                    <p class="mt-1 text-xs text-slate-400">Last 30 days spend vs earn.</p>
                                 </div>
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5">
                                     <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Active members</p>
-                                    <p class="mt-3 text-2xl font-semibold text-slate-50">18,240</p>
-                                    <p class="mt-1 text-xs text-slate-400">+620 new signups</p>
+                                    <p class="mt-3 text-2xl font-semibold text-slate-50">{{ number_format($stats['active_members']) }}</p>
+                                    <p class="mt-1 text-xs text-slate-400">Customers in the loyalty program.</p>
                                 </div>
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5">
-                                    <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Tier upgrades</p>
-                                    <p class="mt-3 text-2xl font-semibold text-slate-50">1,102</p>
-                                    <p class="mt-1 text-xs text-slate-400">Bronze -> Silver</p>
+                                    <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Mystery box claims</p>
+                                    <p class="mt-3 text-2xl font-semibold text-slate-50">{{ number_format($stats['mystery_box_claims']) }}</p>
+                                    <p class="mt-1 text-xs text-slate-400">Claims in the last 30 days.</p>
                                 </div>
                             </section>
 
@@ -205,8 +205,8 @@
                                         <span class="text-xs text-slate-400">Last 30 days</span>
                                     </div>
                                     <svg class="mt-6 h-40 w-full" viewBox="0 0 600 160" fill="none">
-                                        <path d="M10 120 C60 60, 120 80, 180 40 C240 10, 300 40, 360 70 C420 100, 480 60, 590 30" stroke="#38bdf8" stroke-width="3" />
-                                        <path d="M10 140 C70 110, 120 130, 180 90 C240 60, 300 90, 360 110 C420 130, 480 120, 590 80" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6" />
+                                        <path id="points-earned-line" d="" stroke="#38bdf8" stroke-width="3" />
+                                        <path id="points-spent-line" d="" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 6" />
                                     </svg>
                                 </div>
 
@@ -218,37 +218,20 @@
                                         </div>
                                         <span class="text-xs text-slate-400">This month</span>
                                     </div>
-                                    <div class="mt-6 grid grid-cols-2 gap-4">
-                                        <div class="flex items-center justify-center">
-                                            <svg class="h-32 w-32" viewBox="0 0 120 120">
-                                                <circle cx="60" cy="60" r="48" stroke="#1e293b" stroke-width="12" fill="none" />
-                                                <circle cx="60" cy="60" r="48" stroke="#38bdf8" stroke-width="12" fill="none" stroke-dasharray="140 160" stroke-linecap="round" transform="rotate(-90 60 60)" />
-                                                <circle cx="60" cy="60" r="36" fill="#0f172a" />
-                                                <text x="60" y="66" text-anchor="middle" fill="#e2e8f0" font-size="14">38%</text>
-                                            </svg>
-                                        </div>
-                                        <div class="space-y-3 text-xs text-slate-300">
-                                            <div class="flex items-center justify-between">
-                                                <span>Amount off</span>
-                                                <span>38%</span>
+                                    <div class="mt-6 space-y-3 text-xs text-slate-300">
+                                        @forelse ($redemption_mix as $label => $stats)
+                                            <div>
+                                                <div class="flex items-center justify-between">
+                                                    <span>{{ $label }}</span>
+                                                    <span>{{ $stats['percent'] }}% ({{ $stats['count'] }})</span>
+                                                </div>
+                                                <div class="mt-2 h-2 rounded-full bg-slate-800">
+                                                    <div class="h-2 rounded-full bg-sky-400" style="width: {{ $stats['percent'] }}%"></div>
+                                                </div>
                                             </div>
-                                            <div class="flex items-center justify-between">
-                                                <span>Free shipping</span>
-                                                <span>22%</span>
-                                            </div>
-                                            <div class="flex items-center justify-between">
-                                                <span>Gift cards</span>
-                                                <span>18%</span>
-                                            </div>
-                                            <div class="flex items-center justify-between">
-                                                <span>Free product</span>
-                                                <span>12%</span>
-                                            </div>
-                                            <div class="flex items-center justify-between">
-                                                <span>Percentage off</span>
-                                                <span>10%</span>
-                                            </div>
-                                        </div>
+                                        @empty
+                                            <p class="text-xs text-slate-400">No redemptions yet.</p>
+                                        @endforelse
                                     </div>
                                 </div>
 
@@ -261,38 +244,18 @@
                                         <span class="text-xs text-slate-400">Active members</span>
                                     </div>
                                     <div class="mt-6 space-y-3 text-xs text-slate-300">
-                                        <div>
-                                            <div class="flex items-center justify-between">
-                                                <span>Bronze</span><span>9,200</span>
+                                        @forelse ($tier_distribution as $tier)
+                                            <div>
+                                                <div class="flex items-center justify-between">
+                                                    <span>{{ $tier['title'] }}</span><span>{{ number_format($tier['count']) }}</span>
+                                                </div>
+                                                <div class="mt-2 h-2 rounded-full bg-slate-800">
+                                                    <div class="h-2 rounded-full bg-sky-400" style="width: {{ $tier['percent'] }}%"></div>
+                                                </div>
                                             </div>
-                                            <div class="mt-2 h-2 rounded-full bg-slate-800">
-                                                <div class="h-2 rounded-full bg-amber-400" style="width: 62%"></div>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div class="flex items-center justify-between">
-                                                <span>Silver</span><span>6,100</span>
-                                            </div>
-                                            <div class="mt-2 h-2 rounded-full bg-slate-800">
-                                                <div class="h-2 rounded-full bg-slate-300" style="width: 41%"></div>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div class="flex items-center justify-between">
-                                                <span>Gold</span><span>2,100</span>
-                                            </div>
-                                            <div class="mt-2 h-2 rounded-full bg-slate-800">
-                                                <div class="h-2 rounded-full bg-yellow-300" style="width: 22%"></div>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div class="flex items-center justify-between">
-                                                <span>Platinum</span><span>840</span>
-                                            </div>
-                                            <div class="mt-2 h-2 rounded-full bg-slate-800">
-                                                <div class="h-2 rounded-full bg-sky-300" style="width: 12%"></div>
-                                            </div>
-                                        </div>
+                                        @empty
+                                            <p class="text-xs text-slate-400">No tier data yet.</p>
+                                        @endforelse
                                     </div>
                                 </div>
 
@@ -304,120 +267,57 @@
                                         </div>
                                         <span class="text-xs text-slate-400">Weekly</span>
                                     </div>
+                                    @php $maxWeekly = max($series['weekly_redemptions'] ?: [0]); @endphp
                                     <div class="mt-6 grid grid-cols-7 items-end gap-2 text-xs text-slate-400">
-                                        <div class="h-16 rounded-lg bg-sky-500/70"></div>
-                                        <div class="h-20 rounded-lg bg-sky-400/80"></div>
-                                        <div class="h-10 rounded-lg bg-sky-500/60"></div>
-                                        <div class="h-24 rounded-lg bg-sky-400"></div>
-                                        <div class="h-18 rounded-lg bg-sky-500/70"></div>
-                                        <div class="h-12 rounded-lg bg-sky-500/60"></div>
-                                        <div class="h-22 rounded-lg bg-sky-400/80"></div>
+                                        @foreach ($series['weekly_redemptions'] as $index => $count)
+                                            @php
+                                                $height = $maxWeekly > 0 ? max(8, round(($count / $maxWeekly) * 96)) : 8;
+                                                $label = \Illuminate\Support\Carbon::parse($series['days_7'][$index])->format('m/d');
+                                            @endphp
+                                            <div class="flex flex-col items-center gap-2">
+                                                <div class="w-6 rounded-lg bg-sky-400/80" style="height: {{ $height }}px"></div>
+                                                <span>{{ $label }}</span>
+                                            </div>
+                                        @endforeach
                                     </div>
-                                </div>
-
-                                <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
-                                    <div class="flex items-center justify-between">
-                                        <div>
-                                            <p class="text-sm font-semibold text-slate-100">Expiring points forecast</p>
-                                            <p class="text-xs text-slate-400">Webhook + expiry scheduler</p>
-                                        </div>
-                                        <span class="text-xs text-slate-400">Next 8 weeks</span>
-                                    </div>
-                                    <svg class="mt-6 h-36 w-full" viewBox="0 0 600 140" fill="none">
-                                        <path d="M20 120 L80 90 L140 95 L200 70 L260 60 L320 75 L380 50 L440 60 L500 40 L580 55" stroke="#f97316" stroke-width="3" />
-                                    </svg>
-                                </div>
-
-                                <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
-                                    <div class="flex items-center justify-between">
-                                        <div>
-                                            <p class="text-sm font-semibold text-slate-100">Streak engagement</p>
-                                            <p class="text-xs text-slate-400">Webhook: activity + login streaks</p>
-                                        </div>
-                                        <span class="text-xs text-slate-400">Daily</span>
-                                    </div>
-                                    <svg class="mt-6 h-36 w-full" viewBox="0 0 600 140" fill="none">
-                                        <path d="M20 100 C90 110, 140 80, 200 90 C260 100, 320 60, 380 70 C440 80, 500 50, 580 40" stroke="#34d399" stroke-width="3" />
-                                    </svg>
                                 </div>
 
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
                                     <div class="flex items-center justify-between">
                                         <div>
                                             <p class="text-sm font-semibold text-slate-100">Mystery box outcomes</p>
-                                            <p class="text-xs text-slate-400">Webhook: mystery reward claims</p>
+                                            <p class="text-xs text-slate-400">Claimed rewards in the last 30 days.</p>
                                         </div>
-                                        <span class="text-xs text-slate-400">Last 30 days</span>
+                                        <span class="text-xs text-slate-400">Top rewards</span>
                                     </div>
+                                    @php $maxMystery = max($mystery_box_outcomes->pluck('count')->all() ?: [0]); @endphp
                                     <div class="mt-6 grid grid-cols-5 items-end gap-3 text-xs text-slate-400">
-                                        <div class="h-14 rounded-lg bg-purple-400/70"></div>
-                                        <div class="h-24 rounded-lg bg-purple-300"></div>
-                                        <div class="h-10 rounded-lg bg-purple-500/70"></div>
-                                        <div class="h-20 rounded-lg bg-purple-300/80"></div>
-                                        <div class="h-16 rounded-lg bg-purple-400/90"></div>
+                                        @foreach ($mystery_box_outcomes as $item)
+                                            @php
+                                                $height = $maxMystery > 0 ? max(10, round(($item['count'] / $maxMystery) * 96)) : 10;
+                                            @endphp
+                                            <div class="flex flex-col items-center gap-2">
+                                                <div class="w-8 rounded-lg bg-purple-400/80" style="height: {{ $height }}px"></div>
+                                                <span class="text-[10px] text-center text-slate-400">{{ \Illuminate\Support\Str::limit($item['title'], 8) }}</span>
+                                            </div>
+                                        @endforeach
+                                        @if ($mystery_box_outcomes->isEmpty())
+                                            <p class="col-span-5 text-center text-xs text-slate-400">No mystery box claims yet.</p>
+                                        @endif
                                     </div>
                                 </div>
 
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
                                     <div class="flex items-center justify-between">
                                         <div>
-                                            <p class="text-sm font-semibold text-slate-100">Notification click-through</p>
-                                            <p class="text-xs text-slate-400">Webhook: message delivery + clicks</p>
+                                            <p class="text-sm font-semibold text-slate-100">Exclusive chat activity</p>
+                                            <p class="text-xs text-slate-400">Poll votes over the last 14 days.</p>
                                         </div>
                                         <span class="text-xs text-slate-400">Last 14 days</span>
                                     </div>
                                     <svg class="mt-6 h-36 w-full" viewBox="0 0 600 140" fill="none">
-                                        <path d="M20 110 L80 90 L140 100 L200 70 L260 60 L320 80 L380 55 L440 65 L500 50 L580 45" stroke="#a855f7" stroke-width="3" />
+                                        <path id="chat-votes-line" d="" stroke="#a855f7" stroke-width="3" />
                                     </svg>
-                                </div>
-
-                                <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
-                                    <div class="flex items-center justify-between">
-                                        <div>
-                                            <p class="text-sm font-semibold text-slate-100">Segment distribution</p>
-                                            <p class="text-xs text-slate-400">Clustered by earn vs redeem ratio</p>
-                                        </div>
-                                        <span class="text-xs text-slate-400">Weekly</span>
-                                    </div>
-                                    <div class="mt-6 grid gap-3 text-xs text-slate-300">
-                                        <div class="flex items-center justify-between">
-                                            <span>Low redeemers</span>
-                                            <span>43%</span>
-                                        </div>
-                                        <div class="h-2 rounded-full bg-slate-800">
-                                            <div class="h-2 rounded-full bg-rose-400" style="width: 43%"></div>
-                                        </div>
-                                        <div class="flex items-center justify-between">
-                                            <span>Balanced redeemers</span>
-                                            <span>37%</span>
-                                        </div>
-                                        <div class="h-2 rounded-full bg-slate-800">
-                                            <div class="h-2 rounded-full bg-emerald-400" style="width: 37%"></div>
-                                        </div>
-                                        <div class="flex items-center justify-between">
-                                            <span>High redeemers</span>
-                                            <span>20%</span>
-                                        </div>
-                                        <div class="h-2 rounded-full bg-slate-800">
-                                            <div class="h-2 rounded-full bg-sky-400" style="width: 20%"></div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
-                                    <div class="flex items-center justify-between">
-                                        <div>
-                                            <p class="text-sm font-semibold text-slate-100">Customer lifetime value by tier</p>
-                                            <p class="text-xs text-slate-400">Webhook: orders/paid + tier mapping</p>
-                                        </div>
-                                        <span class="text-xs text-slate-400">Quarterly</span>
-                                    </div>
-                                    <div class="mt-6 grid grid-cols-4 items-end gap-4 text-xs text-slate-400">
-                                        <div class="h-16 rounded-lg bg-amber-400/70"></div>
-                                        <div class="h-24 rounded-lg bg-slate-300"></div>
-                                        <div class="h-32 rounded-lg bg-yellow-300"></div>
-                                        <div class="h-36 rounded-lg bg-sky-300"></div>
-                                    </div>
                                 </div>
                             </section>
                         </main>
@@ -460,6 +360,44 @@
                     settingsToggle.addEventListener('click', () => {
                         settingsMenu.classList.toggle('hidden');
                     });
+                }
+            })();
+
+            (function () {
+                const buildLinePath = (values, width, height, padding) => {
+                    if (!values.length) {
+                        return '';
+                    }
+                    const maxValue = Math.max(...values, 1);
+                    const innerWidth = width - padding * 2;
+                    const innerHeight = height - padding * 2;
+                    if (values.length === 1) {
+                        const y = height - padding - (values[0] / maxValue) * innerHeight;
+                        return `M${(padding + innerWidth / 2).toFixed(1)} ${y.toFixed(1)}`;
+                    }
+                    const step = innerWidth / (values.length - 1);
+                    return values.map((value, index) => {
+                        const x = padding + step * index;
+                        const y = height - padding - (value / maxValue) * innerHeight;
+                        return `${index === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`;
+                    }).join(' ');
+                };
+
+                const pointsEarned = @json($series['earned']);
+                const pointsSpent = @json($series['spent']);
+                const chatVotes = @json($series['chat_votes']);
+
+                const earnedPath = document.getElementById('points-earned-line');
+                const spentPath = document.getElementById('points-spent-line');
+                const chatPath = document.getElementById('chat-votes-line');
+
+                if (earnedPath && spentPath) {
+                    earnedPath.setAttribute('d', buildLinePath(pointsEarned, 600, 160, 10));
+                    spentPath.setAttribute('d', buildLinePath(pointsSpent, 600, 160, 10));
+                }
+
+                if (chatPath) {
+                    chatPath.setAttribute('d', buildLinePath(chatVotes, 600, 140, 12));
                 }
             })();
         </script>
