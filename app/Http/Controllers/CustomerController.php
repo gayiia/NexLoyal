@@ -12,8 +12,65 @@ class CustomerController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Customer::query();
+        $query = $this->applyFilters(Customer::query(), $request);
 
+        $perPage = (int) $request->input('per_page', 10);
+        $perPage = in_array($perPage, [10, 25, 50], true) ? $perPage : 10;
+
+        $customers = $query->orderByDesc('id')->paginate($perPage)->withQueryString();
+
+        return view('customers', compact('customers'));
+    }
+
+    public function export(Request $request)
+    {
+        $query = $this->applyFilters(Customer::query(), $request)
+            ->orderByDesc('id');
+
+        $fileName = 'customers_' . now()->format('Ymd_His') . '.csv';
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+        ];
+
+        return response()->streamDownload(function () use ($query) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, [
+                'ID',
+                'Name',
+                'Email',
+                'Phone',
+                'Status',
+                'Orders',
+                'Total Spent',
+                'Loyalty Points',
+                'Tier ID',
+                'Created At',
+            ]);
+
+            $query->chunk(500, function ($customers) use ($handle) {
+                foreach ($customers as $customer) {
+                    fputcsv($handle, [
+                        $customer->id,
+                        $customer->full_name,
+                        $customer->email,
+                        $customer->phone,
+                        $customer->status,
+                        $customer->orders_count,
+                        $customer->total_spent,
+                        $customer->loyalty_points,
+                        $customer->tier_id,
+                        optional($customer->shopify_created_at)->format('Y-m-d H:i:s') ?: null,
+                    ]);
+                }
+            });
+
+            fclose($handle);
+        }, $fileName, $headers);
+    }
+
+    private function applyFilters($query, Request $request)
+    {
         if ($request->filled('name') && $request->input('name') !== 'all') {
             if ($request->input('name') === 'has') {
                 $query->where(function ($builder) {
@@ -68,12 +125,7 @@ class CustomerController extends Controller
             });
         }
 
-        $perPage = (int) $request->input('per_page', 10);
-        $perPage = in_array($perPage, [10, 25, 50], true) ? $perPage : 10;
-
-        $customers = $query->orderByDesc('id')->paginate($perPage)->withQueryString();
-
-        return view('customers', compact('customers'));
+        return $query;
     }
 
     public function show(Customer $customer)

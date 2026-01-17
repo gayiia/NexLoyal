@@ -180,7 +180,7 @@
                                         <button id="open-create-customer" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900" type="button">
                                             Create customer
                                         </button>
-                                        <button class="nl-export-button text-xs">Export Excel</button>
+                                        <a class="nl-export-button text-xs" href="{{ route('customers.export', request()->query()) }}">Export CSV</a>
                                     </div>
                                 </div>
 
