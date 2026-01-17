@@ -12,14 +12,17 @@ class CustomerCoupon extends Model
         'coupon_id',
         'points_spent',
         'code',
+        'status',
         'redeemed_at',
         'used_at',
+        'expires_at',
     ];
 
     protected $casts = [
         'points_spent' => 'integer',
         'redeemed_at' => 'datetime',
         'used_at' => 'datetime',
+        'expires_at' => 'datetime',
     ];
 
     public function customer(): BelongsTo

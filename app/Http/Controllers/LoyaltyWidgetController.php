@@ -8,11 +8,13 @@ use App\Models\CustomerCoupon;
 use App\Models\PointRule;
 use App\Models\Tier;
 use App\Services\ShopifyCustomerService;
+use App\Services\ShopifyDiscountService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Support\Carbon;
 use Symfony\Component\HttpFoundation\Response;
 
 class LoyaltyWidgetController extends Controller
@@ -336,23 +338,15 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
-        $coupons = CustomerCoupon::query()
+        $records = CustomerCoupon::query()
             ->with('coupon')
             ->where('customer_id', $customer->id)
             ->orderByDesc('redeemed_at')
-            ->get()
-            ->map(function (CustomerCoupon $record) {
-                $couponTitle = $record->coupon?->title ?? 'Coupon';
-                return [
-                    'id' => $record->id,
-                    'title' => $couponTitle,
-                    'points_spent' => (int) ($record->points_spent ?? 0),
-                    'code' => $record->code,
-                    'redeemed_at' => optional($record->redeemed_at)->toIso8601String(),
-                    'used_at' => optional($record->used_at)->toIso8601String(),
-                ];
-            })
-            ->values();
+            ->get();
+
+        $coupons = $records->map(function (CustomerCoupon $record) {
+            return $this->formatRedemption($record);
+        })->values();
 
         return $this->corsResponse(
             $request,
@@ -367,7 +361,7 @@ class LoyaltyWidgetController extends Controller
         return $this->corsResponse($request, response()->noContent());
     }
 
-    public function redeemCoupon(Request $request, Coupon $coupon): Response
+    public function redeemCoupon(Request $request, Coupon $coupon, ShopifyDiscountService $shopifyDiscounts): Response
     {
         $token = (string) $request->query('token', '');
         [$customer, $error] = $this->customerFromToken($token);
@@ -412,14 +406,14 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
-        if (!$coupon->code) {
+        if (!$coupon->shopify_price_rule_id) {
             return $this->corsResponse(
                 $request,
-                response()->json(['message' => 'Coupon code is not available yet.'], 422)
+                response()->json(['message' => 'Coupon is not ready for redemption.'], 422)
             );
         }
 
-        $updated = DB::transaction(function () use ($customer, $pointsCost, $coupon) {
+        $updated = DB::transaction(function () use ($customer, $pointsCost, $coupon, $shopifyDiscounts) {
             $lockedCustomer = Customer::query()
                 ->whereKey($customer->id)
                 ->lockForUpdate()
@@ -434,6 +428,14 @@ class LoyaltyWidgetController extends Controller
                 return [null, 'Not enough points to redeem this coupon.', null];
             }
 
+            $code = $this->generateRedeemCode($coupon);
+
+            try {
+                $shopifyDiscounts->createDiscountCode((int) $coupon->shopify_price_rule_id, $code);
+            } catch (\Throwable $exception) {
+                return [null, $exception->getMessage(), null];
+            }
+
             $lockedCustomer->loyalty_points = $currentPoints - $pointsCost;
             $lockedCustomer->save();
 
@@ -441,14 +443,16 @@ class LoyaltyWidgetController extends Controller
                 'customer_id' => $lockedCustomer->id,
                 'coupon_id' => $coupon->id,
                 'points_spent' => $pointsCost,
-                'code' => $coupon->code,
+                'code' => $code,
+                'status' => 'active',
                 'redeemed_at' => now(),
+                'expires_at' => $coupon->end_date,
             ]);
 
             return [$lockedCustomer, null, $record];
         });
 
-        [$updatedCustomer, $message] = $updated;
+        [$updatedCustomer, $message, $record] = $updated;
         if (!$updatedCustomer) {
             return $this->corsResponse(
                 $request,
@@ -460,8 +464,65 @@ class LoyaltyWidgetController extends Controller
             $request,
             response()->json([
                 'message' => 'Coupon redeemed.',
-                'code' => $coupon->code,
+                'code' => $record?->code,
                 'points' => (int) ($updatedCustomer->loyalty_points ?? 0),
+            ])
+        );
+    }
+
+    public function widgetMyCoupons(Request $request): Response
+    {
+        $token = (string) $request->query('token', '');
+        [$customer, $error] = $this->customerFromToken($token);
+
+        if (!$customer) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => $error ?? 'Unauthorized.'], 401)
+            );
+        }
+
+        $records = CustomerCoupon::query()
+            ->with('coupon')
+            ->where('customer_id', $customer->id)
+            ->orderByDesc('redeemed_at')
+            ->get();
+
+        $coupons = $records->map(function (CustomerCoupon $record) {
+            return $this->formatRedemption($record);
+        })->values();
+
+        return $this->corsResponse(
+            $request,
+            response()->json(['coupons' => $coupons])
+        );
+    }
+
+    public function widgetMyCouponDetail(Request $request, CustomerCoupon $redemption): Response
+    {
+        $token = (string) $request->query('token', '');
+        [$customer, $error] = $this->customerFromToken($token);
+
+        if (!$customer) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => $error ?? 'Unauthorized.'], 401)
+            );
+        }
+
+        if ($redemption->customer_id !== $customer->id) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => 'Unauthorized.'], 403)
+            );
+        }
+
+        $redemption->loadMissing('coupon');
+
+        return $this->corsResponse(
+            $request,
+            response()->json([
+                'coupon' => $this->formatRedemption($redemption),
             ])
         );
     }
@@ -560,5 +621,91 @@ class LoyaltyWidgetController extends Controller
         $allowedOrigin = 'https://'.$configuredDomain;
 
         return strcasecmp($origin, $allowedOrigin) === 0 ? $origin : null;
+    }
+
+    private function resolveRedemptionStatus(CustomerCoupon $record, $expiresAt = null): string
+    {
+        $status = strtolower((string) $record->status);
+        if ($status === 'used' || $record->used_at) {
+            return 'used';
+        }
+
+        if ($status === 'expired') {
+            return 'expired';
+        }
+
+        $expiry = $expiresAt ? Carbon::parse($expiresAt) : null;
+        if ($expiry && $expiry->isPast()) {
+            return 'expired';
+        }
+
+        if ($status === 'in_progress') {
+            return 'in_progress';
+        }
+
+        return 'unused';
+    }
+
+    private function formatRedemption(CustomerCoupon $record): array
+    {
+        $coupon = $record->coupon;
+        $expiresAt = $record->expires_at ?? $coupon?->end_date;
+        $status = $this->resolveRedemptionStatus($record, $expiresAt);
+
+        return [
+            'redemption_id' => $record->id,
+            'coupon_id' => $record->coupon_id,
+            'coupon_title' => $coupon?->title ?? 'Coupon',
+            'coupon_value_label' => $coupon ? $this->formatCouponValueLabel($coupon) : null,
+            'coupon_points' => (int) ($coupon?->points_value ?? 0),
+            'shopify_discount_code' => $record->code,
+            'status' => strtoupper($status),
+            'purchased_at' => optional($record->redeemed_at)->toIso8601String(),
+            'expires_at' => optional($expiresAt)->toIso8601String(),
+            'used_at' => optional($record->used_at)->toIso8601String(),
+        ];
+    }
+
+    private function formatCouponValueLabel(Coupon $coupon): string
+    {
+        if ($coupon->type === 'free-shipping') {
+            return 'Free shipping';
+        }
+
+        if ($coupon->type === 'buy-x-get-y') {
+            $buyQty = $coupon->buy_quantity ?: 1;
+            $getQty = $coupon->get_quantity ?: 1;
+            return "Buy {$buyQty} get {$getQty}";
+        }
+
+        $value = (float) ($coupon->value ?? 0);
+        if ($coupon->value_type === 'percentage') {
+            $label = rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.').'%';
+        } elseif ($coupon->value_type === 'fixed') {
+            $label = '$'.number_format($value, 2);
+        } else {
+            $label = 'No value';
+        }
+
+        $suffix = $coupon->type === 'amount-product' ? ' off product' : ' off order';
+
+        return $label.$suffix;
+    }
+
+    private function generateRedeemCode(Coupon $coupon): string
+    {
+        $prefix = strtoupper(Str::slug($coupon->title));
+        $prefix = substr(preg_replace('/[^A-Z0-9]/', '', $prefix), 0, 8);
+
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $code = trim($prefix.'-'.strtoupper(Str::random(8)), '-');
+            $exists = Coupon::where('code', $code)->exists()
+                || CustomerCoupon::where('code', $code)->exists();
+            if (!$exists) {
+                return $code;
+            }
+        }
+
+        return strtoupper(Str::random(12));
     }
 }

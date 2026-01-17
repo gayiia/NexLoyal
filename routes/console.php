@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Customer;
+use App\Models\CustomerCoupon;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
@@ -162,22 +163,32 @@ Artisan::command('shopify:register-webhooks', function () {
     $shopDomain = config('services.shopify.shop_domain');
     $token = config('services.shopify.admin_token');
     $apiVersion = config('services.shopify.api_version');
-    $address = config('services.shopify.webhook_address') ?: rtrim(config('app.url'), '/').'/webhooks/shopify/customers';
+    $baseAddress = config('services.shopify.webhook_address') ?: rtrim(config('app.url'), '/').'/webhooks/shopify';
 
     if (!$shopDomain || !$token) {
         $this->error('Missing Shopify credentials. Set SHOPIFY_SHOP_DOMAIN and SHOPIFY_ADMIN_TOKEN.');
         return 1;
     }
 
-    if (!$address) {
+    if (!$baseAddress) {
         $this->error('Missing webhook address. Set SHOPIFY_WEBHOOK_ADDRESS or APP_URL.');
         return 1;
     }
 
-    $topics = ['customers/create', 'customers/update', 'customers/delete'];
+    $topics = [
+        'customers/create',
+        'customers/update',
+        'customers/delete',
+        'orders/create',
+        'orders/paid',
+        'orders/fulfilled',
+    ];
     $endpoint = "https://{$shopDomain}/admin/api/{$apiVersion}/webhooks.json";
 
     foreach ($topics as $topic) {
+        $address = $topic === 'orders/paid'
+            ? "{$baseAddress}/orders"
+            : "{$baseAddress}/customers";
         $payload = [
             'webhook' => [
                 'topic' => $topic,
@@ -201,6 +212,20 @@ Artisan::command('shopify:register-webhooks', function () {
 
     return 0;
 })->purpose('Register Shopify customer webhooks');
+
+Artisan::command('loyalty:expire-coupons', function () {
+    $now = now();
+    $expired = CustomerCoupon::query()
+        ->whereIn('status', ['active', 'in_progress'])
+        ->whereNotNull('expires_at')
+        ->where('expires_at', '<', $now)
+        ->update([
+            'status' => 'expired',
+        ]);
+
+    $this->info("Expired {$expired} coupon redemptions.");
+    return 0;
+})->purpose('Expire coupon redemptions past their validity date');
 
 Artisan::command('loyalty:award-birthday', function () {
     $rule = PointRule::query()->first();
@@ -247,3 +272,4 @@ Artisan::command('loyalty:award-birthday', function () {
 })->purpose('Award birthday points and send birthday emails');
 
 Schedule::command('loyalty:award-birthday')->dailyAt('00:10');
+Schedule::command('loyalty:expire-coupons')->hourly();

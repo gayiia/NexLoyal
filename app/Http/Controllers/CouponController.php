@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Coupon;
+use App\Models\CustomerCoupon;
 use App\Models\Tier;
 use App\Services\ShopifyDiscountService;
 use App\Services\ShopifyProductService;
@@ -390,6 +391,197 @@ class CouponController extends Controller
         $coupon->delete();
 
         return redirect()->route('coupons');
+    }
+
+    public function view(Request $request, Coupon $coupon)
+    {
+        if ($coupon->status !== 'active') {
+            return redirect()->route('coupons')->withErrors(['coupon' => 'Coupon must be active to view redemptions.']);
+        }
+
+        $now = now();
+        $baseQuery = CustomerCoupon::query()
+            ->where('coupon_id', $coupon->id);
+
+        $purchasedCount = (clone $baseQuery)->count();
+        $usedCount = (clone $baseQuery)
+            ->where(function ($query) {
+                $query->where('status', 'used')
+                    ->orWhereNotNull('used_at');
+            })
+            ->count();
+        $expiredCount = (clone $baseQuery)
+            ->where(function ($query) use ($now) {
+                $query->where('status', 'expired')
+                    ->orWhere(function ($query) use ($now) {
+                        $query->whereNotNull('expires_at')
+                            ->where('expires_at', '<', $now);
+                    });
+            })
+            ->count();
+        $unusedCount = (clone $baseQuery)
+            ->where('status', 'active')
+            ->whereNull('used_at')
+            ->where(function ($query) use ($now) {
+                $query->whereNull('expires_at')
+                    ->orWhere('expires_at', '>=', $now);
+            })
+            ->count();
+
+        $query = CustomerCoupon::query()
+            ->with('customer')
+            ->where('coupon_id', $coupon->id);
+
+        $status = $request->input('status', 'all');
+        if ($status === 'used') {
+            $query->where(function ($query) {
+                $query->where('status', 'used')
+                    ->orWhereNotNull('used_at');
+            });
+        } elseif ($status === 'in_progress') {
+            $query->where('status', 'in_progress');
+        } elseif ($status === 'expired') {
+            $query->where(function ($query) use ($now) {
+                $query->where('status', 'expired')
+                    ->orWhere(function ($query) use ($now) {
+                        $query->whereNotNull('expires_at')
+                            ->where('expires_at', '<', $now);
+                    });
+            });
+        } elseif ($status === 'unused') {
+            $query->where('status', 'active')
+                ->whereNull('used_at')
+                ->where(function ($query) use ($now) {
+                    $query->whereNull('expires_at')
+                        ->orWhere('expires_at', '>=', $now);
+                });
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($query) use ($search) {
+                $query->where('code', 'like', "%{$search}%")
+                    ->orWhereHas('customer', function ($customerQuery) use ($search) {
+                        $customerQuery->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        $redemptions = $query
+            ->orderByDesc('redeemed_at')
+            ->paginate(15)
+            ->withQueryString();
+
+        return view('coupon-view', [
+            'coupon' => $coupon->load('tier'),
+            'redemptions' => $redemptions,
+            'summary' => [
+                'purchased' => $purchasedCount,
+                'used' => $usedCount,
+                'unused' => $unusedCount,
+                'expired' => $expiredCount,
+            ],
+        ]);
+    }
+
+    public function export(Request $request, Coupon $coupon)
+    {
+        if ($coupon->status !== 'active') {
+            return redirect()->route('coupons')->withErrors(['coupon' => 'Coupon must be active to export redemptions.']);
+        }
+
+        $status = $request->input('status', 'all');
+        $search = $request->input('search');
+        $now = now();
+
+        $query = CustomerCoupon::query()
+            ->with('customer')
+            ->where('coupon_id', $coupon->id);
+
+        if ($status === 'used') {
+            $query->where(function ($query) {
+                $query->where('status', 'used')
+                    ->orWhereNotNull('used_at');
+            });
+        } elseif ($status === 'in_progress') {
+            $query->where('status', 'in_progress');
+        } elseif ($status === 'expired') {
+            $query->where(function ($query) use ($now) {
+                $query->where('status', 'expired')
+                    ->orWhere(function ($query) use ($now) {
+                        $query->whereNotNull('expires_at')
+                            ->where('expires_at', '<', $now);
+                    });
+            });
+        } elseif ($status === 'unused') {
+            $query->where('status', 'active')
+                ->whereNull('used_at')
+                ->where(function ($query) use ($now) {
+                    $query->whereNull('expires_at')
+                        ->orWhere('expires_at', '>=', $now);
+                });
+        }
+
+        if ($search) {
+            $query->where(function ($query) use ($search) {
+                $query->where('code', 'like', "%{$search}%")
+                    ->orWhereHas('customer', function ($customerQuery) use ($search) {
+                        $customerQuery->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        $filename = 'coupon-redemptions-'.$coupon->id.'.csv';
+
+        return response()->streamDownload(function () use ($query, $coupon, $now) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, [
+                'Number',
+                'Customer Name',
+                'Customer Email',
+                'Coupon Code',
+                'Status',
+                'Purchased At',
+                'Valid Until',
+            ]);
+
+            $rows = $query->orderByDesc('redeemed_at')->get();
+            foreach ($rows as $index => $record) {
+                $customer = $record->customer;
+                $nameParts = array_filter([$customer?->first_name, $customer?->last_name]);
+                $name = $nameParts ? implode(' ', $nameParts) : ($customer?->email ?? 'Customer');
+
+                $statusLabel = 'Unused';
+                if ($record->status === 'used' || $record->used_at) {
+                    $statusLabel = 'Used';
+                } else {
+                    $expiresAt = $record->expires_at ?? $coupon->end_date;
+                    if ($record->status === 'expired' || ($expiresAt && $expiresAt->lt($now))) {
+                        $statusLabel = 'Expired';
+                    } elseif ($record->status === 'in_progress') {
+                        $statusLabel = 'In progress';
+                    }
+                }
+
+                $expiresAt = $record->expires_at ?? $coupon->end_date;
+
+                fputcsv($handle, [
+                    $index + 1,
+                    $name,
+                    $customer?->email ?? '',
+                    $record->code ?? '',
+                    $statusLabel,
+                    optional($record->redeemed_at)->toIso8601String(),
+                    optional($expiresAt)->toIso8601String(),
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv']);
     }
 
     private function generateCode(string $title): string

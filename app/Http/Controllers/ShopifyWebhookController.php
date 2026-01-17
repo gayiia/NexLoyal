@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\CustomerCoupon;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
@@ -52,6 +53,66 @@ class ShopifyWebhookController extends Controller
                 'shopify_created_at' => $data['created_at'] ?? null,
             ]
         );
+
+        return response('OK', 200);
+    }
+
+    public function handleOrders(Request $request): Response
+    {
+        $secret = config('services.shopify.webhook_secret');
+        if (!$secret) {
+            return response('Webhook secret not set', 500);
+        }
+
+        $payload = $request->getContent();
+        $hmac = $request->header('X-Shopify-Hmac-Sha256');
+        $computed = base64_encode(hash_hmac('sha256', $payload, $secret, true));
+
+        if (!$hmac || !hash_equals($computed, $hmac)) {
+            return response('Invalid signature', 401);
+        }
+
+        $topic = $request->header('X-Shopify-Topic');
+        if (!in_array($topic, ['orders/paid', 'orders/create', 'orders/fulfilled'], true)) {
+            return response('Ignored', 202);
+        }
+
+        $data = json_decode($payload, true);
+        if (!is_array($data)) {
+            return response('Invalid payload', 400);
+        }
+
+        $discounts = $data['discount_codes'] ?? [];
+        if (!is_array($discounts) || !$discounts) {
+            return response('OK', 200);
+        }
+
+        $codes = [];
+        foreach ($discounts as $discount) {
+            if (!empty($discount['code'])) {
+                $codes[] = strtoupper((string) $discount['code']);
+            }
+        }
+
+        if (!$codes) {
+            return response('OK', 200);
+        }
+
+        if ($topic === 'orders/fulfilled') {
+            CustomerCoupon::query()
+                ->whereIn('code', $codes)
+                ->update([
+                    'status' => 'used',
+                    'used_at' => now(),
+                ]);
+        } else {
+            CustomerCoupon::query()
+                ->whereIn('code', $codes)
+                ->update([
+                    'status' => 'in_progress',
+                    'used_at' => null,
+                ]);
+        }
 
         return response('OK', 200);
     }

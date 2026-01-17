@@ -476,6 +476,9 @@
                                                                     @else
                                                                         <span class="nl-action-item text-slate-500 cursor-not-allowed">Edit (locked)</span>
                                                                     @endif
+                                                                    @if ($coupon->status === 'active')
+                                                                        <a class="nl-action-item" href="{{ route('coupons.view', $coupon) }}">View</a>
+                                                                    @endif
                                                                     @if (in_array($coupon->status, ['draft', 'paused'], true))
                                                                         <form method="POST" action="{{ route('coupons.activate', $coupon) }}">
                                                                             @csrf

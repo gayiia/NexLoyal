@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('webhooks/shopify/customers', [ShopifyWebhookController::class, 'handleCustomers'])
     ->name('webhooks.shopify.customers');
+Route::post('webhooks/shopify/orders', [ShopifyWebhookController::class, 'handleOrders'])
+    ->name('webhooks.shopify.orders');
 
 Route::get('loyalty/token', [LoyaltyWidgetController::class, 'token'])->name('loyalty.token');
 Route::options('loyalty/token', [LoyaltyWidgetController::class, 'tokenOptions']);
@@ -23,7 +25,14 @@ Route::post('loyalty/coupons/{coupon}/redeem', [LoyaltyWidgetController::class, 
     ->name('loyalty.coupons.redeem');
 Route::get('loyalty/my-coupons', [LoyaltyWidgetController::class, 'myCoupons'])->name('loyalty.my-coupons');
 Route::options('loyalty/my-coupons', [LoyaltyWidgetController::class, 'myCouponsOptions']);
+Route::get('loyalty/my-coupons/{redemption}', [LoyaltyWidgetController::class, 'widgetMyCouponDetail'])
+    ->name('loyalty.my-coupons.show');
 Route::get('loyalty/dashboard', [LoyaltyWidgetController::class, 'dashboard'])->name('loyalty.dashboard');
+
+Route::get('api/widget/my-coupons', [LoyaltyWidgetController::class, 'widgetMyCoupons'])
+    ->name('widget.my-coupons');
+Route::get('api/widget/my-coupons/{redemption}', [LoyaltyWidgetController::class, 'widgetMyCouponDetail'])
+    ->name('widget.my-coupons.show');
 
 Route::get('/', function () {
     return redirect()->route('login');
@@ -40,6 +49,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('customer-groups');
     Route::get('coupons', [CouponController::class, 'index'])->name('coupons');
     Route::post('coupons', [CouponController::class, 'store'])->name('coupons.store');
+    Route::get('coupons/{coupon}/view', [CouponController::class, 'view'])->name('coupons.view');
+    Route::get('coupons/{coupon}/export', [CouponController::class, 'export'])->name('coupons.export');
     Route::get('coupons/{coupon}/edit', [CouponController::class, 'edit'])->name('coupons.edit');
     Route::patch('coupons/{coupon}', [CouponController::class, 'update'])->name('coupons.update');
     Route::patch('coupons/{coupon}/activate', [CouponController::class, 'activate'])->name('coupons.activate');

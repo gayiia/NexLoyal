@@ -419,10 +419,10 @@
       customerEmail: {{ customer.email | json }},
       shopDomain: "{{ shop.domain }}",
       loginUrl: "{{ routes.account_login_url }}",
-      tokenUrl: "https://comp-minority-lbs-facility.trycloudflare.com/loyalty/token",
-      dataUrl: "https://comp-minority-lbs-facility.trycloudflare.com/loyalty/data",
-      couponsUrl: "https://comp-minority-lbs-facility.trycloudflare.com/loyalty/coupons",
-      myCouponsUrl: "https://comp-minority-lbs-facility.trycloudflare.com/loyalty/my-coupons"
+      tokenUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/loyalty/token",
+      dataUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/loyalty/data",
+      couponsUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/loyalty/coupons",
+      myCouponsUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/loyalty/my-coupons"
     };
 
     var trigger = document.getElementById('nexloyal-trigger');
@@ -784,6 +784,61 @@
       return config.myCouponsUrl + '?token=' + encodeURIComponent(config.currentToken);
     }
 
+    function getMyCouponDetailUrl(redemptionId) {
+      return config.myCouponsUrl + '/' + encodeURIComponent(redemptionId) + '?token=' + encodeURIComponent(config.currentToken);
+    }
+
+    function formatStatusLabel(status) {
+      if (!status) {
+        return 'Unused';
+      }
+      var normalized = status.toString().toLowerCase();
+      if (normalized === 'used') {
+        return 'Used';
+      }
+      if (normalized === 'in_progress') {
+        return 'On hold';
+      }
+      if (normalized === 'expired') {
+        return 'Expired';
+      }
+      return 'Unused';
+    }
+
+    function statusClassFromLabel(label) {
+      if (label === 'Used') {
+        return 'nexloyal-badge is-used';
+      }
+      if (label === 'On hold') {
+        return 'nexloyal-badge';
+      }
+      if (label === 'Expired') {
+        return 'nexloyal-badge is-used';
+      }
+      return 'nexloyal-badge';
+    }
+
+    function formatDateLabel(dateString) {
+      if (!dateString) {
+        return 'No expiry';
+      }
+      var date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return 'No expiry';
+      }
+      return date.toISOString().slice(0, 10);
+    }
+
+    function maskCode(code) {
+      if (!code) {
+        return 'Code unavailable';
+      }
+      if (code.length <= 6) {
+        return code;
+      }
+      return code.slice(0, 4) + '•••' + code.slice(-2);
+    }
+
     function copyToClipboard(text, button) {
       if (!text) {
         return;
@@ -848,18 +903,22 @@
 
           var couponIndex = {};
           var rows = data.coupons.map(function (coupon) {
-            couponIndex[coupon.id] = coupon;
-            var statusLabel = coupon.used_at ? 'Used' : 'Unused';
-            var statusClass = coupon.used_at ? 'nexloyal-badge is-used' : 'nexloyal-badge';
+            couponIndex[coupon.redemption_id || coupon.id] = coupon;
+            var statusLabel = formatStatusLabel(coupon.status);
+            var statusClass = statusClassFromLabel(statusLabel);
+            var codeLabel = maskCode(coupon.shopify_discount_code || coupon.code);
+            var expiryLabel = formatDateLabel(coupon.expires_at);
+            var titleLabel = coupon.coupon_title || coupon.title || 'Coupon';
+            var valueLabel = coupon.coupon_value_label || (typeof coupon.coupon_points === 'number' ? (coupon.coupon_points + ' points') : 'Value unavailable');
             return '' +
-              '<div class="nexloyal-row" data-coupon-id="' + coupon.id + '">' +
+              '<div class="nexloyal-row" data-coupon-id="' + (coupon.redemption_id || coupon.id) + '">' +
                 '<div>' +
-                  '<div class="nexloyal-row-title">' + coupon.title + '</div>' +
-                  '<div class="nexloyal-row-sub">' + coupon.points_spent + ' points</div>' +
+                  '<div class="nexloyal-row-title">' + titleLabel + '</div>' +
+                  '<div class="nexloyal-row-sub">' + valueLabel + ' | ' + codeLabel + ' | ' + expiryLabel + '</div>' +
                 '</div>' +
                 '<div class="nexloyal-row-actions">' +
                   '<span class="' + statusClass + '">' + statusLabel + '</span>' +
-                  '<button type="button" class="nexloyal-action" data-view-my-coupon="' + coupon.id + '">View</button>' +
+                  '<button type="button" class="nexloyal-action" data-view-my-coupon="' + (coupon.redemption_id || coupon.id) + '">View</button>' +
                 '</div>' +
               '</div>';
           }).join('');
@@ -870,7 +929,15 @@
           listEl.querySelectorAll('[data-view-my-coupon]').forEach(function (button) {
             button.addEventListener('click', function () {
               var couponId = button.getAttribute('data-view-my-coupon');
-              renderMyCouponDetail(config.myCouponIndex ? config.myCouponIndex[couponId] : null);
+              fetch(getMyCouponDetailUrl(couponId), { method: 'GET', mode: 'cors' })
+                .then(function(response) { return response.json(); })
+                .then(function(payload) {
+                  var coupon = payload && payload.coupon ? payload.coupon : (config.myCouponIndex ? config.myCouponIndex[couponId] : null);
+                  renderMyCouponDetail(coupon);
+                })
+                .catch(function() {
+                  renderMyCouponDetail(config.myCouponIndex ? config.myCouponIndex[couponId] : null);
+                });
             });
           });
         })
@@ -885,22 +952,25 @@
         return;
       }
 
-      var statusLabel = coupon.used_at ? 'Used' : 'Unused';
-      var statusClass = coupon.used_at ? 'nexloyal-badge is-used' : 'nexloyal-badge';
-      var codeLabel = coupon.code || 'Code unavailable';
+      var statusLabel = formatStatusLabel(coupon.status);
+      var statusClass = statusClassFromLabel(statusLabel);
+      var codeLabel = coupon.shopify_discount_code || coupon.code || 'Code unavailable';
+      var expiryLabel = formatDateLabel(coupon.expires_at);
+      var titleLabel = coupon.coupon_title || coupon.title || 'Coupon';
+      var valueLabel = coupon.coupon_value_label || (typeof coupon.coupon_points === 'number' ? (coupon.coupon_points + ' points') : 'Value unavailable');
 
       content.innerHTML = '' +
         '<div class="nexloyal-dashboard">' +
           '<div class="nexloyal-welcome">' +
-            '<h2>' + coupon.title + '</h2>' +
-            '<p>Redeemed for ' + coupon.points_spent + ' points.</p>' +
+            '<h2>' + titleLabel + '</h2>' +
+            '<p>Value: ' + valueLabel + '. Valid until ' + expiryLabel + '.</p>' +
           '</div>' +
           '<div class="nexloyal-card">' +
             '<div class="' + statusClass + '">' + statusLabel + '</div>' +
             '<div class="nexloyal-code" style="margin-top:12px;">' + codeLabel + '</div>' +
           '</div>' +
           '<div class="nexloyal-form-actions">' +
-            '<button type="button" id="nexloyal-copy-code"' + (coupon.code ? '' : ' disabled') + '>Copy code</button>' +
+            '<button type="button" id="nexloyal-copy-code"' + ((coupon.shopify_discount_code || coupon.code) ? '' : ' disabled') + '>Copy code</button>' +
             '<button type="button" id="nexloyal-my-coupon-back" class="nexloyal-secondary">Back</button>' +
           '</div>' +
         '</div>';
@@ -912,7 +982,7 @@
       var copyButton = document.getElementById('nexloyal-copy-code');
       if (copyButton) {
         copyButton.addEventListener('click', function () {
-          copyToClipboard(coupon.code, copyButton);
+          copyToClipboard(coupon.shopify_discount_code || coupon.code, copyButton);
         });
       }
     }
