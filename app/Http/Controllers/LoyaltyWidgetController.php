@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Coupon;
 use App\Models\Customer;
 use App\Models\CustomerCoupon;
+use App\Models\MysteryBox;
 use App\Models\PointsTransaction;
 use App\Models\PointRule;
 use App\Models\Tier;
@@ -104,6 +105,21 @@ class LoyaltyWidgetController extends Controller
             'customer' => $customer,
             'points' => $points,
             'tier' => $tier,
+            'token' => $token,
+        ]);
+    }
+
+    public function mysteryBoxPage(Request $request)
+    {
+        $token = (string) $request->query('token', '');
+        [$customer, $error] = $this->customerFromToken($token);
+
+        if (!$customer) {
+            return view('loyalty.mystery-box', ['error' => $error ?? 'Unauthorized.']);
+        }
+
+        return view('loyalty.mystery-box', [
+            'customer' => $customer,
             'token' => $token,
         ]);
     }
@@ -309,6 +325,7 @@ class LoyaltyWidgetController extends Controller
 
         $coupons = Coupon::query()
             ->where('status', 'active')
+            ->where('is_mystery_box_coupon', false)
             ->where(function ($query) use ($today) {
                 $query->whereNull('start_date')
                     ->orWhere('start_date', '<=', $today);
@@ -476,6 +493,7 @@ class LoyaltyWidgetController extends Controller
                 'points_spent' => $pointsCost,
                 'code' => $code,
                 'status' => 'active',
+                'source' => 'REDEEM',
                 'redeemed_at' => now(),
                 'expires_at' => $coupon->end_date,
             ]);
@@ -573,6 +591,168 @@ class LoyaltyWidgetController extends Controller
                 'coupon' => $this->formatRedemption($redemption),
             ])
         );
+    }
+
+    public function mysteryBoxActive(Request $request): Response
+    {
+        $token = (string) $request->query('token', '');
+        [$customer, $error] = $this->customerFromToken($token);
+
+        if (!$customer) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => $error ?? 'Unauthorized.'], 401)
+            );
+        }
+
+        $points = (int) ($customer->loyalty_points ?? 0);
+        $tier = $customer->tier ?? $this->resolveTier($points);
+        $tierId = $tier?->id;
+
+        if (!$tierId) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['box' => null, 'message' => 'No tier available for this customer.'])
+            );
+        }
+
+        $box = $this->findActiveMysteryBoxForTier($tierId);
+        if (!$box) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['box' => null, 'message' => 'No active mystery box available.'])
+            );
+        }
+
+        $eligibility = $this->mysteryBoxEligibility($customer->id, $box);
+        $items = $box->items()->with('coupon')->get();
+
+        return $this->corsResponse(
+            $request,
+            response()->json([
+                'box' => [
+                    'id' => $box->id,
+                    'name' => $box->name,
+                    'claim_rule' => $box->claim_rule,
+                    'can_claim' => $eligibility['can_claim'],
+                    'next_claim_at' => $eligibility['next_claim_at']
+                        ? $eligibility['next_claim_at']->toIso8601String()
+                        : null,
+                ],
+                'wheel_items' => $items->map(function ($item) {
+                    return [
+                        'title' => $item->coupon?->title ?? 'Reward',
+                    ];
+                })->values(),
+            ])
+        );
+    }
+
+    public function mysteryBoxClaim(Request $request, MysteryBox $mysteryBox, ShopifyDiscountService $shopifyDiscounts): Response
+    {
+        $token = (string) $request->query('token', '');
+        [$customer, $error] = $this->customerFromToken($token);
+
+        if (!$customer) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => $error ?? 'Unauthorized.'], 401)
+            );
+        }
+
+        $points = (int) ($customer->loyalty_points ?? 0);
+        $tier = $customer->tier ?? $this->resolveTier($points);
+        $tierId = $tier?->id;
+
+        if (!$tierId) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => 'No tier available for this customer.'], 422)
+            );
+        }
+
+        if (!$this->isMysteryBoxActive($mysteryBox, $tierId)) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => 'Mystery box not available.'], 422)
+            );
+        }
+
+        $eligibility = $this->mysteryBoxEligibility($customer->id, $mysteryBox);
+        if (!$eligibility['can_claim']) {
+            return $this->corsResponse(
+                $request,
+                response()->json([
+                    'message' => 'Already claimed.',
+                    'next_claim_at' => $eligibility['next_claim_at']
+                        ? $eligibility['next_claim_at']->toIso8601String()
+                        : null,
+                ], 409)
+            );
+        }
+
+        $items = $mysteryBox->items()->with('coupon')->get();
+        if ($items->isEmpty()) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => 'Mystery box has no rewards.'], 422)
+            );
+        }
+
+        $selectedItem = $this->pickMysteryBoxItem($items);
+        $coupon = $selectedItem?->coupon;
+        if (!$coupon || !$coupon->shopify_price_rule_id) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => 'Reward is not ready.'], 422)
+            );
+        }
+
+        $code = $this->generateRedeemCode($coupon);
+
+        try {
+            $shopifyDiscounts->createDiscountCode((int) $coupon->shopify_price_rule_id, $code);
+        } catch (\Throwable $exception) {
+            return $this->corsResponse(
+                $request,
+                response()->json(['message' => $exception->getMessage()], 502)
+            );
+        }
+
+        $record = CustomerCoupon::create([
+            'customer_id' => $customer->id,
+            'coupon_id' => $coupon->id,
+            'points_spent' => 0,
+            'code' => $code,
+            'status' => 'active',
+            'source' => 'MYSTERY_BOX',
+            'mystery_box_id' => $mysteryBox->id,
+            'redeemed_at' => now(),
+            'expires_at' => $coupon->end_date,
+        ]);
+
+        return $this->corsResponse(
+            $request,
+            response()->json([
+                'won' => [
+                    'coupon_id' => $coupon->id,
+                    'title' => $coupon->title,
+                    'code' => $code,
+                    'expires_at' => optional($coupon->end_date)->toIso8601String(),
+                    'redemption_id' => $record->id,
+                ],
+                'wheel_items' => $items->map(function ($item) {
+                    return [
+                        'title' => $item->coupon?->title ?? 'Reward',
+                    ];
+                })->values(),
+            ])
+        );
+    }
+
+    public function mysteryBoxClaimOptions(Request $request): Response
+    {
+        return $this->corsResponse($request, response()->noContent());
     }
 
     private function resolveTier(int $points): ?Tier
@@ -1024,5 +1204,102 @@ class LoyaltyWidgetController extends Controller
         }
 
         return strtoupper(Str::random(12));
+    }
+
+    private function findActiveMysteryBoxForTier(int $tierId): ?MysteryBox
+    {
+        $now = now();
+
+        return MysteryBox::query()
+            ->where('is_active', true)
+            ->where(function ($query) use ($now) {
+                $query->whereNull('starts_at')
+                    ->orWhere('starts_at', '<=', $now);
+            })
+            ->where(function ($query) use ($now) {
+                $query->whereNull('ends_at')
+                    ->orWhere('ends_at', '>=', $now);
+            })
+            ->whereJsonContains('tiers', $tierId)
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    private function isMysteryBoxActive(MysteryBox $box, int $tierId): bool
+    {
+        if (!$box->is_active) {
+            return false;
+        }
+
+        $now = now();
+        if ($box->starts_at && $box->starts_at->gt($now)) {
+            return false;
+        }
+        if ($box->ends_at && $box->ends_at->lt($now)) {
+            return false;
+        }
+
+        $tierIds = array_map('intval', $box->tiers ?? []);
+        if ($tierIds && !in_array($tierId, $tierIds, true)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function mysteryBoxEligibility(int $customerId, MysteryBox $box): array
+    {
+        $lastClaim = CustomerCoupon::query()
+            ->where('customer_id', $customerId)
+            ->where('source', 'MYSTERY_BOX')
+            ->where('mystery_box_id', $box->id)
+            ->orderByDesc('redeemed_at')
+            ->first();
+
+        if (!$lastClaim || !$lastClaim->redeemed_at) {
+            return ['can_claim' => true, 'next_claim_at' => null];
+        }
+
+        $lastClaimAt = Carbon::parse($lastClaim->redeemed_at);
+        $rule = strtoupper((string) $box->claim_rule);
+        if ($rule === 'ONCE_EVER') {
+            return ['can_claim' => false, 'next_claim_at' => null];
+        }
+
+        if ($rule === 'ONCE_PER_WEEK') {
+            $next = $lastClaimAt->copy()->addWeek()->startOfDay();
+            return [
+                'can_claim' => now()->gte($next),
+                'next_claim_at' => $next,
+            ];
+        }
+
+        $next = $lastClaimAt->copy()->addDay()->startOfDay();
+        return [
+            'can_claim' => now()->gte($next),
+            'next_claim_at' => $next,
+        ];
+    }
+
+    private function pickMysteryBoxItem($items)
+    {
+        $totalWeight = $items->sum(function ($item) {
+            return (int) ($item->weight ?? 1);
+        });
+
+        if ($totalWeight <= 0) {
+            return $items->random();
+        }
+
+        $target = random_int(1, $totalWeight);
+        $running = 0;
+        foreach ($items as $item) {
+            $running += (int) ($item->weight ?? 1);
+            if ($target <= $running) {
+                return $item;
+            }
+        }
+
+        return $items->first();
     }
 }

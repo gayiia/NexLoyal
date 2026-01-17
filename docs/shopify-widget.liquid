@@ -417,6 +417,42 @@
     padding: 3px 6px;
     min-width: auto;
   }
+  .nexloyal-wheel {
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 14px;
+    background: #0b1324;
+    height: 180px;
+    overflow: hidden;
+    position: relative;
+  }
+  .nexloyal-wheel::after {
+    content: "";
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    top: 50%;
+    height: 36px;
+    transform: translateY(-50%);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 10px;
+    pointer-events: none;
+  }
+  .nexloyal-wheel-list {
+    transition: transform 2.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .nexloyal-wheel-item {
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    color: #e2e8f0;
+  }
+  .nexloyal-wheel-note {
+    font-size: 12px;
+    color: #94a3b8;
+    text-align: center;
+  }
   .nexloyal-toast {
     position: absolute;
     bottom: 16px;
@@ -559,6 +595,8 @@
       earnRulesUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/api/widget/earn/rules",
       earnStatusUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/api/widget/earn/status",
       earnSocialUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/api/widget/earn/social",
+      mysteryBoxActiveUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/api/widget/mystery-box/active",
+      mysteryBoxClaimUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/api/widget/mystery-box",
       pointsHistoryUrl: "https://observer-riders-isolation-shirt.trycloudflare.com/api/widget/points/history"
     };
 
@@ -720,7 +758,7 @@
                 '</svg>' +
               '</div>' +
             '</div>' +
-            '<div class="nexloyal-row">' +
+            '<div class="nexloyal-row" data-action="mystery-box">' +
               '<div class="nexloyal-row-left">' +
                 '<div class="nexloyal-row-icon">' +
                   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -794,6 +832,12 @@
       if (earnRow) {
         earnRow.addEventListener('click', function () {
           renderEarnPoints();
+        });
+      }
+      var mysteryRow = content.querySelector('[data-action="mystery-box"]');
+      if (mysteryRow) {
+        mysteryRow.addEventListener('click', function () {
+          renderMysteryBox();
         });
       }
     }
@@ -956,6 +1000,14 @@
 
     function getEarnStatusUrl() {
       return config.earnStatusUrl + '?token=' + encodeURIComponent(config.currentToken);
+    }
+
+    function getMysteryBoxActiveUrl() {
+      return config.mysteryBoxActiveUrl + '?token=' + encodeURIComponent(config.currentToken);
+    }
+
+    function getMysteryBoxClaimUrl(boxId) {
+      return config.mysteryBoxClaimUrl + '/' + encodeURIComponent(boxId) + '/claim?token=' + encodeURIComponent(config.currentToken);
     }
 
     function parseJsonResponse(response) {
@@ -1266,6 +1318,180 @@
         })
         .catch(function() {
           content.innerHTML = '<p>Unable to load earn options right now. Please try again.</p>';
+        });
+    }
+
+    function renderMysteryBox() {
+      if (!config.currentToken) {
+        content.innerHTML = '<p>Missing token. Please reopen the widget.</p>';
+        return;
+      }
+
+      content.innerHTML = '' +
+        '<div class="nexloyal-loading">' +
+          '<div class="nexloyal-spinner" aria-label="Loading"></div>' +
+        '</div>';
+
+      fetch(getMysteryBoxActiveUrl(), { method: 'GET', mode: 'cors' })
+        .then(function(response) { return response.json(); })
+        .then(function(payload) {
+          var box = payload && payload.box ? payload.box : null;
+          var wheelItems = payload && Array.isArray(payload.wheel_items) ? payload.wheel_items : [];
+
+          if (!box) {
+            content.innerHTML = '' +
+              '<div class="nexloyal-dashboard">' +
+                '<div class="nexloyal-welcome">' +
+                  '<h2>Mystery Box</h2>' +
+                  '<p>No active rewards are available right now.</p>' +
+                '</div>' +
+                '<div class="nexloyal-form-actions">' +
+                  '<button type="button" id="nexloyal-mystery-back" class="nexloyal-secondary">Back</button>' +
+                '</div>' +
+              '</div>';
+            document.getElementById('nexloyal-mystery-back').addEventListener('click', function () {
+              loadDashboard(config.currentToken);
+            });
+            return;
+          }
+
+          var canClaim = !!box.can_claim;
+          var nextClaim = box.next_claim_at ? new Date(box.next_claim_at) : null;
+          var nextLabel = nextClaim && !isNaN(nextClaim.getTime())
+            ? nextClaim.toISOString().slice(0, 10)
+            : '';
+
+          content.innerHTML = '' +
+            '<div class="nexloyal-dashboard">' +
+              '<div class="nexloyal-welcome">' +
+                '<h2>Mystery Box</h2>' +
+                '<p>Spin the wheel to reveal your reward.</p>' +
+              '</div>' +
+              '<div class="nexloyal-card">' +
+                '<p class="nexloyal-muted" style="text-align:left;">Try your luck and unlock a surprise reward.</p>' +
+                '<div class="nexloyal-wheel-note">Your reward will be added to My Coupons.</div>' +
+              '</div>' +
+              '<div class="nexloyal-form-actions">' +
+                '<button type="button" id="nexloyal-mystery-claim"' + (canClaim ? '' : ' disabled') + '>Claim reward</button>' +
+                '<button type="button" id="nexloyal-mystery-back" class="nexloyal-secondary">Back</button>' +
+              '</div>' +
+              (canClaim ? '' : '<div class="nexloyal-muted">Already claimed' + (nextLabel ? '. Try again on ' + nextLabel : '') + '.</div>') +
+            '</div>';
+
+          document.getElementById('nexloyal-mystery-back').addEventListener('click', function () {
+            loadDashboard(config.currentToken);
+          });
+
+          var claimButton = document.getElementById('nexloyal-mystery-claim');
+          if (!claimButton) {
+            return;
+          }
+
+          claimButton.addEventListener('click', function () {
+            if (claimButton.disabled) {
+              return;
+            }
+
+            claimButton.disabled = true;
+            claimButton.textContent = 'Spinning...';
+
+            fetch(getMysteryBoxClaimUrl(box.id), { method: 'POST', mode: 'cors' })
+              .then(function(response) { return response.json(); })
+              .then(function(result) {
+                if (!result || !result.won) {
+                  throw new Error((result && result.message) ? result.message : 'Unable to claim right now');
+                }
+
+                var won = result.won;
+                var listItems = Array.isArray(result.wheel_items) ? result.wheel_items : wheelItems;
+                var titles = listItems.map(function (item) { return item.title; }).filter(Boolean);
+                if (!titles.length) {
+                  titles = [won.title || 'Reward'];
+                }
+
+                var repeats = 4;
+                var itemsHtml = '';
+                for (var i = 0; i < repeats; i++) {
+                  titles.forEach(function (title) {
+                    itemsHtml += '<div class="nexloyal-wheel-item">' + title + '</div>';
+                  });
+                }
+
+                content.innerHTML = '' +
+                  '<div class="nexloyal-dashboard">' +
+                    '<div class="nexloyal-welcome">' +
+                      '<h2>Mystery Box</h2>' +
+                      '<p>And the wheel stops at...</p>' +
+                    '</div>' +
+                    '<div class="nexloyal-card">' +
+                      '<div class="nexloyal-wheel">' +
+                        '<div id="nexloyal-wheel-list" class="nexloyal-wheel-list">' +
+                          itemsHtml +
+                        '</div>' +
+                      '</div>' +
+                    '</div>' +
+                    '<div id="nexloyal-wheel-result"></div>' +
+                    '<div class="nexloyal-form-actions">' +
+                      '<button type="button" id="nexloyal-mystery-back" class="nexloyal-secondary">Back</button>' +
+                    '</div>' +
+                  '</div>';
+
+                var wheelList = document.getElementById('nexloyal-wheel-list');
+                var itemHeight = 36;
+                var baseIndex = titles.indexOf(won.title);
+                if (baseIndex < 0) {
+                  baseIndex = 0;
+                }
+                var targetIndex = baseIndex + (titles.length * 2);
+
+                setTimeout(function () {
+                  if (wheelList) {
+                    wheelList.style.transform = 'translateY(' + (-targetIndex * itemHeight) + 'px)';
+                  }
+                }, 60);
+
+                setTimeout(function () {
+                  var resultEl = document.getElementById('nexloyal-wheel-result');
+                  if (!resultEl) {
+                    return;
+                  }
+                  resultEl.innerHTML = '' +
+                    '<div class="nexloyal-card">' +
+                      '<h4>You won: ' + (won.title || 'Reward') + '</h4>' +
+                      '<div class="nexloyal-code">' + won.code + '</div>' +
+                      '<div class="nexloyal-form-actions" style="margin-top:12px;">' +
+                        '<button type="button" id="nexloyal-mystery-copy">Copy code</button>' +
+                        '<button type="button" id="nexloyal-mystery-view" class="nexloyal-secondary">View in My Coupons</button>' +
+                      '</div>' +
+                    '</div>';
+
+                  var copyButton = document.getElementById('nexloyal-mystery-copy');
+                  if (copyButton) {
+                    copyButton.addEventListener('click', function () {
+                      copyToClipboard(won.code, copyButton);
+                    });
+                  }
+                  var viewButton = document.getElementById('nexloyal-mystery-view');
+                  if (viewButton) {
+                    viewButton.addEventListener('click', function () {
+                      renderMyCouponsList();
+                    });
+                  }
+                }, 2700);
+
+                document.getElementById('nexloyal-mystery-back').addEventListener('click', function () {
+                  loadDashboard(config.currentToken);
+                });
+              })
+              .catch(function(error) {
+                showToast(error.message || 'Unable to claim right now');
+                claimButton.disabled = false;
+                claimButton.textContent = 'Claim reward';
+              });
+          });
+        })
+        .catch(function() {
+          content.innerHTML = '<p>Unable to load Mystery Box right now. Please try again.</p>';
         });
     }
 

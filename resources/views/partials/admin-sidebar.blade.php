@@ -45,6 +45,15 @@
             <span>Coupons</span>
             <span class="text-xs text-slate-500 nl-text-muted">Rewards</span>
         </a>
+        <a href="{{ route('mystery-boxes') }}"
+           @class([
+               'flex items-center justify-between rounded-lg border border-transparent px-3 py-2 transition nl-sidebar-link',
+               'border-slate-800 bg-slate-900/80 text-slate-100 nl-sidebar-link-active' => $isActive('mystery-boxes'),
+               'text-slate-300 hover:border-slate-800 hover:bg-slate-900/60' => !$isActive('mystery-boxes'),
+           ])>
+            <span>Mystery Box</span>
+            <span class="text-xs text-slate-500 nl-text-muted">Coupons</span>
+        </a>
         <a href="#" class="flex items-center justify-between rounded-lg border border-transparent px-3 py-2 text-slate-300 transition hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
             <span>Notifications</span>
             <span class="text-xs text-slate-500 nl-text-muted">Engage</span>

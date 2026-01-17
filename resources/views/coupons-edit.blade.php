@@ -206,14 +206,21 @@
                                                     <p class="text-xs text-rose-300">{{ $message }}</p>
                                                 @enderror
                                             </div>
-                                            <div class="flex flex-col gap-2">
-                                                <label class="nl-modal-label uppercase text-slate-400">Points value</label>
-                                                <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="points_value" min="0" value="{{ old('points_value', $coupon->points_value) }}" required>
-                                                @error('points_value')
-                                                    <p class="text-xs text-rose-300">{{ $message }}</p>
-                                                @enderror
-                                            </div>
-                                            <div class="flex flex-col gap-2">
+                                              <div class="flex flex-col gap-2">
+                                                  <label class="nl-modal-label uppercase text-slate-400">Points value</label>
+                                                  <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="points_value" min="0" value="{{ old('points_value', $coupon->points_value) }}" required>
+                                                  @error('points_value')
+                                                      <p class="text-xs text-rose-300">{{ $message }}</p>
+                                                  @enderror
+                                              </div>
+                                              <div class="flex flex-col gap-2">
+                                                  <label class="nl-modal-label uppercase text-slate-400">Mystery Box coupon</label>
+                                                  <label class="inline-flex items-center gap-2 text-sm text-slate-200">
+                                                      <input type="checkbox" name="is_mystery_box_coupon" value="1" @checked(old('is_mystery_box_coupon', $coupon->is_mystery_box_coupon))>
+                                                      <span>This is a Mystery Box coupon</span>
+                                                  </label>
+                                              </div>
+                                              <div class="flex flex-col gap-2">
                                                 <label class="nl-modal-label uppercase text-slate-400">Tier</label>
                                                 <select class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" name="tier_id">
                                                     <option value="" @selected(!old('tier_id', $coupon->tier_id))>All tiers</option>

@@ -13,6 +13,8 @@ class CustomerCoupon extends Model
         'points_spent',
         'code',
         'status',
+        'source',
+        'mystery_box_id',
         'redeemed_at',
         'used_at',
         'expires_at',
@@ -33,5 +35,10 @@ class CustomerCoupon extends Model
     public function coupon(): BelongsTo
     {
         return $this->belongsTo(Coupon::class);
+    }
+
+    public function mysteryBox(): BelongsTo
+    {
+        return $this->belongsTo(MysteryBox::class);
     }
 }

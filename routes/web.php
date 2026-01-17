@@ -4,6 +4,7 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerGroupController;
 use App\Http\Controllers\CouponController;
 use App\Http\Controllers\LoyaltyWidgetController;
+use App\Http\Controllers\MysteryBoxController;
 use App\Http\Controllers\ShopifyWebhookController;
 use Illuminate\Support\Facades\Route;
 
@@ -38,6 +39,8 @@ Route::options('loyalty/my-coupons', [LoyaltyWidgetController::class, 'myCoupons
 Route::get('loyalty/my-coupons/{redemption}', [LoyaltyWidgetController::class, 'widgetMyCouponDetail'])
     ->name('loyalty.my-coupons.show');
 Route::get('loyalty/dashboard', [LoyaltyWidgetController::class, 'dashboard'])->name('loyalty.dashboard');
+Route::get('loyalty/mystery-box', [LoyaltyWidgetController::class, 'mysteryBoxPage'])
+    ->name('loyalty.mystery-box');
 
 Route::get('api/widget/my-coupons', [LoyaltyWidgetController::class, 'widgetMyCoupons'])
     ->name('widget.my-coupons');
@@ -50,6 +53,11 @@ Route::get('api/widget/earn/status', [LoyaltyWidgetController::class, 'earnStatu
 Route::post('api/widget/earn/social', [LoyaltyWidgetController::class, 'earnSocial'])
     ->name('widget.earn.social');
 Route::options('api/widget/earn/social', [LoyaltyWidgetController::class, 'earnSocialOptions']);
+Route::get('api/widget/mystery-box/active', [LoyaltyWidgetController::class, 'mysteryBoxActive'])
+    ->name('widget.mystery-box.active');
+Route::post('api/widget/mystery-box/{mysteryBox}/claim', [LoyaltyWidgetController::class, 'mysteryBoxClaim'])
+    ->name('widget.mystery-box.claim');
+Route::options('api/widget/mystery-box/{mysteryBox}/claim', [LoyaltyWidgetController::class, 'mysteryBoxClaimOptions']);
 Route::get('api/widget/points/history', [LoyaltyWidgetController::class, 'pointsHistory'])
     ->name('widget.points.history');
 
@@ -75,6 +83,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('coupons/{coupon}/activate', [CouponController::class, 'activate'])->name('coupons.activate');
     Route::patch('coupons/{coupon}/deactivate', [CouponController::class, 'deactivate'])->name('coupons.deactivate');
     Route::delete('coupons/{coupon}', [CouponController::class, 'destroy'])->name('coupons.destroy');
+
+    Route::get('coupons/mystery-box', [MysteryBoxController::class, 'index'])->name('mystery-boxes');
+    Route::get('coupons/mystery-box/create', [MysteryBoxController::class, 'create'])->name('mystery-boxes.create');
+    Route::post('coupons/mystery-box', [MysteryBoxController::class, 'store'])->name('mystery-boxes.store');
+    Route::get('coupons/mystery-box/{mysteryBox}/view', [MysteryBoxController::class, 'view'])->name('mystery-boxes.view');
+    Route::get('coupons/mystery-box/{mysteryBox}/export', [MysteryBoxController::class, 'export'])->name('mystery-boxes.export');
+    Route::get('coupons/mystery-box/{mysteryBox}/edit', [MysteryBoxController::class, 'edit'])->name('mystery-boxes.edit');
+    Route::patch('coupons/mystery-box/{mysteryBox}', [MysteryBoxController::class, 'update'])->name('mystery-boxes.update');
+    Route::patch('coupons/mystery-box/{mysteryBox}/activate', [MysteryBoxController::class, 'activate'])->name('mystery-boxes.activate');
+    Route::patch('coupons/mystery-box/{mysteryBox}/deactivate', [MysteryBoxController::class, 'deactivate'])->name('mystery-boxes.deactivate');
+    Route::delete('coupons/mystery-box/{mysteryBox}', [MysteryBoxController::class, 'destroy'])->name('mystery-boxes.destroy');
 });
 
 require __DIR__.'/settings.php';
