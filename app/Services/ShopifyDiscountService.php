@@ -228,4 +228,72 @@ class ShopifyDiscountService
             throw new \RuntimeException("Shopify price rule delete failed ({$status}): {$message}");
         }
     }
+
+    public function lookupDiscountCodeId(int $priceRuleId, string $code): ?int
+    {
+        $domain = config('services.shopify.shop_domain');
+        $token = config('services.shopify.admin_token');
+        $version = config('services.shopify.api_version', '2024-01');
+
+        if (!$domain || !$token) {
+            throw new \RuntimeException('Shopify credentials are not configured.');
+        }
+
+        $response = Http::withHeaders([
+            'X-Shopify-Access-Token' => $token,
+            'Accept' => 'application/json',
+        ])->get("https://{$domain}/admin/api/{$version}/price_rules/{$priceRuleId}/discount_codes/lookup.json", [
+            'code' => $code,
+        ]);
+
+        if ($response->status() === 404) {
+            return null;
+        }
+
+        if (!$response->successful()) {
+            $status = $response->status();
+            $message = $response->body();
+            throw new \RuntimeException("Shopify discount code lookup failed ({$status}): {$message}");
+        }
+
+        $data = $response->json();
+        $discount = is_array($data) ? ($data['discount_code'] ?? null) : null;
+        if (!is_array($discount) || empty($discount['id'])) {
+            return null;
+        }
+
+        return (int) $discount['id'];
+    }
+
+    public function deleteDiscountCode(int $priceRuleId, int $discountCodeId): void
+    {
+        $domain = config('services.shopify.shop_domain');
+        $token = config('services.shopify.admin_token');
+        $version = config('services.shopify.api_version', '2024-01');
+
+        if (!$domain || !$token) {
+            throw new \RuntimeException('Shopify credentials are not configured.');
+        }
+
+        $response = Http::withHeaders([
+            'X-Shopify-Access-Token' => $token,
+            'Accept' => 'application/json',
+        ])->delete("https://{$domain}/admin/api/{$version}/price_rules/{$priceRuleId}/discount_codes/{$discountCodeId}.json");
+
+        if (!$response->successful()) {
+            $status = $response->status();
+            $message = $response->body();
+            throw new \RuntimeException("Shopify discount code delete failed ({$status}): {$message}");
+        }
+    }
+
+    public function disableDiscountCode(int $priceRuleId, string $code): void
+    {
+        $discountCodeId = $this->lookupDiscountCodeId($priceRuleId, $code);
+        if (!$discountCodeId) {
+            return;
+        }
+
+        $this->deleteDiscountCode($priceRuleId, $discountCodeId);
+    }
 }

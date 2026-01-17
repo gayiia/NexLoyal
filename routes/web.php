@@ -11,6 +11,12 @@ Route::post('webhooks/shopify/customers', [ShopifyWebhookController::class, 'han
     ->name('webhooks.shopify.customers');
 Route::post('webhooks/shopify/orders', [ShopifyWebhookController::class, 'handleOrders'])
     ->name('webhooks.shopify.orders');
+Route::post('webhooks/shopify/orders/paid', [ShopifyWebhookController::class, 'handleOrders'])
+    ->name('webhooks.shopify.orders.paid');
+Route::post('webhooks/shopify/orders/create', [ShopifyWebhookController::class, 'handleOrders'])
+    ->name('webhooks.shopify.orders.create');
+Route::post('webhooks/shopify/orders/fulfilled', [ShopifyWebhookController::class, 'handleOrders'])
+    ->name('webhooks.shopify.orders.fulfilled');
 
 Route::get('loyalty/token', [LoyaltyWidgetController::class, 'token'])->name('loyalty.token');
 Route::options('loyalty/token', [LoyaltyWidgetController::class, 'tokenOptions']);

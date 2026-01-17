@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use App\Models\CustomerCoupon;
+use App\Services\ShopifyDiscountService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 
 class ShopifyWebhookController extends Controller
 {
@@ -57,7 +59,7 @@ class ShopifyWebhookController extends Controller
         return response('OK', 200);
     }
 
-    public function handleOrders(Request $request): Response
+    public function handleOrders(Request $request, ShopifyDiscountService $shopifyDiscounts): Response
     {
         $secret = config('services.shopify.webhook_secret');
         if (!$secret) {
@@ -98,20 +100,33 @@ class ShopifyWebhookController extends Controller
             return response('OK', 200);
         }
 
+        $records = CustomerCoupon::query()
+            ->with('coupon')
+            ->whereIn(DB::raw('upper(code)'), $codes)
+            ->get();
+
+        $codeQuery = CustomerCoupon::query()->whereKey($records->pluck('id')->all());
+
         if ($topic === 'orders/fulfilled') {
-            CustomerCoupon::query()
-                ->whereIn('code', $codes)
-                ->update([
-                    'status' => 'used',
-                    'used_at' => now(),
-                ]);
+            $codeQuery->update([
+                'status' => 'used',
+                'used_at' => now(),
+            ]);
         } else {
-            CustomerCoupon::query()
-                ->whereIn('code', $codes)
-                ->update([
-                    'status' => 'in_progress',
-                    'used_at' => null,
-                ]);
+            foreach ($records as $record) {
+                $priceRuleId = (int) ($record->coupon?->shopify_price_rule_id ?? 0);
+                if ($priceRuleId > 0 && $record->code) {
+                    try {
+                        $shopifyDiscounts->disableDiscountCode($priceRuleId, $record->code);
+                    } catch (\Throwable $exception) {
+                        // Ignore disable failures; status update still applies.
+                    }
+                }
+            }
+            $codeQuery->update([
+                'status' => 'in_progress',
+                'used_at' => null,
+            ]);
         }
 
         return response('OK', 200);
