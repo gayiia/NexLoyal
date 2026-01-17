@@ -108,69 +108,7 @@
             <div class="min-h-screen bg-[radial-gradient(700px_circle_at_bottom,rgba(30,64,175,0.22),transparent_60%)]">
                 <div class="min-h-screen bg-[linear-gradient(120deg,rgba(15,23,42,0.9),rgba(2,6,23,0.95))] nl-shell">
                     <div class="flex min-h-screen">
-                        <aside class="w-72 border-r border-slate-800/70 bg-slate-950/80 px-6 py-8 nl-panel">
-                            <div class="flex items-center gap-3">
-                            <div class="flex items-center gap-4 nl-animate-up nl-delay-1">
-                                <div class="flex w-40 items-center justify-center">
-                                    <img src="{{ URL::asset('build\Images\logo-light.png') }}" alt="NexLoyal" class="w-auto">
-                                </div>
-                            </div>
-
-                            </div>
-
-                            <nav class="mt-10 space-y-2 text-sm">
-                                <a href="{{ route('dashboard') }}" class="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-3 text-slate-100 nl-sidebar-link nl-sidebar-link-active">
-                                    <span>Dashboard</span>
-                                    <span class="text-xs text-slate-400 nl-text-muted">Overview</span>
-                                </a>
-                                <a href="{{ route('customers') }}" class="flex items-center justify-between rounded-xl border border-transparent px-4 py-3 text-slate-300 hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
-                                    <span>Customers</span>
-                                    <span class="text-xs text-slate-500 nl-text-muted">Segments</span>
-                                </a>
-                                <a href="{{ route('coupons') }}" class="flex items-center justify-between rounded-xl border border-transparent px-4 py-3 text-slate-300 hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
-                                    <span>Coupons</span>
-                                    <span class="text-xs text-slate-500 nl-text-muted">Rewards</span>
-                                </a>
-                                <a href="#" class="flex items-center justify-between rounded-xl border border-transparent px-4 py-3 text-slate-300 hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
-                                    <span>Notifications</span>
-                                    <span class="text-xs text-slate-500 nl-text-muted">Engage</span>
-                                </a>
-                                <div>
-                                    <button id="settings-toggle" type="button" class="flex w-full items-center justify-between rounded-xl border border-transparent px-4 py-3 text-slate-300 hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
-                                        <span>Settings</span>
-                                        <span class="text-xs text-slate-500 nl-text-muted">Rules</span>
-                                    </button>
-                                    <div id="settings-menu" class="mt-2 hidden space-y-1 pl-4 text-xs">
-                                        <a href="{{ route('profile.edit') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Profile</a>
-                                        <a href="{{ route('user-password.edit') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Password</a>
-                                        <a href="{{ route('two-factor.show') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Two-Factor Auth</a>
-                                        <a href="{{ route('appearance.edit') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Appearance</a>
-                                        <a href="{{ route('customer-groups') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Customer groups</a>
-                                        <a href="{{ route('tier-rules') }}" class="block rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-900/60">Tier rules</a>
-                                    </div>
-                                </div>
-                            </nav>
-
-                            <div class="mt-10 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 nl-panel-muted">
-                                <p class="text-xs uppercase tracking-[0.2em] text-slate-400 nl-text-muted">Webhook status</p>
-                                <p class="mt-2 text-sm font-medium text-slate-100">Shopify data stream</p>
-                                <p class="mt-1 text-xs text-slate-400 nl-text-muted">Listening for customers/create, orders/paid, refunds, cancellations.</p>
-                                <div class="mt-3 flex items-center gap-2 text-xs text-slate-300 nl-text-muted">
-                                    <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
-                                    Online (connect in Settings)
-                                </div>
-                            </div>
-                            <div class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 nl-panel-muted">
-                                <p class="text-xs uppercase tracking-[0.2em] text-slate-400 nl-text-muted">Account</p>
-                                <p class="mt-2 text-sm font-medium text-slate-100">gayindu</p>
-                                <form method="POST" action="{{ route('logout') }}" class="mt-3">
-                                    @csrf
-                                    <button type="submit" class="w-full rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-slate-500">
-                                        Log out
-                                    </button>
-                                </form>
-                            </div>
-                        </aside>
+                        @include('partials.admin-sidebar')
 
                         <main class="flex-1 px-10 py-8">
                             <x-page-header eyebrow="" title="Dashobaord" subtitle="">
