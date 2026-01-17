@@ -490,6 +490,98 @@ class CouponController extends Controller
         ]);
     }
 
+    public function exportList(Request $request)
+    {
+        $query = Coupon::query()->with('tier');
+
+        if ($request->filled('type') && $request->input('type') !== 'all') {
+            $query->where('type', $request->input('type'));
+        }
+
+        if ($request->filled('status') && $request->input('status') !== 'all') {
+            $query->where('status', $request->input('status'));
+        }
+
+        if ($request->filled('value_type') && $request->input('value_type') !== 'all') {
+            $query->where('value_type', $request->input('value_type'));
+        }
+
+        if ($request->filled('tier') && $request->input('tier') !== 'all') {
+            $query->where('tier_id', $request->input('tier'));
+        }
+
+        if ($request->filled('start_period')) {
+            $query->whereDate('start_date', '>=', $request->input('start_period'));
+        }
+
+        if ($request->filled('end_period')) {
+            $query->whereDate('end_date', '<=', $request->input('end_period'));
+        }
+
+        if ($request->filled('points') && $request->input('points') !== 'all') {
+            $points = $request->input('points');
+            if ($points === 'under-200') {
+                $query->where('points_value', '<', 200);
+            } elseif ($points === '200-500') {
+                $query->whereBetween('points_value', [200, 500]);
+            } elseif ($points === '500-1000') {
+                $query->whereBetween('points_value', [500, 1000]);
+            } elseif ($points === '1000-plus') {
+                $query->where('points_value', '>=', 1000);
+            }
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where('title', 'like', "%{$search}%");
+        }
+
+        $fileName = 'coupons_' . now()->format('Ymd_His') . '.csv';
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+        ];
+
+        return response()->streamDownload(function () use ($query) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, [
+                'ID',
+                'Title',
+                'Type',
+                'Value Type',
+                'Value',
+                'Points Value',
+                'Status',
+                'Tier',
+                'Start Date',
+                'End Date',
+                'Mystery Box Coupon',
+                'Created At',
+            ]);
+
+            $query->orderByDesc('id')->chunk(500, function ($coupons) use ($handle) {
+                foreach ($coupons as $coupon) {
+                    fputcsv($handle, [
+                        $coupon->id,
+                        $coupon->title,
+                        $coupon->type,
+                        $coupon->value_type,
+                        $coupon->value,
+                        $coupon->points_value,
+                        $coupon->status,
+                        $coupon->tier?->title,
+                        optional($coupon->start_date)->format('Y-m-d') ?: null,
+                        optional($coupon->end_date)->format('Y-m-d') ?: null,
+                        $coupon->is_mystery_box_coupon ? 'Yes' : 'No',
+                        optional($coupon->created_at)->format('Y-m-d H:i:s') ?: null,
+                    ]);
+                }
+            });
+
+            fclose($handle);
+        }, $fileName, $headers);
+    }
+
     public function export(Request $request, Coupon $coupon)
     {
         if ($coupon->status !== 'active') {

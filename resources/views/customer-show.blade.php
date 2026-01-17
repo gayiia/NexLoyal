@@ -154,6 +154,9 @@
                                         <p class="text-sm font-semibold text-slate-100">Point history</p>
                                         <p class="text-xs text-slate-400">Latest earn and redeem activity.</p>
                                     </div>
+                                    <a class="rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-200" href="{{ route('customers.show.export', $customer) }}">
+                                        Export CSV
+                                    </a>
                                 </div>
 
                                 <div class="mt-4 overflow-x-auto">

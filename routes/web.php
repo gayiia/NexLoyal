@@ -79,9 +79,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('customers/export', [CustomerController::class, 'export'])->name('customers.export');
     Route::post('customers', [CustomerController::class, 'store'])->name('customers.store');
     Route::get('customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
+    Route::get('customers/{customer}/export', [CustomerController::class, 'exportDetail'])->name('customers.show.export');
     Route::get('customer-groups', [CustomerGroupController::class, 'index'])
         ->name('customer-groups');
     Route::get('coupons', [CouponController::class, 'index'])->name('coupons');
+    Route::get('coupons/export', [CouponController::class, 'exportList'])->name('coupons.export.list');
     Route::post('coupons', [CouponController::class, 'store'])->name('coupons.store');
     Route::get('coupons/{coupon}/view', [CouponController::class, 'view'])->name('coupons.view');
     Route::get('coupons/{coupon}/export', [CouponController::class, 'export'])->name('coupons.export');
@@ -104,10 +106,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::prefix('admin/notifications/exclusive-chat')->group(function () {
         Route::get('/', [ExclusiveChatController::class, 'index'])->name('exclusive-chat');
+        Route::get('export', [ExclusiveChatController::class, 'exportMessages'])->name('exclusive-chat.export');
         Route::post('messages', [ExclusiveChatController::class, 'storeMessage'])->name('exclusive-chat.messages.store');
         Route::get('settings', [ExclusiveChatController::class, 'settings'])->name('exclusive-chat.settings');
         Route::post('settings', [ExclusiveChatController::class, 'updateSettings'])->name('exclusive-chat.settings.update');
         Route::get('{message}/view', [ExclusiveChatController::class, 'view'])->name('exclusive-chat.view');
+        Route::get('{message}/export', [ExclusiveChatController::class, 'exportPoll'])->name('exclusive-chat.view.export');
         Route::delete('{message}', [ExclusiveChatController::class, 'destroy'])->name('exclusive-chat.destroy');
     });
 

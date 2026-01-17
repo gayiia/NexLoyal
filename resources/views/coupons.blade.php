@@ -300,6 +300,9 @@
                                         <p class="mt-1 text-xs text-slate-400">Track discount availability and tier eligibility.</p>
                                     </div>
                                     <div class="flex flex-wrap items-center gap-2">
+                                        <a class="rounded-xl border border-slate-700 px-4 py-2 text-xs text-slate-200" href="{{ route('coupons.export.list', request()->query()) }}">
+                                            Export CSV
+                                        </a>
                                         <button id="open-create-coupon" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900" type="button">
                                             Add new coupon
                                         </button>

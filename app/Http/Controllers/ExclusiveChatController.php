@@ -6,6 +6,7 @@ use App\Models\ChatAttachment;
 use App\Models\ChatMessage;
 use App\Models\ChatPoll;
 use App\Models\ChatPollOption;
+use App\Models\ChatPollVote;
 use App\Models\ChatSetting;
 use App\Models\Tier;
 use Illuminate\Http\Request;
@@ -176,6 +177,123 @@ class ExclusiveChatController extends Controller
             'options' => $options,
             'totalVotes' => $totalVotes,
         ]);
+    }
+
+    public function exportMessages()
+    {
+        $tiers = Tier::query()->orderBy('min_points')->get()->keyBy('id');
+
+        $fileName = 'exclusive_chat_messages_' . now()->format('Ymd_His') . '.csv';
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+        ];
+
+        $query = ChatMessage::query()
+            ->with(['attachments', 'poll.options'])
+            ->orderByDesc('sent_at')
+            ->orderByDesc('id');
+
+        return response()->streamDownload(function () use ($query, $tiers) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, [
+                'ID',
+                'Type',
+                'Title',
+                'Body',
+                'Tier Visibility',
+                'Sent At',
+                'Attachments',
+                'Poll Options',
+                'Poll Closes At',
+            ]);
+
+            $query->chunk(200, function ($messages) use ($handle, $tiers) {
+                foreach ($messages as $message) {
+                    $tierIds = collect($message->tier_visibility ?? [])->map(fn ($id) => (int) $id)->all();
+                    $tierLabels = $tierIds
+                        ? collect($tierIds)->map(fn ($id) => $tiers->get($id)?->title)->filter()->values()->all()
+                        : ['Default tiers'];
+
+                    $attachments = $message->attachments
+                        ? $message->attachments->map(fn ($attachment) => $attachment->resolved_url ?: $attachment->file_url)->filter()->values()->all()
+                        : [];
+
+                    $pollOptions = [];
+                    $pollClosesAt = null;
+                    if ($message->poll) {
+                        $pollOptions = $message->poll->options
+                            ? $message->poll->options->pluck('label')->filter()->values()->all()
+                            : [];
+                        $pollClosesAt = optional($message->poll->closes_at)->toIso8601String();
+                    }
+
+                    fputcsv($handle, [
+                        $message->id,
+                        $message->type,
+                        $message->title,
+                        $message->body,
+                        implode(', ', $tierLabels),
+                        optional($message->sent_at)->toIso8601String(),
+                        implode(' | ', $attachments),
+                        implode(' | ', $pollOptions),
+                        $pollClosesAt,
+                    ]);
+                }
+            });
+
+            fclose($handle);
+        }, $fileName, $headers);
+    }
+
+    public function exportPoll(ChatMessage $message)
+    {
+        $message->load(['poll.options']);
+        $poll = $message->poll;
+
+        if (!$poll) {
+            return redirect()->route('exclusive-chat');
+        }
+
+        $fileName = 'exclusive_chat_poll_' . $poll->id . '_' . now()->format('Ymd_His') . '.csv';
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+        ];
+
+        $query = ChatPollVote::query()
+            ->with(['option', 'customer.tier'])
+            ->where('chat_poll_id', $poll->id)
+            ->orderByDesc('voted_at');
+
+        return response()->streamDownload(function () use ($query) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, [
+                'Option',
+                'Customer Name',
+                'Customer Email',
+                'Tier',
+                'Voted At',
+            ]);
+
+            $query->chunk(500, function ($votes) use ($handle) {
+                foreach ($votes as $vote) {
+                    $customer = $vote->customer;
+                    $nameParts = array_filter([$customer?->first_name, $customer?->last_name]);
+                    $name = $nameParts ? implode(' ', $nameParts) : ($customer?->email ?? 'Customer');
+
+                    fputcsv($handle, [
+                        $vote->option?->label,
+                        $name,
+                        $customer?->email,
+                        $customer?->tier?->title,
+                        optional($vote->voted_at)->toIso8601String(),
+                    ]);
+                }
+            });
+
+            fclose($handle);
+        }, $fileName, $headers);
     }
 
     public function destroy(ChatMessage $message)

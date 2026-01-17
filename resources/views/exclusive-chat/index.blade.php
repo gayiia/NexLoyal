@@ -150,6 +150,9 @@
                                     <p class="text-sm font-semibold text-slate-100">Messages</p>
                                     <p class="mt-1 text-xs text-slate-400">One-way broadcast feed for customers.</p>
                                 </div>
+                                <a href="{{ route('exclusive-chat.export') }}" class="rounded-xl border border-slate-700 px-4 py-2 text-xs text-slate-200">
+                                    Export CSV
+                                </a>
                             </div>
 
                             <div class="overflow-x-auto px-6 py-5">

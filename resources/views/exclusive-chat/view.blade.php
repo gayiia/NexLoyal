@@ -43,6 +43,9 @@
                                 <a href="{{ route('exclusive-chat') }}" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-200 nl-panel-muted">
                                     Back to messages
                                 </a>
+                                <a href="{{ route('exclusive-chat.view.export', $message) }}" class="rounded-xl border border-slate-700 px-4 py-2 text-xs text-slate-200">
+                                    Export CSV
+                                </a>
                             </x-slot>
                         </x-page-header>
 

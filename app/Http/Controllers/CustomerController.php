@@ -148,6 +148,49 @@ class CustomerController extends Controller
         ]);
     }
 
+    public function exportDetail(Customer $customer)
+    {
+        $query = PointsTransaction::query()
+            ->where('customer_id', $customer->id)
+            ->orderByDesc('created_at');
+
+        $fileName = 'customer_' . $customer->id . '_points_' . now()->format('Ymd_His') . '.csv';
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+        ];
+
+        return response()->streamDownload(function () use ($query) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, [
+                'Transaction ID',
+                'Status',
+                'Direction',
+                'Points',
+                'Title',
+                'Type',
+                'Created At',
+            ]);
+
+            $query->chunk(500, function ($transactions) use ($handle) {
+                foreach ($transactions as $transaction) {
+                    $formatted = PointsHistoryFormatter::format($transaction);
+                    fputcsv($handle, [
+                        $formatted['id'] ?? null,
+                        $formatted['status'] ?? null,
+                        $formatted['direction'] ?? null,
+                        $formatted['points'] ?? null,
+                        $formatted['title'] ?? null,
+                        $formatted['type'] ?? null,
+                        $formatted['created_at'] ?? null,
+                    ]);
+                }
+            });
+
+            fclose($handle);
+        }, $fileName, $headers);
+    }
+
     public function store(Request $request, ShopifyCustomerService $shopify)
     {
         $validated = $request->validate([
