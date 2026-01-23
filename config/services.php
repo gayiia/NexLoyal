@@ -41,5 +41,6 @@ return [
         'api_version' => env('SHOPIFY_API_VERSION', '2024-01'),
         'webhook_address' => env('SHOPIFY_WEBHOOK_ADDRESS'),
     ],
+    'ai_service_url' => env('AI_SERVICE_URL'),
 
 ];

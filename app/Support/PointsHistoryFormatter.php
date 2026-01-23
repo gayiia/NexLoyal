@@ -40,6 +40,7 @@ class PointsHistoryFormatter
         return match ($sourceType) {
             'ORDER' => 'Order',
             'COUPON' => 'Coupon',
+            'AI' => 'Smart Offer',
             'REGISTER' => 'Register',
             'SOCIAL' => 'Social Media',
             'BIRTHDAY' => 'Birthday',
@@ -93,6 +94,14 @@ class PointsHistoryFormatter
                 return "Coupon redeemed (Ref: {$referenceId})";
             }
             return 'Coupon redeemed';
+        }
+
+        if ($sourceType === 'AI') {
+            $title = $meta['title'] ?? null;
+            if ($title) {
+                return "Smart Offer: {$title}";
+            }
+            return 'Smart Offer';
         }
 
         if (!empty($meta['title'])) {

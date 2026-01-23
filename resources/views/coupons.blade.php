@@ -462,15 +462,18 @@
                                                         <td class="px-4 py-4 text-slate-300">{{ optional($coupon->start_date)->format('Y-m-d') }}</td>
                                                         <td class="px-4 py-4 text-slate-300">{{ optional($coupon->end_date)->format('Y-m-d') }}</td>
                                                           <td class="px-4 py-4">
-                                                              @php
-                                                                  if ($coupon->is_mystery_box_coupon) {
-                                                                      $statusLabel = 'Mystery Box';
-                                                                      $statusClass = 'bg-cyan-500/20 text-cyan-200';
-                                                                  } else {
-                                                                      $statusLabel = $statusLabels[$coupon->status] ?? $coupon->status;
-                                                                      $statusClass = $statusClasses[$coupon->status] ?? 'bg-slate-500/20 text-slate-200';
-                                                                  }
-                                                              @endphp
+                                                          @php
+                                                              if ($coupon->is_mystery_box_coupon) {
+                                                                  $statusLabel = 'Mystery Box';
+                                                                  $statusClass = 'bg-cyan-500/20 text-cyan-200';
+                                                              } elseif ($coupon->is_ai_cluster_coupon) {
+                                                                  $statusLabel = 'AI Cluster';
+                                                                  $statusClass = 'bg-indigo-500/20 text-indigo-200';
+                                                              } else {
+                                                                  $statusLabel = $statusLabels[$coupon->status] ?? $coupon->status;
+                                                                  $statusClass = $statusClasses[$coupon->status] ?? 'bg-slate-500/20 text-slate-200';
+                                                              }
+                                                          @endphp
                                                               <span class="nl-badge {{ $statusClass }}">{{ $statusLabel }}</span>
                                                           </td>
                                                         <td class="px-4 py-4">
@@ -622,6 +625,13 @@
                     <label class="inline-flex items-center gap-2 text-sm text-slate-200">
                         <input type="checkbox" name="is_mystery_box_coupon" value="1" @checked(old('is_mystery_box_coupon'))>
                         <span>This is a Mystery Box coupon</span>
+                    </label>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label class="nl-modal-label uppercase text-slate-400">AI Insights coupon</label>
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-200">
+                        <input type="checkbox" name="is_ai_cluster_coupon" value="1" @checked(old('is_ai_cluster_coupon'))>
+                        <span>This is an AI Cluster coupon</span>
                     </label>
                 </div>
                 <div class="flex flex-col gap-2">

@@ -85,6 +85,7 @@ class CouponController extends Controller
             'value' => ['nullable', 'numeric', 'min:0'],
             'points_value' => ['required', 'integer', 'min:0'],
             'is_mystery_box_coupon' => ['nullable', 'boolean'],
+            'is_ai_cluster_coupon' => ['nullable', 'boolean'],
             'tier_id' => ['nullable', 'exists:tiers,id'],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
@@ -171,6 +172,7 @@ class CouponController extends Controller
             'value' => $validated['value'],
             'points_value' => $validated['points_value'],
             'is_mystery_box_coupon' => $request->boolean('is_mystery_box_coupon'),
+            'is_ai_cluster_coupon' => $request->boolean('is_ai_cluster_coupon'),
             'tier_id' => $validated['tier_id'] ?? null,
             'start_date' => $validated['start_date'],
             'end_date' => $validated['end_date'],
@@ -219,6 +221,7 @@ class CouponController extends Controller
             'value' => ['nullable', 'numeric', 'min:0'],
             'points_value' => ['required', 'integer', 'min:0'],
             'is_mystery_box_coupon' => ['nullable', 'boolean'],
+            'is_ai_cluster_coupon' => ['nullable', 'boolean'],
             'tier_id' => ['nullable', 'exists:tiers,id'],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
@@ -288,6 +291,7 @@ class CouponController extends Controller
             'value' => $validated['value'],
             'points_value' => $validated['points_value'],
             'is_mystery_box_coupon' => $request->boolean('is_mystery_box_coupon'),
+            'is_ai_cluster_coupon' => $request->boolean('is_ai_cluster_coupon'),
             'tier_id' => $validated['tier_id'] ?? null,
             'start_date' => $validated['start_date'],
             'end_date' => $validated['end_date'],
@@ -556,6 +560,7 @@ class CouponController extends Controller
                 'Start Date',
                 'End Date',
                 'Mystery Box Coupon',
+                'AI Cluster Coupon',
                 'Created At',
             ]);
 
@@ -573,6 +578,7 @@ class CouponController extends Controller
                         optional($coupon->start_date)->format('Y-m-d') ?: null,
                         optional($coupon->end_date)->format('Y-m-d') ?: null,
                         $coupon->is_mystery_box_coupon ? 'Yes' : 'No',
+                        $coupon->is_ai_cluster_coupon ? 'Yes' : 'No',
                         optional($coupon->created_at)->format('Y-m-d H:i:s') ?: null,
                     ]);
                 }

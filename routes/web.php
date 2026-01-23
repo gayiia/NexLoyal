@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\AdminDashboardController;
+use App\Http\Controllers\AiClusterAwardController;
+use App\Http\Controllers\AiInsightsController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerGroupController;
 use App\Http\Controllers\CouponController;
@@ -121,6 +123,28 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('polls/{poll}/options/{option}/voters', [ExclusiveChatAdminApiController::class, 'voters'])
             ->name('exclusive-chat.polls.voters');
     });
+
+    Route::get('admin/ai-insights', [AiInsightsController::class, 'index'])->name('ai-insights');
+    Route::post('admin/ai-insights/run', [AiInsightsController::class, 'run'])->name('ai-insights.run');
+    Route::get('admin/ai-insights/status', [AiInsightsController::class, 'status'])->name('ai-insights.status');
+    Route::get('admin/ai-insights/clusters/{cluster}/export', [AiInsightsController::class, 'exportCluster'])
+        ->name('ai-insights.clusters.export');
+    Route::get('admin/ai-insights/awards/create', [AiClusterAwardController::class, 'create'])
+        ->name('ai-insights.awards.create');
+    Route::post('admin/ai-insights/awards', [AiClusterAwardController::class, 'store'])
+        ->name('ai-insights.awards.store');
+    Route::get('admin/ai-insights/awards/{award}/edit', [AiClusterAwardController::class, 'edit'])
+        ->name('ai-insights.awards.edit');
+    Route::patch('admin/ai-insights/awards/{award}', [AiClusterAwardController::class, 'update'])
+        ->name('ai-insights.awards.update');
+    Route::patch('admin/ai-insights/awards/{award}/activate', [AiClusterAwardController::class, 'activate'])
+        ->name('ai-insights.awards.activate');
+    Route::patch('admin/ai-insights/awards/{award}/deactivate', [AiClusterAwardController::class, 'deactivate'])
+        ->name('ai-insights.awards.deactivate');
+    Route::delete('admin/ai-insights/awards/{award}', [AiClusterAwardController::class, 'destroy'])
+        ->name('ai-insights.awards.destroy');
+    Route::get('admin/ai-insights/awards/{award}/export', [AiClusterAwardController::class, 'export'])
+        ->name('ai-insights.awards.export');
 });
 
 require __DIR__.'/settings.php';

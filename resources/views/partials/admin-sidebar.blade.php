@@ -12,6 +12,10 @@
         request()->routeIs('exclusive-chat') ||
         request()->routeIs('exclusive-chat.settings') ||
         request()->routeIs('exclusive-chat.view');
+    $isAiInsights =
+        request()->routeIs('ai-insights') ||
+        request()->routeIs('ai-insights.awards.create') ||
+        request()->routeIs('ai-insights.awards.edit');
 @endphp
 
 <aside class="w-72 border-r border-slate-800/70 bg-slate-950/80 px-5 py-6 text-slate-100 nl-panel">
@@ -57,6 +61,15 @@
            ])>
             <span>Mystery Box</span>
             <span class="text-xs text-slate-500 nl-text-muted">Coupons</span>
+        </a>
+        <a href="{{ route('ai-insights') }}"
+           @class([
+               'flex items-center justify-between rounded-lg border border-transparent px-3 py-2 transition nl-sidebar-link',
+               'border-slate-800 bg-slate-900/80 text-slate-100 nl-sidebar-link-active' => $isAiInsights,
+               'text-slate-300 hover:border-slate-800 hover:bg-slate-900/60' => !$isAiInsights,
+           ])>
+            <span>AI Insights ✨</span>
+            <span class="text-xs text-slate-500 nl-text-muted">Clusters</span>
         </a>
         <details class="group" @if($isNotifications) open @endif>
             <summary class="flex cursor-pointer items-center justify-between rounded-lg border border-transparent px-3 py-2 text-slate-300 transition hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
