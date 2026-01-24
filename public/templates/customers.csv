@@ -1,0 +1,6 @@
+shopify_id,email,orders_count,total_spent,loyalty_points,points_pending,last_order_at
+1001,ai_test_1001@example.com,6,820.50,1200,50,2025-12-15 10:30:00
+1002,ai_test_1002@example.com,4,410.00,640,25,2025-12-12 15:10:00
+1003,ai_test_1003@example.com,2,140.25,180,10,2025-12-08 09:45:00
+1004,ai_test_1004@example.com,1,45.99,40,0,2025-12-01 11:05:00
+1005,ai_test_1005@example.com,5,520.75,760,30,2025-12-18 18:20:00

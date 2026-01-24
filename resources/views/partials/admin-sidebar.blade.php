@@ -16,6 +16,20 @@
         request()->routeIs('ai-insights') ||
         request()->routeIs('ai-insights.awards.create') ||
         request()->routeIs('ai-insights.awards.edit');
+    $isAiDataImport =
+        request()->routeIs('ai-data-import') ||
+        request()->routeIs('ai-data-import.store');
+    $isAiSandbox =
+        request()->routeIs('ai-sandbox') ||
+        request()->routeIs('ai-sandbox.compute') ||
+        request()->routeIs('ai-sandbox.train');
+    $isAiFeatures = request()->routeIs('ai-features');
+    $isAiMenu = $isAiInsights || $isAiSandbox || $isAiFeatures || $isAiDataImport;
+    $isReports =
+        request()->routeIs('reports') ||
+        request()->routeIs('reports.generate') ||
+        request()->routeIs('reports.export.excel') ||
+        request()->routeIs('reports.export.pdf');
 @endphp
 
 <aside class="w-72 border-r border-slate-800/70 bg-slate-950/80 px-5 py-6 text-slate-100 nl-panel">
@@ -62,15 +76,27 @@
             <span>Mystery Box</span>
             <span class="text-xs text-slate-500 nl-text-muted">Coupons</span>
         </a>
-        <a href="{{ route('ai-insights') }}"
-           @class([
-               'flex items-center justify-between rounded-lg border border-transparent px-3 py-2 transition nl-sidebar-link',
-               'border-slate-800 bg-slate-900/80 text-slate-100 nl-sidebar-link-active' => $isAiInsights,
-               'text-slate-300 hover:border-slate-800 hover:bg-slate-900/60' => !$isAiInsights,
-           ])>
-            <span>AI Insights ✨</span>
-            <span class="text-xs text-slate-500 nl-text-muted">Clusters</span>
-        </a>
+        <details class="group" @if($isAiMenu) open @endif>
+            <summary class="flex cursor-pointer items-center justify-between rounded-lg border border-transparent px-3 py-2 text-slate-300 transition hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
+                <span>AI</span>
+                <span class="text-xs text-slate-500 nl-text-muted">Modules</span>
+            </summary>
+            <div class="mt-2 space-y-1 pl-3 text-xs">
+                <a href="{{ route('ai-sandbox') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60 @if($isAiSandbox) bg-slate-900/70 text-slate-100 @endif">AI Sandbox</a>
+                <a href="{{ route('ai-features') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60 @if($isAiFeatures) bg-slate-900/70 text-slate-100 @endif">Feature Preview</a>
+                <a href="{{ route('ai-data-import') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60 @if($isAiDataImport) bg-slate-900/70 text-slate-100 @endif">AI Data Import</a>
+                <a href="{{ route('ai-insights') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60 @if($isAiInsights) bg-slate-900/70 text-slate-100 @endif">AI Insights</a>
+            </div>
+        </details>
+        <details class="group" @if($isReports) open @endif>
+            <summary class="flex cursor-pointer items-center justify-between rounded-lg border border-transparent px-3 py-2 text-slate-300 transition hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
+                <span>Reports</span>
+                <span class="text-xs text-slate-500 nl-text-muted">Builder</span>
+            </summary>
+            <div class="mt-2 space-y-1 pl-3 text-xs">
+                <a href="{{ route('reports') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60 @if($isReports) bg-slate-900/70 text-slate-100 @endif">Report Builder</a>
+            </div>
+        </details>
         <details class="group" @if($isNotifications) open @endif>
             <summary class="flex cursor-pointer items-center justify-between rounded-lg border border-transparent px-3 py-2 text-slate-300 transition hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
                 <span>Notifications</span>

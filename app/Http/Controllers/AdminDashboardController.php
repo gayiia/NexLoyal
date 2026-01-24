@@ -7,6 +7,7 @@ use App\Models\ChatPollVote;
 use App\Models\Customer;
 use App\Models\CustomerCoupon;
 use App\Models\PointsTransaction;
+use App\Enums\SourceType;
 use App\Models\Tier;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -57,7 +58,7 @@ class AdminDashboardController extends Controller
             ->count();
 
         $mysteryBoxClaims = CustomerCoupon::query()
-            ->where('source', 'MYSTERY_BOX')
+            ->where('source', SourceType::MYSTERY_BOX->value)
             ->whereBetween('redeemed_at', [$start30, $now])
             ->count();
 
@@ -134,7 +135,7 @@ class AdminDashboardController extends Controller
         $mysteryBoxOutcomes = CustomerCoupon::query()
             ->select('coupons.title', DB::raw('COUNT(*) as total'))
             ->join('coupons', 'coupons.id', '=', 'customer_coupons.coupon_id')
-            ->where('customer_coupons.source', 'MYSTERY_BOX')
+            ->where('customer_coupons.source', SourceType::MYSTERY_BOX->value)
             ->whereBetween('customer_coupons.redeemed_at', [$start30, $now])
             ->groupBy('coupons.title')
             ->orderByDesc('total')

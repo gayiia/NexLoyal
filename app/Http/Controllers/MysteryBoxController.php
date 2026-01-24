@@ -6,6 +6,7 @@ use App\Models\Coupon;
 use App\Models\CustomerCoupon;
 use App\Models\MysteryBox;
 use App\Models\MysteryBoxItem;
+use App\Enums\SourceType;
 use App\Models\Tier;
 use Illuminate\Http\Request;
 
@@ -203,7 +204,7 @@ class MysteryBoxController extends Controller
             : [];
         $baseQuery = CustomerCoupon::query()
             ->where('mystery_box_id', $mysteryBox->id)
-            ->where('source', 'MYSTERY_BOX');
+            ->where('source', SourceType::MYSTERY_BOX->value);
 
         $totalClaims = (clone $baseQuery)->count();
         $usedClaims = (clone $baseQuery)
@@ -236,7 +237,7 @@ class MysteryBoxController extends Controller
         $query = CustomerCoupon::query()
             ->with(['customer', 'coupon'])
             ->where('mystery_box_id', $mysteryBox->id)
-            ->where('source', 'MYSTERY_BOX');
+            ->where('source', SourceType::MYSTERY_BOX->value);
 
         if ($status === 'used') {
             $query->where(function ($query) {
@@ -298,7 +299,7 @@ class MysteryBoxController extends Controller
         $query = CustomerCoupon::query()
             ->with(['customer', 'coupon'])
             ->where('mystery_box_id', $mysteryBox->id)
-            ->where('source', 'MYSTERY_BOX');
+            ->where('source', SourceType::MYSTERY_BOX->value);
 
         if ($status === 'used') {
             $query->where(function ($query) {

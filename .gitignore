@@ -1,6 +1,15 @@
 /.phpunit.cache
 /bootstrap/ssr
 /node_modules
+/ai_service/__pycache__
+/ai_service/*.log
+/ai_service/.mypy_cache
+/ai_service/.pytest_cache
+/ai_service/.venv
+/ai_service/model_state.json
+/__pycache__
+*.log
+.venv
 /public/build
 /public/hot
 /public/storage

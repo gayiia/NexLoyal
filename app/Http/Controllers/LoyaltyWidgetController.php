@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\PointsTransactionType;
+use App\Enums\SourceType;
 use App\Models\Coupon;
 use App\Models\ChatMessage;
 use App\Models\ChatPoll;
@@ -12,20 +14,23 @@ use App\Models\CustomerCoupon;
 use App\Models\MysteryBox;
 use App\Models\PointsTransaction;
 use App\Models\PointRule;
-use App\Models\Tier;
+use App\Services\LoyaltyRulesEngine;
 use App\Services\ShopifyCustomerService;
 use App\Services\ShopifyDiscountService;
 use App\Support\PointsHistoryFormatter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Support\Carbon;
 use Symfony\Component\HttpFoundation\Response;
 
 class LoyaltyWidgetController extends Controller
 {
+    public function __construct(private LoyaltyRulesEngine $rulesEngine)
+    {
+    }
+
     public function token(Request $request, ShopifyCustomerService $shopify): Response
     {
         $validated = $request->validate([
@@ -67,7 +72,7 @@ class LoyaltyWidgetController extends Controller
             ]
         );
 
-        $this->awardWelcomePoints($customer);
+        $this->rulesEngine->awardWelcomePoints($customer);
 
         $expiresAt = now()->addMinutes(30);
         $payload = [
@@ -103,7 +108,7 @@ class LoyaltyWidgetController extends Controller
         }
 
         $points = $customer->loyalty_points ?? 0;
-        $tier = $customer->tier ?? $this->resolveTier($points);
+        $tier = $customer->tier ?? $this->rulesEngine->resolveTier($points);
 
         return view('loyalty.dashboard', [
             'customer' => $customer,
@@ -142,7 +147,7 @@ class LoyaltyWidgetController extends Controller
 
         $points = (int) ($customer->loyalty_points ?? 0);
         $pendingPoints = (int) ($customer->points_pending ?? 0);
-        $tier = $customer->tier ?? $this->resolveTier($points);
+        $tier = $customer->tier ?? $this->rulesEngine->resolveTier($points);
 
         return $this->corsResponse(
             $request,
@@ -242,59 +247,10 @@ class LoyaltyWidgetController extends Controller
 
         $customer->fill($updates);
 
-        $awardedProfilePoints = false;
         $rule = $this->pointRule();
-        $profilePoints = (int) ($rule?->profile_completion_points ?? 0);
-
-        if (!$customer->profile_completed_at
-            && $customer->first_name
-            && $customer->last_name
-            && $customer->email
-            && $customer->birthday
-        ) {
-            if ($profilePoints > 0) {
-                $customer->loyalty_points += $profilePoints;
-                $awardedProfilePoints = true;
-                PointsTransaction::create([
-                    'customer_id' => $customer->id,
-                    'points' => $profilePoints,
-                    'status' => 'APPROVED',
-                    'source' => 'RULE',
-                    'source_type' => 'PROFILE',
-                    'type' => 'EARN',
-                    'event_key' => 'profile_completion',
-                    'reason' => 'Profile completed',
-                ]);
-            }
-            $customer->profile_completed_at = now();
-        }
-
-        $awardedBirthdayPoints = false;
-        $birthdayPoints = (int) ($rule?->birthday_points ?? 0);
-        if ($birthdayPoints > 0 && $customer->birthday) {
-            $today = now()->toDateString();
-            if ($customer->birthday->format('m-d') === now()->format('m-d')) {
-                $lastReward = $customer->birthday_rewarded_at?->format('Y');
-                if ($lastReward !== now()->format('Y')) {
-                    $customer->loyalty_points += $birthdayPoints;
-                    $customer->birthday_rewarded_at = $today;
-                    $awardedBirthdayPoints = true;
-                    PointsTransaction::create([
-                        'customer_id' => $customer->id,
-                        'points' => $birthdayPoints,
-                        'status' => 'APPROVED',
-                        'source' => 'RULE',
-                        'source_type' => 'BIRTHDAY',
-                        'type' => 'EARN',
-                        'event_key' => 'birthday_reward:'.now()->format('Y'),
-                        'reason' => 'Birthday reward',
-                    ]);
-                    $this->sendBirthdayEmail($customer, $birthdayPoints);
-                }
-            }
-        }
-
-        $customer->save();
+        $awardStatus = $this->rulesEngine->awardProfileAndBirthday($customer, $rule);
+        $awardedProfilePoints = (bool) ($awardStatus['awarded_profile_points'] ?? false);
+        $awardedBirthdayPoints = (bool) ($awardStatus['awarded_birthday_points'] ?? false);
 
         return $this->corsResponse(
             $request,
@@ -324,7 +280,7 @@ class LoyaltyWidgetController extends Controller
         }
 
         $points = (int) ($customer->loyalty_points ?? 0);
-        $tier = $customer->tier ?? $this->resolveTier($points);
+        $tier = $customer->tier ?? $this->rulesEngine->resolveTier($points);
         $today = now()->toDateString();
 
         $coupons = Coupon::query()
@@ -427,7 +383,7 @@ class LoyaltyWidgetController extends Controller
 
         $today = now()->toDateString();
         $pointsCost = (int) ($coupon->points_value ?? 0);
-        $tier = $customer->tier ?? $this->resolveTier((int) ($customer->loyalty_points ?? 0));
+        $tier = $customer->tier ?? $this->rulesEngine->resolveTier((int) ($customer->loyalty_points ?? 0));
         $tierId = $tier?->id;
 
         if ($coupon->status !== 'active') {
@@ -497,7 +453,7 @@ class LoyaltyWidgetController extends Controller
                 'points_spent' => $pointsCost,
                 'code' => $code,
                 'status' => 'active',
-                'source' => 'REDEEM',
+                'source' => SourceType::REDEEM->value,
                 'redeemed_at' => now(),
                 'expires_at' => $coupon->end_date,
             ]);
@@ -506,9 +462,9 @@ class LoyaltyWidgetController extends Controller
                 'customer_id' => $lockedCustomer->id,
                 'points' => $pointsCost,
                 'status' => 'APPROVED',
-                'source' => 'COUPON',
-                'source_type' => 'COUPON',
-                'type' => 'SPEND',
+                'source' => SourceType::COUPON->value,
+                'source_type' => SourceType::COUPON->value,
+                'type' => PointsTransactionType::SPEND->value,
                 'event_key' => 'coupon_redeem:'.$record->id,
                 'reason' => 'Coupon redeemed',
                 'reference_type' => 'CustomerCoupon',
@@ -610,7 +566,7 @@ class LoyaltyWidgetController extends Controller
         }
 
         $points = (int) ($customer->loyalty_points ?? 0);
-        $tier = $customer->tier ?? $this->resolveTier($points);
+        $tier = $customer->tier ?? $this->rulesEngine->resolveTier($points);
         $tierId = $tier?->id;
 
         if (!$tierId) {
@@ -665,7 +621,7 @@ class LoyaltyWidgetController extends Controller
         }
 
         $points = (int) ($customer->loyalty_points ?? 0);
-        $tier = $customer->tier ?? $this->resolveTier($points);
+        $tier = $customer->tier ?? $this->rulesEngine->resolveTier($points);
         $tierId = $tier?->id;
 
         if (!$tierId) {
@@ -729,7 +685,7 @@ class LoyaltyWidgetController extends Controller
             'points_spent' => 0,
             'code' => $code,
             'status' => 'active',
-            'source' => 'MYSTERY_BOX',
+            'source' => SourceType::MYSTERY_BOX->value,
             'mystery_box_id' => $mysteryBox->id,
             'redeemed_at' => now(),
             'expires_at' => $coupon->end_date,
@@ -757,16 +713,6 @@ class LoyaltyWidgetController extends Controller
     public function mysteryBoxClaimOptions(Request $request): Response
     {
         return $this->corsResponse($request, response()->noContent());
-    }
-
-    private function resolveTier(int $points): ?Tier
-    {
-        return Tier::query()
-            ->where('status', 'active')
-            ->where('min_points', '<=', $points)
-            ->where('max_points', '>=', $points)
-            ->orderBy('min_points')
-            ->first();
     }
 
     private function customerFromToken(string $token): array
@@ -821,49 +767,6 @@ class LoyaltyWidgetController extends Controller
             'profile_completion_points' => 0,
             'amount_per_point' => 100,
         ]);
-    }
-
-    private function awardWelcomePoints(Customer $customer): void
-    {
-        $rule = $this->pointRule();
-        $points = (int) ($rule->welcome_points ?? 0);
-        if ($points <= 0) {
-            return;
-        }
-
-        DB::transaction(function () use ($customer, $points): void {
-            $lockedCustomer = Customer::query()
-                ->whereKey($customer->id)
-                ->lockForUpdate()
-                ->first();
-
-            if (!$lockedCustomer) {
-                return;
-            }
-
-            $exists = PointsTransaction::query()
-                ->where('customer_id', $lockedCustomer->id)
-                ->where('event_key', 'welcome_bonus')
-                ->exists();
-
-            if ($exists) {
-                return;
-            }
-
-            PointsTransaction::create([
-                'customer_id' => $lockedCustomer->id,
-                'points' => $points,
-                'status' => 'APPROVED',
-                'source' => 'RULE',
-                'source_type' => 'REGISTER',
-                'type' => 'EARN',
-                'event_key' => 'welcome_bonus',
-                'reason' => 'Welcome bonus',
-            ]);
-
-            $lockedCustomer->loyalty_points = (int) ($lockedCustomer->loyalty_points ?? 0) + $points;
-            $lockedCustomer->save();
-        });
     }
 
     public function earnRules(Request $request): Response
@@ -972,74 +875,20 @@ class LoyaltyWidgetController extends Controller
 
         $rule = $this->pointRule();
         $platform = $validated['platform'];
-
-        $platformConfig = [
-            'linkedin' => ['url' => $rule->social_linkedin_url, 'points' => $rule->social_linkedin_points],
-            'tiktok' => ['url' => $rule->social_tiktok_url, 'points' => $rule->social_tiktok_points],
-            'facebook' => ['url' => $rule->social_facebook_url, 'points' => $rule->social_facebook_points],
-            'x' => ['url' => $rule->social_x_url, 'points' => $rule->social_x_points],
-            'instagram' => ['url' => $rule->social_instagram_url, 'points' => $rule->social_instagram_points],
-            'youtube' => ['url' => $rule->social_youtube_url, 'points' => $rule->social_youtube_points],
-        ];
-
-        $config = $platformConfig[$platform] ?? null;
-        $points = (int) ($config['points'] ?? 0);
-        $url = trim((string) ($config['url'] ?? ''));
-
-        if ($points <= 0 || $url === '') {
+        $result = $this->rulesEngine->awardSocialVisit($customer, $platform, $rule);
+        if (($result['awarded'] ?? false) === false && ($result['message'] ?? '') === 'Social reward not configured.') {
             return $this->corsResponse(
                 $request,
                 response()->json(['message' => 'Reward not configured.'], 422)
             );
         }
 
-        $eventKey = "social:{$platform}";
-
-        $awarded = false;
-        DB::transaction(function () use ($customer, $eventKey, $points, $platform, &$awarded) {
-            $lockedCustomer = Customer::query()
-                ->whereKey($customer->id)
-                ->lockForUpdate()
-                ->first();
-
-            if (!$lockedCustomer) {
-                return;
-            }
-
-            $exists = PointsTransaction::query()
-                ->where('customer_id', $lockedCustomer->id)
-                ->where('event_key', $eventKey)
-                ->exists();
-
-            if ($exists) {
-                return;
-            }
-
-            PointsTransaction::create([
-                'customer_id' => $lockedCustomer->id,
-                'points' => $points,
-                'status' => 'APPROVED',
-                'source' => 'RULE',
-                'source_type' => 'SOCIAL',
-                'type' => 'EARN',
-                'event_key' => $eventKey,
-                'reason' => "Social reward: {$platform}",
-                'meta' => [
-                    'platform' => ucfirst($platform),
-                ],
-            ]);
-
-            $lockedCustomer->loyalty_points += $points;
-            $lockedCustomer->save();
-            $awarded = true;
-        });
-
         $customer->refresh();
 
         return $this->corsResponse(
             $request,
             response()->json([
-                'awarded' => $awarded,
+                'awarded' => (bool) ($result['awarded'] ?? false),
                 'points' => (int) ($customer->loyalty_points ?? 0),
                 'pending_points' => (int) ($customer->points_pending ?? 0),
             ])
@@ -1067,9 +916,9 @@ class LoyaltyWidgetController extends Controller
             ->orderByDesc('created_at');
 
         if ($filter === 'earned') {
-            $query->where('type', 'EARN');
+            $query->where('type', PointsTransactionType::EARN->value);
         } elseif ($filter === 'redeemed') {
-            $query->where('type', 'SPEND');
+            $query->where('type', PointsTransactionType::SPEND->value);
         }
 
         $paginator = $query->paginate($perPage)->withQueryString();
@@ -1118,7 +967,7 @@ class LoyaltyWidgetController extends Controller
         }
 
         $points = (int) ($customer->loyalty_points ?? 0);
-        $tier = $customer->tier ?? $this->resolveTier($points);
+        $tier = $customer->tier ?? $this->rulesEngine->resolveTier($points);
         $tierId = (int) ($tier?->id ?? 0);
 
         $allowedTiers = array_map('intval', $settings->allowed_tiers ?? []);
@@ -1251,7 +1100,7 @@ class LoyaltyWidgetController extends Controller
         }
 
         $points = (int) ($customer->loyalty_points ?? 0);
-        $tier = $customer->tier ?? $this->resolveTier($points);
+        $tier = $customer->tier ?? $this->rulesEngine->resolveTier($points);
         $tierId = (int) ($tier?->id ?? 0);
         $allowedTiers = array_map('intval', $settings->allowed_tiers ?? []);
         if (!$tierId || ($allowedTiers && !in_array($tierId, $allowedTiers, true))) {
@@ -1319,21 +1168,6 @@ class LoyaltyWidgetController extends Controller
     public function chatPollVoteOptions(Request $request): Response
     {
         return $this->corsResponse($request, response()->noContent());
-    }
-
-    private function sendBirthdayEmail(Customer $customer, int $points): void
-    {
-        if (!$customer->email) {
-            return;
-        }
-
-        Mail::send('emails.birthday', [
-            'customer' => $customer,
-            'points' => $points,
-        ], function ($message) use ($customer): void {
-            $message->to($customer->email, $customer->full_name ?: $customer->email)
-                ->subject('Happy Birthday from NexLoyal');
-        });
     }
 
     private function allowedOrigin(Request $request): ?string
@@ -1486,7 +1320,7 @@ class LoyaltyWidgetController extends Controller
     {
         $lastClaim = CustomerCoupon::query()
             ->where('customer_id', $customerId)
-            ->where('source', 'MYSTERY_BOX')
+            ->where('source', SourceType::MYSTERY_BOX->value)
             ->where('mystery_box_id', $box->id)
             ->orderByDesc('redeemed_at')
             ->first();

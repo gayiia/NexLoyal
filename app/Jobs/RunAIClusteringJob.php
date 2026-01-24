@@ -5,8 +5,9 @@ namespace App\Jobs;
 use App\Models\AiCluster;
 use App\Models\AiClusterCustomer;
 use App\Models\AiClusterRun;
+use App\Enums\AiRunStatus;
 use App\Models\CustomerFeature;
-use App\Services\AiClusterClient;
+use App\Services\AiInsightsService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -14,6 +15,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class RunAIClusteringJob implements ShouldQueue
 {
@@ -22,88 +24,55 @@ class RunAIClusteringJob implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
-    private const FEATURE_KEYS = [
-        'orders_count',
-        'total_spent',
-        'avg_order_value',
-        'redeemed_coupons',
-        'points_earned',
-        'points_spent',
-        'loyalty_points',
-        'days_since_last_order',
-    ];
-
-    private const MIN_CUSTOMERS = 20;
-
-    public function handle(AiClusterClient $client): void
+    public function handle(AiInsightsService $insights): void
     {
         $lock = Cache::lock('ai_cluster_run', 1200);
         if (!$lock->get()) {
             return;
         }
 
+        $featureKeys = (array) config('ai.feature_keys', []);
+        $minK = (int) data_get(config('ai.k_range'), 'min', 2);
+        $maxK = (int) data_get(config('ai.k_range'), 'max', 6);
+        $minCustomers = (int) config('ai.min_customers_for_training', 20);
+
         $run = AiClusterRun::create([
-            'status' => 'running',
+            'status' => AiRunStatus::RUNNING->value,
             'started_at' => now(),
             'params' => [
-                'feature_keys' => self::FEATURE_KEYS,
-                'min_k' => 2,
-                'max_k' => 6,
+                'feature_keys' => $featureKeys,
+                'min_k' => $minK,
+                'max_k' => $maxK,
+                'outlier_cap_quantile' => config('ai.outlier_cap_quantile'),
+                'log_transforms' => config('ai.log_transforms'),
+                'feature_schema_version' => config('ai.feature_schema_version'),
+                'algorithm_version' => config('ai.algorithm_version'),
+                'exclude_zero_activity_customers' => config('ai.exclude_zero_activity_customers'),
+                'exclude_refund_only_customers' => config('ai.exclude_refund_only_customers'),
             ],
         ]);
 
         try {
-            $features = CustomerFeature::query()
-                ->whereNotNull('features')
-                ->get([
-                    'customer_id',
-                    'orders_count',
-                    'total_spent',
-                    'loyalty_points',
-                    'points_earned',
-                    'points_spent',
-                    'redeemed_coupons',
-                    'features',
-                ]);
+            $dataset = $insights->computeCustomerFeatures(true);
+            $customerIds = $dataset['customer_ids'] ?? [];
+            $vectors = $dataset['vectors'] ?? [];
+            $snapshots = $dataset['snapshots'] ?? [];
 
-            if ($features->count() < self::MIN_CUSTOMERS) {
+            if (count($customerIds) < $minCustomers) {
                 $run->update([
-                    'status' => 'failed',
-                    'error_message' => 'At least 20 customers are required for clustering.',
+                    'status' => AiRunStatus::FAILED->value,
+                    'error_message' => "At least {$minCustomers} customers are required for clustering.",
                     'completed_at' => now(),
                 ]);
                 return;
             }
 
-            $customerIds = [];
-            $vectors = [];
-            $snapshots = [];
-
-            foreach ($features as $feature) {
-                $values = $feature->features ?? [];
-                $vector = [];
-                foreach (self::FEATURE_KEYS as $key) {
-                    $vector[] = (float) ($values[$key] ?? 0);
-                }
-
-                $customerIds[] = $feature->customer_id;
-                $vectors[] = $vector;
-                $snapshots[$feature->customer_id] = [
-                    'orders_count_snapshot' => (int) $feature->orders_count,
-                    'total_spent_snapshot' => (float) $feature->total_spent,
-                    'loyalty_points_snapshot' => (int) $feature->loyalty_points,
-                    'points_earned_snapshot' => (int) $feature->points_earned,
-                    'points_spent_snapshot' => (int) $feature->points_spent,
-                    'redeemed_coupons_snapshot' => (int) $feature->redeemed_coupons,
-                ];
-            }
-
-            $response = $client->train([
-                'features' => $vectors,
-                'feature_keys' => self::FEATURE_KEYS,
-                'min_k' => 2,
-                'max_k' => 6,
-            ]);
+            $response = $insights->train(
+                $vectors,
+                $featureKeys,
+                $dataset['outlier_caps'] ?? [],
+                $dataset['log_transforms'] ?? []
+            );
 
             $labels = $response['labels'] ?? [];
             if (count($labels) !== count($customerIds)) {
@@ -134,23 +103,23 @@ class RunAIClusteringJob implements ShouldQueue
                 }
 
                 $count = max(1, count($ids));
-                $labelName = is_numeric($labelKey)
-                    ? 'Cluster '.((int) $labelKey + 1)
-                    : 'Cluster '.$labelKey;
 
                 $clusterRecords[$labelKey] = [
                     'ai_cluster_run_id' => $run->id,
-                    'label' => $labelName,
+                    'label' => (string) $labelKey,
+                    'cluster_index' => (int) $labelKey,
                     'customer_count' => count($ids),
                     'avg_total_spent' => $totals['total_spent'] / $count,
                     'avg_orders_count' => $totals['orders_count'] / $count,
                     'avg_loyalty_points' => $totals['loyalty_points'] / $count,
                     'avg_points_spent' => $totals['points_spent'] / $count,
-                    'centroid' => $response['centroids'][$labelKey] ?? null,
+                    'centroid' => $response['centroids'][(int) $labelKey] ?? null,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ];
             }
+
+            $clusterRecords = $this->applyClusterLabels($clusterRecords);
 
             DB::transaction(function () use ($run, $clusterRecords, $clusterGroups, $snapshots, $response): void {
                 $clusterIdMap = [];
@@ -182,21 +151,72 @@ class RunAIClusteringJob implements ShouldQueue
                 }
 
                 $run->update([
-                    'status' => 'completed',
+                    'status' => AiRunStatus::COMPLETED->value,
                     'completed_at' => now(),
                     'total_customers' => count($snapshots),
                     'total_clusters' => count($clusterRecords),
-                    'silhouette_score' => $response['silhouette'] ?? null,
+                    'silhouette_score' => $response['final_silhouette'] ?? null,
+                    'selected_k' => $response['selected_k'] ?? null,
+                    'final_inertia' => $response['final_inertia'] ?? null,
+                    'silhouette_scores' => $response['silhouette_scores'] ?? null,
+                    'inertia_scores' => $response['inertia_scores'] ?? null,
+                    'data_stats' => $response['data_stats'] ?? null,
+                    'timing' => $response['timing'] ?? null,
+                    'scaler_mean' => data_get($response, 'scaler.mean'),
+                    'scaler_scale' => data_get($response, 'scaler.scale'),
+                    'feature_names' => data_get($response, 'scaler.feature_names'),
+                    'outlier_caps' => data_get($response, 'scaler.outlier_caps'),
+                    'log_transforms' => data_get($response, 'scaler.log_transforms'),
+                    'model_metadata' => $response['model_metadata'] ?? null,
                 ]);
             });
         } catch (\Throwable $exception) {
+            Log::error('AI clustering failed', [
+                'message' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
             $run->update([
-                'status' => 'failed',
+                'status' => AiRunStatus::FAILED->value,
                 'error_message' => $exception->getMessage(),
                 'completed_at' => now(),
             ]);
         } finally {
             optional($lock)->release();
         }
+    }
+
+    private function applyClusterLabels(array $clusterRecords): array
+    {
+        if (!$clusterRecords) {
+            return $clusterRecords;
+        }
+
+        $labelsByRank = [
+            'Value Seekers',
+            'Budget Buyers',
+            'Growing Shoppers',
+            'Core Shoppers',
+            'Loyal Spenders',
+            'VIP Loyalists',
+        ];
+
+        $sorted = $clusterRecords;
+        uasort($sorted, function ($a, $b) {
+            return ($a['avg_total_spent'] ?? 0) <=> ($b['avg_total_spent'] ?? 0);
+        });
+
+        $rankMap = [];
+        $index = 0;
+        $maxIndex = count($labelsByRank) - 1;
+        foreach (array_keys($sorted) as $labelKey) {
+            $rankMap[$labelKey] = $labelsByRank[min($index, $maxIndex)];
+            $index++;
+        }
+
+        foreach ($clusterRecords as $labelKey => $data) {
+            $clusterRecords[$labelKey]['label'] = $rankMap[$labelKey] ?? $data['label'];
+        }
+
+        return $clusterRecords;
     }
 }

@@ -19,8 +19,12 @@ class CustomerFeature extends Model
         'points_pending',
         'last_order_at',
         'days_since_last_order',
+        'tenure_days',
         'features',
         'computed_at',
+        'is_new_customer',
+        'is_excluded',
+        'excluded_reason',
     ];
 
     protected $casts = [
@@ -34,8 +38,12 @@ class CustomerFeature extends Model
         'points_pending' => 'integer',
         'last_order_at' => 'datetime',
         'days_since_last_order' => 'integer',
+        'tenure_days' => 'integer',
         'features' => 'array',
         'computed_at' => 'datetime',
+        'is_new_customer' => 'boolean',
+        'is_excluded' => 'boolean',
+        'excluded_reason' => 'string',
     ];
 
     public function customer(): BelongsTo

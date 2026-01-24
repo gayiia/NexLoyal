@@ -11,6 +11,7 @@ class AiCluster extends Model
     protected $fillable = [
         'ai_cluster_run_id',
         'label',
+        'cluster_index',
         'customer_count',
         'avg_total_spent',
         'avg_orders_count',
@@ -20,6 +21,7 @@ class AiCluster extends Model
     ];
 
     protected $casts = [
+        'cluster_index' => 'integer',
         'customer_count' => 'integer',
         'avg_total_spent' => 'decimal:2',
         'avg_orders_count' => 'decimal:2',

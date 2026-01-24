@@ -40,9 +40,9 @@ Shopify APIs and webhooks are foundational dependencies. Shopify Admin API calls
 
 JWT is not used in this system. Instead, the widget uses encrypted tokens created by Laravel's Crypt facade. This approach was chosen to avoid introducing additional authentication infrastructure while still ensuring token confidentiality and a short expiration window. The encryption mechanism is sufficient because tokens are scoped to a single customer and are validated server-side.
 
-Queue support is configured through Laravel's database queue driver and the default jobs table. While the current implementation does not define queued jobs, the configuration anticipates future offloading of heavier tasks such as bulk imports or analytics aggregation. Storage uses Laravel's local and public disks, with S3 available via configuration when required.
+Queue support is configured through Laravel's database queue driver and the default jobs table. AI feature computation and clustering run through queued jobs to keep the admin UI responsive. Storage uses Laravel's local and public disks, with S3 available via configuration when required.
 
-No AI or machine learning components are present in the codebase at this time. All decision logic is deterministic and configured through database rules.
+AI clustering is handled by a separate FastAPI service that runs KMeans training and returns model metrics, scaler parameters, and version metadata. The Laravel app stores these artifacts per run to keep predictions consistent and auditable across schema changes.
 
 ## 4. High-Level System Architecture
 

@@ -5,16 +5,19 @@ namespace App\Jobs;
 use App\Models\AiAwardIssuance;
 use App\Models\AiClusterAward;
 use App\Models\AiClusterAwardCustomer;
-use App\Models\CouponCode;
 use App\Models\Customer;
 use App\Models\CustomerCoupon;
 use App\Models\PointsTransaction;
+use App\Enums\PointsTransactionType;
+use App\Enums\SourceType;
+use App\Services\ShopifyDiscountService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class IssueAiAwardChunkJob implements ShouldQueue
 {
@@ -27,7 +30,7 @@ class IssueAiAwardChunkJob implements ShouldQueue
     {
     }
 
-    public function handle(): void
+    public function handle(ShopifyDiscountService $shopifyDiscounts): void
     {
         $award = AiClusterAward::query()
             ->with('coupon')
@@ -86,9 +89,9 @@ class IssueAiAwardChunkJob implements ShouldQueue
                         'customer_id' => $customerId,
                         'points' => $points,
                         'status' => 'APPROVED',
-                        'source' => 'AI',
-                        'source_type' => 'AI',
-                        'type' => 'EARN',
+                        'source' => SourceType::AI->value,
+                        'source_type' => SourceType::AI->value,
+                        'type' => PointsTransactionType::EARN->value,
                         'event_key' => $eventKey,
                         'reason' => 'Smart Offer',
                         'reference_type' => 'AiClusterAward',
@@ -115,34 +118,34 @@ class IssueAiAwardChunkJob implements ShouldQueue
                 }
 
                 if ($award->type === 'coupon' && $award->coupon_id) {
-                    $couponCode = CouponCode::query()
-                        ->where('coupon_id', $award->coupon_id)
-                        ->where('status', 'available')
-                        ->lockForUpdate()
-                        ->first();
-
-                    if (!$couponCode) {
+                    $coupon = $award->coupon;
+                    if (!$coupon || !$coupon->shopify_price_rule_id) {
                         $awardCustomer->update([
                             'status' => 'failed',
                         ]);
                         return;
                     }
 
-                    $couponCode->update([
-                        'status' => 'issued',
-                        'customer_id' => $customerId,
-                        'issued_at' => now(),
-                    ]);
+                    $code = $this->generateRedeemCode($coupon);
+
+                    try {
+                        $shopifyDiscounts->createDiscountCode((int) $coupon->shopify_price_rule_id, $code);
+                    } catch (\Throwable $exception) {
+                        $awardCustomer->update([
+                            'status' => 'failed',
+                        ]);
+                        return;
+                    }
 
                     $redemption = CustomerCoupon::create([
                         'customer_id' => $customerId,
                         'coupon_id' => $award->coupon_id,
                         'points_spent' => 0,
-                        'code' => $couponCode->code,
+                        'code' => $code,
                         'status' => 'active',
-                        'source' => 'AI',
+                        'source' => SourceType::AI->value,
                         'redeemed_at' => now(),
-                        'expires_at' => $award->coupon?->end_date,
+                        'expires_at' => $coupon->end_date,
                     ]);
 
                     $eventKey = "ai_award:{$award->id}:{$customerId}";
@@ -150,9 +153,9 @@ class IssueAiAwardChunkJob implements ShouldQueue
                         'customer_id' => $customerId,
                         'points' => 0,
                         'status' => 'APPROVED',
-                        'source' => 'AI',
-                        'source_type' => 'AI',
-                        'type' => 'EARN',
+                        'source' => SourceType::AI->value,
+                        'source_type' => SourceType::AI->value,
+                        'type' => PointsTransactionType::EARN->value,
                         'event_key' => $eventKey,
                         'reason' => 'Smart Offer',
                         'reference_type' => 'CustomerCoupon',
@@ -180,5 +183,21 @@ class IssueAiAwardChunkJob implements ShouldQueue
                 }
             });
         }
+    }
+
+    private function generateRedeemCode($coupon): string
+    {
+        $prefix = strtoupper(Str::slug((string) $coupon->title));
+        $prefix = substr(preg_replace('/[^A-Z0-9]/', '', $prefix), 0, 8);
+
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $code = trim($prefix.'-'.strtoupper(Str::random(8)), '-');
+            $exists = CustomerCoupon::where('code', $code)->exists();
+            if (!$exists) {
+                return $code;
+            }
+        }
+
+        return strtoupper(Str::random(12));
     }
 }

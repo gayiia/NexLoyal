@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Coupon;
 use App\Models\Customer;
 use App\Models\CustomerCoupon;
 use Illuminate\Foundation\Inspiring;
@@ -7,6 +8,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schedule;
 use App\Models\PointRule;
+use App\Models\AiClusterRun;
 use Illuminate\Support\Facades\Mail;
 
 Artisan::command('inspire', function () {
@@ -275,3 +277,139 @@ Artisan::command('loyalty:award-birthday', function () {
 
 Schedule::command('loyalty:award-birthday')->dailyAt('00:10');
 Schedule::command('loyalty:expire-coupons')->hourly();
+
+Artisan::command('ai:seed-coupons {--codes=} {--file=}', function () {
+    $codesOption = trim((string) $this->option('codes'));
+    $fileOption = trim((string) $this->option('file'));
+
+    $codes = [];
+    if ($codesOption !== '') {
+        $codes = array_filter(array_map('trim', explode(',', $codesOption)));
+    } elseif ($fileOption !== '') {
+        $path = $fileOption;
+        if (!is_file($path)) {
+            $this->error("File not found: {$path}");
+            return 1;
+        }
+        $handle = fopen($path, 'r');
+        if (!$handle) {
+            $this->error('Unable to read file.');
+            return 1;
+        }
+        $headers = fgetcsv($handle) ?: [];
+        $headers = array_map(fn ($header) => strtolower(trim((string) $header)), $headers);
+        $codeIndex = array_search('coupon_code', $headers, true);
+        if ($codeIndex === false) {
+            $codeIndex = array_search('code', $headers, true);
+        }
+        if ($codeIndex === false) {
+            $this->error('CSV missing coupon_code column.');
+            fclose($handle);
+            return 1;
+        }
+        while (($row = fgetcsv($handle)) !== false) {
+            $value = trim((string) ($row[$codeIndex] ?? ''));
+            if ($value !== '') {
+                $codes[] = $value;
+            }
+        }
+        fclose($handle);
+    } else {
+        $this->error('Provide --codes=CODE1,CODE2 or --file=path/to/customer_coupons.csv');
+        return 1;
+    }
+
+    $codes = array_values(array_unique($codes));
+    if (!$codes) {
+        $this->warn('No coupon codes found.');
+        return 0;
+    }
+
+    $now = now();
+    $created = 0;
+    $skipped = 0;
+
+    foreach ($codes as $code) {
+        $exists = Coupon::query()->where('code', $code)->exists();
+        if ($exists) {
+            $skipped++;
+            continue;
+        }
+
+        Coupon::query()->create([
+            'title' => "AI Seed {$code}",
+            'type' => 'amount-order',
+            'value_type' => 'fixed',
+            'value' => 10,
+            'points_value' => 100,
+            'start_date' => $now->toDateString(),
+            'end_date' => $now->copy()->addYear()->toDateString(),
+            'description' => 'Auto-created for AI CSV import.',
+            'status' => 'active',
+            'code' => $code,
+            'is_mystery_box_coupon' => false,
+            'is_ai_cluster_coupon' => false,
+        ]);
+        $created++;
+    }
+
+    $this->info("Coupons created: {$created}. Skipped existing: {$skipped}.");
+    return 0;
+})->purpose('Create missing coupon codes for AI CSV imports');
+
+Artisan::command('ai:reset-clusters {--force}', function () {
+    if (!$this->option('force')) {
+        if (!$this->confirm('This will delete all AI clustering runs, clusters, and mappings. Continue?')) {
+            $this->info('Aborted.');
+            return 0;
+        }
+    }
+
+    $tables = [
+        'ai_cluster_customers',
+        'ai_clusters',
+        'ai_cluster_runs',
+    ];
+
+    foreach ($tables as $table) {
+        try {
+            DB::table($table)->delete();
+        } catch (Throwable $exception) {
+            $this->error("Failed to clear {$table}: {$exception->getMessage()}");
+            return 1;
+        }
+    }
+
+    $this->info('AI clustering data cleared.');
+    return 0;
+})->purpose('Delete AI clustering runs, clusters, and cluster customer mappings');
+
+Artisan::command('ai:cleanup-runs {--days=}', function () {
+    $days = (int) ($this->option('days') ?: config('ai.cleanup_days', 90));
+    if ($days < 1) {
+        $this->error('Days must be at least 1.');
+        return 1;
+    }
+
+    $latestRun = AiClusterRun::query()->orderByDesc('id')->first();
+    if (!$latestRun) {
+        $this->info('No AI cluster runs found.');
+        return 0;
+    }
+
+    $cutoff = now()->subDays($days);
+    $query = AiClusterRun::query()
+        ->where('id', '!=', $latestRun->id)
+        ->whereNotNull('completed_at')
+        ->where('completed_at', '<', $cutoff);
+
+    $count = $query->count();
+    if ($count === 0) {
+        $this->info('No AI cluster runs eligible for cleanup.');
+        return 0;
+    }
+
+    $deleted = $query->delete();
+    $this->info("Deleted {$deleted} AI cluster runs older than {$days} days (kept latest run #{$latestRun->id}).");
+    return 0;
+})->purpose('Delete AI clustering runs older than N days while preserving the latest run');

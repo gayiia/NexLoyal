@@ -185,14 +185,14 @@
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5">
                                     <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Clusters</p>
                                     <p class="mt-3 text-2xl font-semibold text-slate-50">{{ $latestRun?->total_clusters ?? 0 }}</p>
-                                    <p class="mt-1 text-xs text-slate-400">Best k selection.</p>
+                                    <p class="mt-1 text-xs text-slate-400">Selected K: {{ $latestRun?->selected_k ?? '-' }}</p>
                                 </div>
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5">
                                     <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Silhouette</p>
                                     <p class="mt-3 text-2xl font-semibold text-slate-50">
-                                        {{ $latestRun?->silhouette_score !== null ? number_format($latestRun->silhouette_score, 3) : '�' }}
+                                        {{ $latestRun?->silhouette_score !== null ? number_format($latestRun->silhouette_score, 3) : '-' }}
                                     </p>
-                                    <p class="mt-1 text-xs text-slate-400">Cluster separation quality.</p>
+                                    <p class="mt-1 text-xs text-slate-400">Inertia: {{ $latestRun?->final_inertia ?? '-' }}</p>
                                 </div>
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5">
                                     <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Customers</p>
@@ -315,7 +315,7 @@
                                             @forelse ($awards as $award)
                                                 <tr>
                                                     <td class="px-3 py-3 text-slate-200">{{ $award->title }}</td>
-                                                    <td class="px-3 py-3 text-slate-300">{{ $award->cluster?->label ?? '�' }}</td>
+                                                    <td class="px-3 py-3 text-slate-300">{{ $award->cluster?->label ?? '?' }}</td>
                                                     <td class="px-3 py-3 text-slate-300">{{ ucfirst($award->type) }}</td>
                                                     <td class="px-3 py-3 text-slate-300">{{ ucfirst($award->status) }}</td>
                                                     <td class="px-3 py-3">

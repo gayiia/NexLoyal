@@ -174,18 +174,6 @@ class AiClusterAwardController extends Controller
                 ->where('status', 'pending')
                 ->count();
 
-            if ($award->type === 'coupon' && $award->coupon_id) {
-                $available = CouponCode::query()
-                    ->where('coupon_id', $award->coupon_id)
-                    ->where('status', 'available')
-                    ->count();
-
-                if ($available < $pendingCount) {
-                    return redirect()->route('ai-insights')
-                        ->withErrors(['award' => 'Not enough coupon codes available in the pool.']);
-                }
-            }
-
             $award->update([
                 'status' => 'active',
                 'activated_at' => now(),

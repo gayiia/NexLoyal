@@ -1,8 +1,11 @@
 <?php
 
 use App\Http\Controllers\AdminDashboardController;
+use App\Http\Controllers\Admin\ReportsController;
 use App\Http\Controllers\AiClusterAwardController;
+use App\Http\Controllers\AiDataImportController;
 use App\Http\Controllers\AiInsightsController;
+use App\Http\Controllers\AiSandboxController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerGroupController;
 use App\Http\Controllers\CouponController;
@@ -13,63 +16,67 @@ use App\Http\Controllers\MysteryBoxController;
 use App\Http\Controllers\ShopifyWebhookController;
 use Illuminate\Support\Facades\Route;
 
-Route::post('webhooks/shopify/customers', [ShopifyWebhookController::class, 'handleCustomers'])
-    ->name('webhooks.shopify.customers');
-Route::post('webhooks/shopify/orders', [ShopifyWebhookController::class, 'handleOrders'])
-    ->name('webhooks.shopify.orders');
-Route::post('webhooks/shopify/orders/paid', [ShopifyWebhookController::class, 'handleOrders'])
-    ->name('webhooks.shopify.orders.paid');
-Route::post('webhooks/shopify/orders/create', [ShopifyWebhookController::class, 'handleOrders'])
-    ->name('webhooks.shopify.orders.create');
-Route::post('webhooks/shopify/orders/fulfilled', [ShopifyWebhookController::class, 'handleOrders'])
-    ->name('webhooks.shopify.orders.fulfilled');
-Route::post('webhooks/shopify/orders/refunded', [ShopifyWebhookController::class, 'handleOrders'])
-    ->name('webhooks.shopify.orders.refunded');
-Route::post('webhooks/shopify/orders/cancelled', [ShopifyWebhookController::class, 'handleOrders'])
-    ->name('webhooks.shopify.orders.cancelled');
+Route::middleware('throttle:60,1')->group(function () {
+    Route::post('webhooks/shopify/customers', [ShopifyWebhookController::class, 'handleCustomers'])
+        ->name('webhooks.shopify.customers');
+    Route::post('webhooks/shopify/orders', [ShopifyWebhookController::class, 'handleOrders'])
+        ->name('webhooks.shopify.orders');
+    Route::post('webhooks/shopify/orders/paid', [ShopifyWebhookController::class, 'handleOrders'])
+        ->name('webhooks.shopify.orders.paid');
+    Route::post('webhooks/shopify/orders/create', [ShopifyWebhookController::class, 'handleOrders'])
+        ->name('webhooks.shopify.orders.create');
+    Route::post('webhooks/shopify/orders/fulfilled', [ShopifyWebhookController::class, 'handleOrders'])
+        ->name('webhooks.shopify.orders.fulfilled');
+    Route::post('webhooks/shopify/orders/refunded', [ShopifyWebhookController::class, 'handleOrders'])
+        ->name('webhooks.shopify.orders.refunded');
+    Route::post('webhooks/shopify/orders/cancelled', [ShopifyWebhookController::class, 'handleOrders'])
+        ->name('webhooks.shopify.orders.cancelled');
+});
 
-Route::get('loyalty/token', [LoyaltyWidgetController::class, 'token'])->name('loyalty.token');
-Route::options('loyalty/token', [LoyaltyWidgetController::class, 'tokenOptions']);
-Route::get('loyalty/data', [LoyaltyWidgetController::class, 'data'])->name('loyalty.data');
-Route::options('loyalty/data', [LoyaltyWidgetController::class, 'dataOptions']);
-Route::get('loyalty/profile', [LoyaltyWidgetController::class, 'profile'])->name('loyalty.profile');
-Route::post('loyalty/profile', [LoyaltyWidgetController::class, 'updateProfile'])->name('loyalty.profile.update');
-Route::options('loyalty/profile', [LoyaltyWidgetController::class, 'profileOptions']);
-Route::get('loyalty/coupons', [LoyaltyWidgetController::class, 'coupons'])->name('loyalty.coupons');
-Route::options('loyalty/coupons', [LoyaltyWidgetController::class, 'couponsOptions']);
-Route::post('loyalty/coupons/{coupon}/redeem', [LoyaltyWidgetController::class, 'redeemCoupon'])
-    ->name('loyalty.coupons.redeem');
-Route::get('loyalty/my-coupons', [LoyaltyWidgetController::class, 'myCoupons'])->name('loyalty.my-coupons');
-Route::options('loyalty/my-coupons', [LoyaltyWidgetController::class, 'myCouponsOptions']);
-Route::get('loyalty/my-coupons/{redemption}', [LoyaltyWidgetController::class, 'widgetMyCouponDetail'])
-    ->name('loyalty.my-coupons.show');
-Route::get('loyalty/dashboard', [LoyaltyWidgetController::class, 'dashboard'])->name('loyalty.dashboard');
-Route::get('loyalty/mystery-box', [LoyaltyWidgetController::class, 'mysteryBoxPage'])
-    ->name('loyalty.mystery-box');
+Route::middleware('throttle:120,1')->group(function () {
+    Route::get('loyalty/token', [LoyaltyWidgetController::class, 'token'])->name('loyalty.token');
+    Route::options('loyalty/token', [LoyaltyWidgetController::class, 'tokenOptions']);
+    Route::get('loyalty/data', [LoyaltyWidgetController::class, 'data'])->name('loyalty.data');
+    Route::options('loyalty/data', [LoyaltyWidgetController::class, 'dataOptions']);
+    Route::get('loyalty/profile', [LoyaltyWidgetController::class, 'profile'])->name('loyalty.profile');
+    Route::post('loyalty/profile', [LoyaltyWidgetController::class, 'updateProfile'])->name('loyalty.profile.update');
+    Route::options('loyalty/profile', [LoyaltyWidgetController::class, 'profileOptions']);
+    Route::get('loyalty/coupons', [LoyaltyWidgetController::class, 'coupons'])->name('loyalty.coupons');
+    Route::options('loyalty/coupons', [LoyaltyWidgetController::class, 'couponsOptions']);
+    Route::post('loyalty/coupons/{coupon}/redeem', [LoyaltyWidgetController::class, 'redeemCoupon'])
+        ->name('loyalty.coupons.redeem');
+    Route::get('loyalty/my-coupons', [LoyaltyWidgetController::class, 'myCoupons'])->name('loyalty.my-coupons');
+    Route::options('loyalty/my-coupons', [LoyaltyWidgetController::class, 'myCouponsOptions']);
+    Route::get('loyalty/my-coupons/{redemption}', [LoyaltyWidgetController::class, 'widgetMyCouponDetail'])
+        ->name('loyalty.my-coupons.show');
+    Route::get('loyalty/dashboard', [LoyaltyWidgetController::class, 'dashboard'])->name('loyalty.dashboard');
+    Route::get('loyalty/mystery-box', [LoyaltyWidgetController::class, 'mysteryBoxPage'])
+        ->name('loyalty.mystery-box');
 
-Route::get('api/widget/my-coupons', [LoyaltyWidgetController::class, 'widgetMyCoupons'])
-    ->name('widget.my-coupons');
-Route::get('api/widget/my-coupons/{redemption}', [LoyaltyWidgetController::class, 'widgetMyCouponDetail'])
-    ->name('widget.my-coupons.show');
-Route::get('api/widget/earn/rules', [LoyaltyWidgetController::class, 'earnRules'])
-    ->name('widget.earn.rules');
-Route::get('api/widget/earn/status', [LoyaltyWidgetController::class, 'earnStatus'])
-    ->name('widget.earn.status');
-Route::post('api/widget/earn/social', [LoyaltyWidgetController::class, 'earnSocial'])
-    ->name('widget.earn.social');
-Route::options('api/widget/earn/social', [LoyaltyWidgetController::class, 'earnSocialOptions']);
-Route::get('api/widget/mystery-box/active', [LoyaltyWidgetController::class, 'mysteryBoxActive'])
-    ->name('widget.mystery-box.active');
-Route::post('api/widget/mystery-box/{mysteryBox}/claim', [LoyaltyWidgetController::class, 'mysteryBoxClaim'])
-    ->name('widget.mystery-box.claim');
-Route::options('api/widget/mystery-box/{mysteryBox}/claim', [LoyaltyWidgetController::class, 'mysteryBoxClaimOptions']);
-Route::get('api/widget/chat/messages', [LoyaltyWidgetController::class, 'chatMessages'])
-    ->name('widget.chat.messages');
-Route::post('api/widget/chat/polls/{poll}/vote', [LoyaltyWidgetController::class, 'chatPollVote'])
-    ->name('widget.chat.polls.vote');
-Route::options('api/widget/chat/polls/{poll}/vote', [LoyaltyWidgetController::class, 'chatPollVoteOptions']);
-Route::get('api/widget/points/history', [LoyaltyWidgetController::class, 'pointsHistory'])
-    ->name('widget.points.history');
+    Route::get('api/widget/my-coupons', [LoyaltyWidgetController::class, 'widgetMyCoupons'])
+        ->name('widget.my-coupons');
+    Route::get('api/widget/my-coupons/{redemption}', [LoyaltyWidgetController::class, 'widgetMyCouponDetail'])
+        ->name('widget.my-coupons.show');
+    Route::get('api/widget/earn/rules', [LoyaltyWidgetController::class, 'earnRules'])
+        ->name('widget.earn.rules');
+    Route::get('api/widget/earn/status', [LoyaltyWidgetController::class, 'earnStatus'])
+        ->name('widget.earn.status');
+    Route::post('api/widget/earn/social', [LoyaltyWidgetController::class, 'earnSocial'])
+        ->name('widget.earn.social');
+    Route::options('api/widget/earn/social', [LoyaltyWidgetController::class, 'earnSocialOptions']);
+    Route::get('api/widget/mystery-box/active', [LoyaltyWidgetController::class, 'mysteryBoxActive'])
+        ->name('widget.mystery-box.active');
+    Route::post('api/widget/mystery-box/{mysteryBox}/claim', [LoyaltyWidgetController::class, 'mysteryBoxClaim'])
+        ->name('widget.mystery-box.claim');
+    Route::options('api/widget/mystery-box/{mysteryBox}/claim', [LoyaltyWidgetController::class, 'mysteryBoxClaimOptions']);
+    Route::get('api/widget/chat/messages', [LoyaltyWidgetController::class, 'chatMessages'])
+        ->name('widget.chat.messages');
+    Route::post('api/widget/chat/polls/{poll}/vote', [LoyaltyWidgetController::class, 'chatPollVote'])
+        ->name('widget.chat.polls.vote');
+    Route::options('api/widget/chat/polls/{poll}/vote', [LoyaltyWidgetController::class, 'chatPollVoteOptions']);
+    Route::get('api/widget/points/history', [LoyaltyWidgetController::class, 'pointsHistory'])
+        ->name('widget.points.history');
+});
 
 Route::get('/', function () {
     return redirect()->route('login');
@@ -125,8 +132,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     Route::get('admin/ai-insights', [AiInsightsController::class, 'index'])->name('ai-insights');
-    Route::post('admin/ai-insights/run', [AiInsightsController::class, 'run'])->name('ai-insights.run');
+    Route::post('admin/ai-insights/run', [AiInsightsController::class, 'run'])
+        ->middleware('throttle:6,1')
+        ->name('ai-insights.run');
     Route::get('admin/ai-insights/status', [AiInsightsController::class, 'status'])->name('ai-insights.status');
+    Route::get('admin/ai/sandbox', [AiSandboxController::class, 'index'])->name('ai-sandbox');
+    Route::post('admin/ai/sandbox/compute-features', [AiSandboxController::class, 'computeFeatures'])
+        ->middleware('throttle:6,1')
+        ->name('ai-sandbox.compute');
+    Route::post('admin/ai/sandbox/train', [AiSandboxController::class, 'train'])
+        ->middleware('throttle:6,1')
+        ->name('ai-sandbox.train');
+    Route::post('admin/ai/predict', [AiSandboxController::class, 'predict'])
+        ->middleware('throttle:12,1')
+        ->name('ai-sandbox.predict');
+    Route::get('admin/ai/features', [AiSandboxController::class, 'featurePreview'])->name('ai-features');
+    Route::get('admin/ai/data/import', [AiDataImportController::class, 'index'])->name('ai-data-import');
+    Route::post('admin/ai/data/import', [AiDataImportController::class, 'store'])->name('ai-data-import.store');
     Route::get('admin/ai-insights/clusters/{cluster}/export', [AiInsightsController::class, 'exportCluster'])
         ->name('ai-insights.clusters.export');
     Route::get('admin/ai-insights/awards/create', [AiClusterAwardController::class, 'create'])
@@ -145,6 +167,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('ai-insights.awards.destroy');
     Route::get('admin/ai-insights/awards/{award}/export', [AiClusterAwardController::class, 'export'])
         ->name('ai-insights.awards.export');
+
+    Route::get('admin/reports', [ReportsController::class, 'index'])->name('reports');
+    Route::post('admin/reports/generate', [ReportsController::class, 'generate'])->name('reports.generate');
+    Route::get('admin/reports/export/excel', [ReportsController::class, 'exportExcel'])->name('reports.export.excel');
+    Route::get('admin/reports/export/pdf', [ReportsController::class, 'exportPdf'])->name('reports.export.pdf');
 });
 
 require __DIR__.'/settings.php';
