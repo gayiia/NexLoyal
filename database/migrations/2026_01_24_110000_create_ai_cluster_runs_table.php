@@ -1,5 +1,6 @@
 <?php
 
+// This migration creates the ai_cluster_runs table for AI job tracking.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,6 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // This table stores run status and key metrics for clustering.
         Schema::create('ai_cluster_runs', function (Blueprint $table) {
             $table->id();
             $table->string('status')->default('pending');
@@ -26,6 +28,7 @@ return new class extends Migration
 
     public function down(): void
     {
+        // This removes the ai_cluster_runs table created in up().
         Schema::dropIfExists('ai_cluster_runs');
     }
 };

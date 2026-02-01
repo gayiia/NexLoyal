@@ -1,5 +1,6 @@
 <?php
 
+// This request validates profile updates from the settings form.
 namespace App\Http\Requests\Settings;
 
 use App\Models\User;
@@ -7,6 +8,7 @@ use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
+// This class centralizes validation rules for user profile updates.
 class ProfileUpdateRequest extends FormRequest
 {
     /**
@@ -16,6 +18,7 @@ class ProfileUpdateRequest extends FormRequest
      */
     public function rules(): array
     {
+        // These rules ensure name and email are valid and email is unique.
         return [
             'name' => ['required', 'string', 'max:255'],
 

@@ -1,5 +1,6 @@
 <?php
 
+// This migration adds additional history fields to points transactions.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,6 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // These checks avoid errors when columns already exist.
         if (!Schema::hasColumn('points_transactions', 'store_id')) {
             Schema::table('points_transactions', function (Blueprint $table): void {
                 $table->unsignedBigInteger('store_id')->nullable()->after('id');
@@ -37,6 +39,7 @@ return new class extends Migration
 
     public function down(): void
     {
+        // This drops the history columns if they exist.
         $columns = [
             'store_id',
             'source_type',

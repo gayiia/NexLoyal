@@ -1,13 +1,18 @@
+{{-- This view lets admins choose their preferred theme appearance. --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- The title uses the app name configuration with a fallback for local/dev environments. --}}
         <title>{{ config('app.name', 'NexLoyal') }} - Appearance</title>
+        {{-- Preconnect and load the UI font used across the admin experience. --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        {{-- Vite builds and injects the compiled CSS for this page. --}}
         @vite(['resources/css/app.css'])
         <style>
+            {{-- These styles define light-mode overrides and appearance button states. --}}
             :root {
                 color-scheme: dark;
             }
@@ -89,9 +94,11 @@
             <div class="min-h-screen bg-[radial-gradient(700px_circle_at_bottom,rgba(30,64,175,0.22),transparent_60%)]">
                 <div class="min-h-screen bg-[linear-gradient(120deg,rgba(15,23,42,0.9),rgba(2,6,23,0.95))] nl-shell">
                     <div class="flex min-h-screen">
+                        {{-- The admin sidebar is shared across the dashboard and provides navigation. --}}
                         @include('partials.admin-sidebar')
 
                         <main class="flex-1 px-10 py-8">
+                            {{-- The header anchors the appearance settings screen. --}}
                             <x-page-header eyebrow="" title="Appearance" breadcrumb="Settings / Appearance">
                                 <x-slot name="actions">
                                     <button id="theme-toggle" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-200 nl-panel-muted" type="button">
@@ -108,6 +115,7 @@
 
                                 <div class="px-6 py-6">
                                     <div class="flex flex-wrap gap-3">
+                                        {{-- These buttons persist the theme preference in local storage. --}}
                                         <button type="button" class="nl-appearance-button" data-theme="light">Light</button>
                                         <button type="button" class="nl-appearance-button" data-theme="dark">Dark</button>
                                         <button type="button" class="nl-appearance-button" data-theme="system">System</button>
@@ -121,11 +129,13 @@
         </div>
         <script>
             (function () {
+                // Store the theme preference locally so it persists between visits.
                 const storageKey = 'nl-theme';
                 const body = document.body;
                 const button = document.getElementById('theme-toggle');
                 const buttons = document.querySelectorAll('[data-theme]');
 
+                // Apply a theme preference, falling back to system if selected.
                 const applyTheme = (theme) => {
                     if (theme === 'system') {
                         const systemTheme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
@@ -143,11 +153,13 @@
                     });
                 };
 
+                // Default to dark if no preference is stored.
                 const stored = localStorage.getItem(storageKey) || 'dark';
                 applyTheme(stored);
 
                 if (button) {
                     button.addEventListener('click', () => {
+                        // Toggle between light and dark for quick switching.
                         const next = body.classList.contains('nl-theme-light') ? 'dark' : 'light';
                         localStorage.setItem(storageKey, next);
                         applyTheme(next);
@@ -156,6 +168,7 @@
 
                 buttons.forEach((item) => {
                     item.addEventListener('click', () => {
+                        // Persist the selected appearance and update button styles.
                         const theme = item.getAttribute('data-theme');
                         if (!theme) {
                             return;
@@ -167,6 +180,7 @@
 
                 const settingsToggle = document.getElementById('settings-toggle');
                 const settingsMenu = document.getElementById('settings-menu');
+                // Settings submenu toggles via the sidebar caret.
                 if (settingsToggle && settingsMenu) {
                     settingsToggle.addEventListener('click', () => {
                         settingsMenu.classList.toggle('hidden');

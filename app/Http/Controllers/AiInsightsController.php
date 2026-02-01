@@ -1,5 +1,6 @@
 <?php
 
+// This controller renders AI insights and manages clustering runs.
 namespace App\Http\Controllers;
 
 use App\Jobs\ComputeCustomerFeaturesJob;
@@ -13,10 +14,13 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 
+// This class powers the AI insights dashboard and export endpoints.
 class AiInsightsController extends Controller
 {
+    // This loads the latest clustering data and renders the AI insights page.
     public function index(Request $request)
     {
+        // This fetches the most recent clustering run if one exists.
         $latestRun = AiClusterRun::query()->orderByDesc('id')->first();
         $clusters = $latestRun
             ? AiCluster::query()
@@ -25,6 +29,7 @@ class AiInsightsController extends Controller
                 ->get()
             : collect();
 
+        // This groups cluster customers so the UI can show members per cluster.
         $clusterCustomers = $latestRun
             ? AiClusterCustomer::query()
                 ->with('customer')
@@ -33,11 +38,13 @@ class AiInsightsController extends Controller
                 ->groupBy('ai_cluster_id')
             : collect();
 
+        // This loads configured AI awards and their linked coupon data.
         $awards = AiClusterAward::query()
             ->with(['cluster', 'coupon'])
             ->orderByDesc('id')
             ->get();
 
+        // This aggregates award issuance counts by type for summary charts.
         $awardIssuanceCounts = AiAwardIssuance::query()
             ->select('ai_cluster_awards.type', DB::raw('COUNT(*) as total'))
             ->join('ai_cluster_awards', 'ai_cluster_awards.id', '=', 'ai_award_issuances.ai_cluster_award_id')
@@ -45,6 +52,7 @@ class AiInsightsController extends Controller
             ->pluck('total', 'type')
             ->toArray();
 
+        // These arrays are used to build charts in the Blade template.
         $chartLabels = $clusters->pluck('label')->values()->all();
         $chartDistribution = $clusters->pluck('customer_count')->values()->all();
         $chartAvgSpend = $clusters->pluck('avg_total_spent')->map(fn ($value) => (float) $value)->values()->all();
@@ -53,6 +61,7 @@ class AiInsightsController extends Controller
             'coupon' => (int) ($awardIssuanceCounts['coupon'] ?? 0),
         ];
 
+        // This renders the dashboard view with all derived data.
         return view('ai-insights', [
             'latestRun' => $latestRun,
             'clusters' => $clusters,
@@ -67,8 +76,10 @@ class AiInsightsController extends Controller
         ]);
     }
 
+    // This starts a new AI clustering run as a chained background job.
     public function run(Request $request)
     {
+        // This ensures feature computation happens before clustering.
         Bus::chain([
             new ComputeCustomerFeaturesJob(),
             new RunAIClusteringJob(),
@@ -77,21 +88,26 @@ class AiInsightsController extends Controller
         return redirect()->route('ai-insights')->with('status', 'AI clustering started.');
     }
 
+    // This streams a CSV export of customers in a selected cluster.
     public function exportCluster(AiCluster $cluster)
     {
+        // This builds the query used for chunked CSV export.
         $query = AiClusterCustomer::query()
             ->with('customer')
             ->where('ai_cluster_id', $cluster->id)
             ->orderByDesc('total_spent_snapshot');
 
+        // This names the file with the cluster ID and timestamp.
         $fileName = 'ai-cluster-' . $cluster->id . '-customers-' . now()->format('Ymd_His') . '.csv';
         $headers = [
             'Content-Type' => 'text/csv',
             'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
         ];
 
+        // This streams the CSV content to avoid loading all rows into memory.
         return response()->streamDownload(function () use ($query) {
             $handle = fopen('php://output', 'w');
+            // This writes the header row expected by the export.
             fputcsv($handle, [
                 'Customer ID',
                 'Name',
@@ -103,6 +119,7 @@ class AiInsightsController extends Controller
 
             $query->chunk(500, function ($rows) use ($handle) {
                 foreach ($rows as $row) {
+                    // This falls back to email when name fields are missing.
                     $customer = $row->customer;
                     $nameParts = array_filter([$customer?->first_name, $customer?->last_name]);
                     $name = $nameParts ? implode(' ', $nameParts) : ($customer?->email ?? 'Customer');
@@ -121,6 +138,7 @@ class AiInsightsController extends Controller
         }, $fileName, $headers);
     }
 
+    // This returns the status of the latest clustering run for polling.
     public function status()
     {
         $latestRun = AiClusterRun::query()->orderByDesc('id')->first();
@@ -130,6 +148,7 @@ class AiInsightsController extends Controller
             ]);
         }
 
+        // This exposes run metrics used by the front-end progress UI.
         return response()->json([
             'status' => $latestRun->status,
             'total_customers' => (int) $latestRun->total_customers,

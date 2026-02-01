@@ -1,13 +1,17 @@
 <?php
 
+// This helper formats points transactions into display-friendly fields.
 namespace App\Support;
 
 use App\Models\PointsTransaction;
 
+// This class centralizes label and title rules for points history UI.
 class PointsHistoryFormatter
 {
+    // This builds a normalized payload for a single points transaction.
     public static function format(PointsTransaction $transaction): array
     {
+        // These derived fields ensure consistent display in the UI.
         $direction = self::direction($transaction);
         $points = abs((int) $transaction->points);
         $status = strtoupper((string) $transaction->status);
@@ -25,8 +29,10 @@ class PointsHistoryFormatter
         ];
     }
 
+    // This determines whether a transaction is an earn or redeem movement.
     public static function direction(PointsTransaction $transaction): string
     {
+        // Negative points or spend type are treated as redemption in the UI.
         if (strtoupper((string) $transaction->type) === 'SPEND' || $transaction->points < 0) {
             return 'REDEEM';
         }
@@ -34,6 +40,7 @@ class PointsHistoryFormatter
         return 'EARN';
     }
 
+    // This maps the source type to a human-readable category label.
     public static function typeLabel(PointsTransaction $transaction): string
     {
         $sourceType = strtoupper((string) ($transaction->source_type ?? $transaction->source ?? ''));
@@ -50,12 +57,14 @@ class PointsHistoryFormatter
         };
     }
 
+    // This builds a descriptive title that explains why the points changed.
     public static function title(PointsTransaction $transaction): string
     {
         $sourceType = strtoupper((string) ($transaction->source_type ?? $transaction->source ?? ''));
         $meta = is_array($transaction->meta) ? $transaction->meta : [];
         $referenceId = $transaction->reference_id ?? $transaction->order_id;
 
+        // These branches select a title based on the source type and available metadata.
         if ($sourceType === 'ORDER') {
             $orderNumber = $meta['order_number'] ?? null;
             if ($orderNumber) {

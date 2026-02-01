@@ -1,13 +1,18 @@
+{{-- This view renders the AI CSV import screen so admins can upload data for clustering and review import results. --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- The title uses the app name configuration with a fallback for local/dev environments. --}}
         <title>{{ config('app.name', 'NexLoyal') }} - AI Data Import</title>
+        {{-- Preconnect and load the UI font used across the admin experience. --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        {{-- Vite builds and injects the compiled CSS for this page. --}}
         @vite(['resources/css/app.css'])
         <style>
+            {{-- These styles toggle light-mode colors for admin previews within the dark theme. --}}
             :root {
                 color-scheme: dark;
             }
@@ -66,9 +71,11 @@
             <div class="min-h-screen bg-[radial-gradient(700px_circle_at_bottom,rgba(30,64,175,0.22),transparent_60%)]">
                 <div class="min-h-screen bg-[linear-gradient(120deg,rgba(15,23,42,0.9),rgba(2,6,23,0.95))] nl-shell">
                     <div class="flex min-h-screen">
+                        {{-- The admin sidebar is shared across the dashboard and provides navigation. --}}
                         @include('partials.admin-sidebar')
 
                         <main class="flex-1 px-6 py-8 lg:px-10">
+                            {{-- The page header communicates location and offers quick actions. --}}
                             <x-page-header eyebrow="AI" title="Data import" subtitle="Import CSV data for AI clustering" breadcrumb="AI / Data / Import CSV">
                                 <x-slot name="actions">
                                     <a class="rounded-xl border border-slate-700 px-4 py-2 text-xs text-slate-200" href="{{ route('ai-insights') }}">Back to AI Insights</a>
@@ -78,6 +85,7 @@
                                 </x-slot>
                             </x-page-header>
 
+                            {{-- Validation errors from the upload/import process are listed here. --}}
                             @if ($errors->any())
                                 <div class="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
                                     <p class="font-semibold text-rose-100">Import failed.</p>
@@ -89,6 +97,7 @@
                                 </div>
                             @endif
 
+                            {{-- The import summary is only shown after a successful or partial import. --}}
                             @if (session('import_summary'))
                                 @php $summary = session('import_summary'); @endphp
                                 <section class="mt-4 rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
@@ -101,6 +110,7 @@
                                     </div>
                                     <div class="mt-5 grid gap-4 lg:grid-cols-3">
                                         <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4 text-xs">
+                                            {{-- The customers block reports counts by action taken. --}}
                                             <p class="uppercase tracking-[0.2em] text-slate-400">Customers</p>
                                             <p class="mt-2 text-sm text-slate-100">Imported: {{ $summary['customers']['imported'] ?? 0 }}</p>
                                             <p class="text-slate-300">Updated: {{ $summary['customers']['updated'] ?? 0 }}</p>
@@ -110,17 +120,20 @@
                                             @endif
                                         </div>
                                         <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4 text-xs">
+                                            {{-- Points transactions are optional but summarized when provided. --}}
                                             <p class="uppercase tracking-[0.2em] text-slate-400">Points transactions</p>
                                             <p class="mt-2 text-sm text-slate-100">Imported: {{ $summary['points_transactions']['imported'] ?? 0 }}</p>
                                             <p class="text-slate-300">Skipped: {{ $summary['points_transactions']['skipped'] ?? 0 }}</p>
                                         </div>
                                         <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4 text-xs">
+                                            {{-- Customer coupons are optional but summarized when provided. --}}
                                             <p class="uppercase tracking-[0.2em] text-slate-400">Customer coupons</p>
                                             <p class="mt-2 text-sm text-slate-100">Imported: {{ $summary['customer_coupons']['imported'] ?? 0 }}</p>
                                             <p class="text-slate-300">Updated: {{ $summary['customer_coupons']['updated'] ?? 0 }}</p>
                                             <p class="text-slate-300">Skipped: {{ $summary['customer_coupons']['skipped'] ?? 0 }}</p>
                                         </div>
                                     </div>
+                                    {{-- Warnings capture non-fatal issues that still completed the import. --}}
                                     @if (!empty($summary['warnings']))
                                         <div class="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
                                             <p class="font-semibold">Warnings</p>
@@ -131,6 +144,7 @@
                                             </ul>
                                         </div>
                                     @endif
+                                    {{-- Sample rows help diagnose which input data was ignored. --}}
                                     @if (!empty($summary['skipped_rows']))
                                         <div class="mt-4 rounded-xl border border-slate-800/70 bg-slate-950/40 p-4 text-xs">
                                             <p class="font-semibold text-slate-100">Skipped rows (sample)</p>
@@ -151,6 +165,7 @@
 
                             <section class="mt-6 grid gap-6 lg:grid-cols-3">
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
+                                    {{-- Templates are provided so users can match the expected CSV structure. --}}
                                     <p class="text-sm font-semibold text-slate-100">Templates</p>
                                     <p class="mt-1 text-xs text-slate-400">Download sample CSVs with 5 rows.</p>
                                     <div class="mt-4 space-y-2 text-xs">
@@ -160,6 +175,7 @@
                                     </div>
                                 </div>
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6 lg:col-span-2">
+                                    {{-- This form submits CSV files for server-side import and optional clustering. --}}
                                     <p class="text-sm font-semibold text-slate-100">Upload CSV files</p>
                                     <p class="mt-1 text-xs text-slate-400">Customers file is required. Others are optional.</p>
 
@@ -167,23 +183,28 @@
                                         @csrf
                                         <div class="grid gap-4 md:grid-cols-2">
                                             <div>
+                                                {{-- Customers are required because other datasets link to customer IDs. --}}
                                                 <label class="text-xs uppercase tracking-[0.2em] text-slate-400">customers.csv</label>
                                                 <input class="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-xs text-slate-200" type="file" name="customers_file" accept=".csv" required>
                                             </div>
                                             <div>
+                                                {{-- Transactions improve feature accuracy but can be omitted. --}}
                                                 <label class="text-xs uppercase tracking-[0.2em] text-slate-400">points_transactions.csv</label>
                                                 <input class="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-xs text-slate-200" type="file" name="points_transactions_file" accept=".csv">
                                             </div>
                                             <div>
+                                                {{-- Coupon redemptions are optional and are used for richer clustering. --}}
                                                 <label class="text-xs uppercase tracking-[0.2em] text-slate-400">customer_coupons.csv</label>
                                                 <input class="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-xs text-slate-200" type="file" name="customer_coupons_file" accept=".csv">
                                             </div>
                                             <div class="flex items-center gap-2 text-xs text-slate-200">
+                                                {{-- This flag triggers a background clustering job after import. --}}
                                                 <input id="run_clustering" type="checkbox" name="run_clustering" value="1" checked>
                                                 <label for="run_clustering">Run clustering after import</label>
                                             </div>
                                         </div>
 
+                                        {{-- The import relies on queued jobs, so a worker must be running. --}}
                                         <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 px-4 py-3 text-xs text-slate-300">
                                             Make sure the queue worker is running: <span class="text-slate-200">php artisan queue:work</span>
                                         </div>
@@ -192,6 +213,7 @@
                                             <button type="submit" class="rounded-xl bg-sky-400 px-5 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-sky-500/30">
                                                 Import CSV
                                             </button>
+                                            {{-- The import message reflects that database writes are wrapped in a transaction. --}}
                                             <p class="text-xs text-slate-400">The import runs inside a database transaction.</p>
                                         </div>
                                     </form>
@@ -205,10 +227,12 @@
 
         <script>
             (function () {
+                // Store the theme preference locally so it persists between visits.
                 const storageKey = 'nl-theme';
                 const body = document.body;
                 const button = document.getElementById('theme-toggle');
 
+                // Apply light or dark styles and update the button label.
                 const applyTheme = (theme) => {
                     if (theme === 'light') {
                         body.classList.add('nl-theme-light');
@@ -220,17 +244,20 @@
                     }
                 };
 
+                // Default to dark when no preference is stored.
                 const stored = localStorage.getItem(storageKey);
                 applyTheme(stored || 'dark');
 
                 if (button) {
                     button.addEventListener('click', () => {
+                        // Toggle the theme and persist the choice.
                         const next = body.classList.contains('nl-theme-light') ? 'dark' : 'light';
                         localStorage.setItem(storageKey, next);
                         applyTheme(next);
                     });
                 }
 
+                // Keep the settings menu open when navigating within settings pages.
                 const settingsToggle = document.getElementById('settings-toggle');
                 const settingsMenu = document.getElementById('settings-menu');
                 const shouldOpenSettings = window.location.pathname.startsWith('/settings');

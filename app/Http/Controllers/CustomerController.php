@@ -1,5 +1,6 @@
 <?php
 
+// This controller manages customer listing, export, detail views, and creation.
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
@@ -8,12 +9,16 @@ use App\Support\PointsHistoryFormatter;
 use App\Services\ShopifyCustomerService;
 use Illuminate\Http\Request;
 
+// This class provides CRUD-like endpoints for customer management and reporting.
 class CustomerController extends Controller
 {
+    // This lists customers with filter and pagination support.
     public function index(Request $request)
     {
+        // This applies filter rules based on query parameters.
         $query = $this->applyFilters(Customer::query(), $request);
 
+        // This enforces allowed page sizes to keep responses predictable.
         $perPage = (int) $request->input('per_page', 10);
         $perPage = in_array($perPage, [10, 25, 50], true) ? $perPage : 10;
 
@@ -22,17 +27,20 @@ class CustomerController extends Controller
         return view('customers', compact('customers'));
     }
 
+    // This streams a CSV export of the filtered customer list.
     public function export(Request $request)
     {
         $query = $this->applyFilters(Customer::query(), $request)
             ->orderByDesc('id');
 
+        // This builds a timestamped filename for the export.
         $fileName = 'customers_' . now()->format('Ymd_His') . '.csv';
         $headers = [
             'Content-Type' => 'text/csv',
             'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
         ];
 
+        // This streams results in chunks to avoid loading all rows into memory.
         return response()->streamDownload(function () use ($query) {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
@@ -50,6 +58,7 @@ class CustomerController extends Controller
 
             $query->chunk(500, function ($customers) use ($handle) {
                 foreach ($customers as $customer) {
+                    // This writes a single customer row to the CSV output.
                     fputcsv($handle, [
                         $customer->id,
                         $customer->full_name,
@@ -69,8 +78,10 @@ class CustomerController extends Controller
         }, $fileName, $headers);
     }
 
+    // This applies filter options from the request to the customer query.
     private function applyFilters($query, Request $request)
     {
+        // These branches support filters for missing or present names.
         if ($request->filled('name') && $request->input('name') !== 'all') {
             if ($request->input('name') === 'has') {
                 $query->where(function ($builder) {
@@ -91,6 +102,7 @@ class CustomerController extends Controller
             }
         }
 
+        // These branches support filters for missing or present email.
         if ($request->filled('email') && $request->input('email') !== 'all') {
             if ($request->input('email') === 'has') {
                 $query->whereNotNull('email')->where('email', '!=', '');
@@ -101,6 +113,7 @@ class CustomerController extends Controller
             }
         }
 
+        // These branches support filters for missing or present phone numbers.
         if ($request->filled('mobile') && $request->input('mobile') !== 'all') {
             if ($request->input('mobile') === 'has') {
                 $query->whereNotNull('phone')->where('phone', '!=', '');
@@ -111,10 +124,12 @@ class CustomerController extends Controller
             }
         }
 
+        // This filters by the explicit customer status when provided.
         if ($request->filled('status') && $request->input('status') !== 'all') {
             $query->where('status', $request->input('status'));
         }
 
+        // This applies a simple text search across common identity fields.
         if ($request->filled('search')) {
             $search = $request->input('search');
             $query->where(function ($builder) use ($search): void {
@@ -128,14 +143,17 @@ class CustomerController extends Controller
         return $query;
     }
 
+    // This shows a single customer and a paginated points history.
     public function show(Customer $customer)
     {
+        // This loads the customer's points transactions in reverse chronological order.
         $transactions = PointsTransaction::query()
             ->where('customer_id', $customer->id)
             ->orderByDesc('created_at')
             ->paginate(10)
             ->withQueryString();
 
+        // This maps transactions into display-friendly summaries.
         $transactions->setCollection(
             $transactions->getCollection()->map(function (PointsTransaction $transaction) {
                 return PointsHistoryFormatter::format($transaction);
@@ -148,18 +166,21 @@ class CustomerController extends Controller
         ]);
     }
 
+    // This streams a CSV export of a single customer's points history.
     public function exportDetail(Customer $customer)
     {
         $query = PointsTransaction::query()
             ->where('customer_id', $customer->id)
             ->orderByDesc('created_at');
 
+        // This builds a timestamped filename for the export.
         $fileName = 'customer_' . $customer->id . '_points_' . now()->format('Ymd_His') . '.csv';
         $headers = [
             'Content-Type' => 'text/csv',
             'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
         ];
 
+        // This streams results in chunks to avoid loading all rows into memory.
         return response()->streamDownload(function () use ($query) {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
@@ -174,6 +195,7 @@ class CustomerController extends Controller
 
             $query->chunk(500, function ($transactions) use ($handle) {
                 foreach ($transactions as $transaction) {
+                    // This formats the transaction consistently with the UI.
                     $formatted = PointsHistoryFormatter::format($transaction);
                     fputcsv($handle, [
                         $formatted['id'] ?? null,
@@ -191,8 +213,10 @@ class CustomerController extends Controller
         }, $fileName, $headers);
     }
 
+    // This creates a new Shopify customer and mirrors it locally.
     public function store(Request $request, ShopifyCustomerService $shopify)
     {
+        // These fields are required to create the customer in Shopify.
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:120'],
             'last_name' => ['required', 'string', 'max:120'],
@@ -202,8 +226,10 @@ class CustomerController extends Controller
             'phone' => ['required', 'string', 'max:40'],
         ]);
 
+        // This builds a full phone number string stored in Shopify.
         $fullPhone = trim($validated['phone_country'].' '.$validated['phone']);
 
+        // This payload matches Shopify's expected customer fields.
         $payload = [
             'first_name' => $validated['first_name'],
             'last_name' => $validated['last_name'],
@@ -213,13 +239,16 @@ class CustomerController extends Controller
         ];
 
         try {
+            // This creates the customer in Shopify and returns the record.
             $shopifyCustomer = $shopify->createCustomer($payload);
         } catch (\Throwable $exception) {
+            // This returns Shopify API errors back to the form.
             return back()
                 ->withErrors(['shopify' => $exception->getMessage()])
                 ->withInput();
         }
 
+        // This mirrors the Shopify customer into the local database.
         Customer::create([
             'shopify_id' => (string) ($shopifyCustomer['id'] ?? ''),
             'first_name' => $shopifyCustomer['first_name'] ?? $validated['first_name'],

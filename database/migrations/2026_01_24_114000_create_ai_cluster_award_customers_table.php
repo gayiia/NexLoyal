@@ -1,5 +1,6 @@
 <?php
 
+// This migration creates the ai_cluster_award_customers table and unique index.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -9,6 +10,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // This ensures the unique index exists when the table is already present.
         if (Schema::hasTable('ai_cluster_award_customers')) {
             $hasIndex = $this->hasIndex('ai_cluster_award_customers', 'ai_award_customer_unique');
             if (!$hasIndex) {
@@ -19,6 +21,7 @@ return new class extends Migration
             return;
         }
 
+        // This table stores award recipients and issuance status.
         Schema::create('ai_cluster_award_customers', function (Blueprint $table) {
             $table->id();
             $table->foreignId('ai_cluster_award_id')->constrained()->cascadeOnDelete();
@@ -34,9 +37,11 @@ return new class extends Migration
 
     public function down(): void
     {
+        // This removes the ai_cluster_award_customers table created in up().
         Schema::dropIfExists('ai_cluster_award_customers');
     }
 
+    // This checks for an index in the database to avoid duplicates.
     private function hasIndex(string $table, string $index): bool
     {
         $database = DB::getDatabaseName();

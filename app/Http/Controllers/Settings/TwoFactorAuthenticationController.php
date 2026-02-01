@@ -1,5 +1,6 @@
 <?php
 
+// This controller renders the two-factor authentication settings screen.
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
@@ -10,6 +11,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Laravel\Fortify\Features;
 
+// This class configures middleware and serves 2FA settings via Inertia.
 class TwoFactorAuthenticationController extends Controller implements HasMiddleware
 {
     /**
@@ -17,6 +19,7 @@ class TwoFactorAuthenticationController extends Controller implements HasMiddlew
      */
     public static function middleware(): array
     {
+        // This requires password confirmation when the Fortify option is enabled.
         return Features::optionEnabled(Features::twoFactorAuthentication(), 'confirmPassword')
             ? [new Middleware('password.confirm', only: ['show'])]
             : [];
@@ -27,6 +30,7 @@ class TwoFactorAuthenticationController extends Controller implements HasMiddlew
      */
     public function show(TwoFactorAuthenticationRequest $request): Response
     {
+        // This enforces any Fortify state checks before rendering.
         $request->ensureStateIsValid();
 
         return Inertia::render('settings/two-factor', [

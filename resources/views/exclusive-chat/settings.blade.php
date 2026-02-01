@@ -1,13 +1,18 @@
+{{-- This view configures Exclusive Chat availability and tier visibility. --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- The title uses the app name configuration with a fallback for local/dev environments. --}}
         <title>{{ config('app.name', 'NexLoyal') }} - Exclusive Chat Settings</title>
+        {{-- Preconnect and load the UI font used across the admin experience. --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        {{-- Vite builds and injects the compiled CSS for this page. --}}
         @vite(['resources/css/app.css'])
         <style>
+            {{-- These styles define light-mode overrides and tab appearance. --}}
             :root { color-scheme: dark; }
             body { letter-spacing: 0.01em; }
             .nl-theme-light { color-scheme: light; background-color: #f8fafc; color: #0f172a; }
@@ -25,9 +30,11 @@
         <div class="min-h-screen bg-[radial-gradient(900px_circle_at_top,rgba(56,189,248,0.18),transparent_60%)]">
             <div class="min-h-screen bg-[linear-gradient(120deg,rgba(15,23,42,0.9),rgba(2,6,23,0.95))] nl-shell">
                 <div class="flex min-h-screen flex-col lg:flex-row">
+                    {{-- The admin sidebar is shared across the dashboard and provides navigation. --}}
                     @include('partials.admin-sidebar')
 
                     <main class="flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+                        {{-- The header anchors the exclusive chat settings page. --}}
                         <x-page-header eyebrow="" title="Exclusive Chat" breadcrumb="Notifications / Exclusive Chat">
                             <x-slot name="actions">
                                 <button id="theme-toggle" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-200 nl-panel-muted" type="button">
@@ -36,12 +43,14 @@
                             </x-slot>
                         </x-page-header>
 
+                        {{-- Tabs switch between messages and settings. --}}
                         <div class="mt-6 flex flex-wrap gap-3">
                             <a href="{{ route('exclusive-chat') }}" class="nl-tab border border-slate-700 text-slate-200">Messages</a>
                             <a href="{{ route('exclusive-chat.settings') }}" class="nl-tab border border-slate-700 bg-slate-100 text-slate-900">Settings</a>
                         </div>
 
                         <section class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-6 nl-panel">
+                            {{-- This form saves chat availability and allowed tiers. --}}
                             <form method="POST" action="{{ route('exclusive-chat.settings.update') }}" class="grid gap-6">
                                 @csrf
                                 <div>
@@ -49,12 +58,14 @@
                                     <p class="mt-1 text-xs text-slate-400">Enable Exclusive Chat and select which tiers can see it.</p>
                                 </div>
 
+                                {{-- Master toggle to enable or disable chat. --}}
                                 <label class="flex items-center gap-3 text-sm text-slate-200">
                                     <input type="checkbox" name="enabled" value="1" @checked(old('enabled', $settings->enabled))>
                                     Enable Exclusive Chat
                                 </label>
 
                                 <div>
+                                    {{-- Allowed tiers limit chat visibility to certain customers. --}}
                                     <label class="text-xs uppercase tracking-[0.2em] text-slate-400">Allowed tiers</label>
                                     <div class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                                         @foreach ($tiers as $tier)
@@ -67,6 +78,7 @@
                                 </div>
 
                                 <div class="flex items-center justify-end gap-3">
+                                    {{-- Save persists the settings in the backend. --}}
                                     <button class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900" type="submit">
                                         Save settings
                                     </button>
@@ -80,10 +92,12 @@
 
         <script>
             (function () {
+                // Store the theme preference locally so it persists between visits.
                 const storageKey = 'nl-theme';
                 const body = document.body;
                 const button = document.getElementById('theme-toggle');
 
+                // Apply light or dark styles and update the button label.
                 const applyTheme = (theme) => {
                     body.classList.toggle('nl-theme-light', theme === 'light');
                     if (button) {
@@ -96,6 +110,7 @@
 
                 if (button) {
                     button.addEventListener('click', () => {
+                        // Toggle the theme and persist the choice.
                         const next = body.classList.contains('nl-theme-light') ? 'dark' : 'light';
                         localStorage.setItem(storageKey, next);
                         applyTheme(next);

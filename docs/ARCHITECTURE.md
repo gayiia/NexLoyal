@@ -1,3 +1,4 @@
+<!-- This document explains the system architecture so readers can understand how the project is structured and why key design choices were made. -->
 # NexLoyal System Architecture
 
 ## 1. Introduction

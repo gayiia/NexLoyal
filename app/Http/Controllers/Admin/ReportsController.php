@@ -1,5 +1,6 @@
 <?php
 
+// This controller renders reports and handles exports for the admin UI.
 namespace App\Http\Controllers\Admin;
 
 use App\Exports\GenericReportExport;
@@ -15,12 +16,15 @@ use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
 
+// This class coordinates report generation, filtering, and output formats.
 class ReportsController extends Controller
 {
+    // This shows the report dashboard with any previously generated data.
     public function index(Request $request, ReportsService $reports)
     {
         $filters = $this->defaultFilters();
 
+        // This restores any previously generated report from the session.
         $payload = $request->session()->get('reports.payload');
         $selected = $request->session()->get('reports.report_key');
         $filters = array_merge($filters, $request->session()->get('reports.filters', []));
@@ -38,6 +42,7 @@ class ReportsController extends Controller
         ]);
     }
 
+    // This validates filters, generates the report, and stores it in session.
     public function generate(Request $request, ReportsService $reports)
     {
         $validated = $request->validate($this->rules($reports));
@@ -45,6 +50,7 @@ class ReportsController extends Controller
 
         $payload = $reports->generate($validated['report_key'], $filters);
 
+        // This keeps the latest report in session for export actions.
         $request->session()->put('reports.payload', $payload);
         $request->session()->put('reports.report_key', $validated['report_key']);
         $request->session()->put('reports.filters', $filters);
@@ -62,12 +68,14 @@ class ReportsController extends Controller
         ]);
     }
 
+    // This exports the report data to an Excel file.
     public function exportExcel(Request $request, ReportsService $reports)
     {
         $payload = $request->session()->get('reports.payload');
         $reportKey = $request->session()->get('reports.report_key');
         $filters = $request->session()->get('reports.filters', []);
 
+        // This allows direct export by query parameters without prior session state.
         if ($request->query('report_key')) {
             $validated = $request->validate($this->rules($reports));
             $filters = $this->normalizeFilters($validated);
@@ -79,6 +87,7 @@ class ReportsController extends Controller
             return redirect()->route('reports')->with('status', 'Please generate a report before exporting.');
         }
 
+        // This formats the report into a tabular export.
         $export = new GenericReportExport($payload);
         $fileBase = $reportKey . '_' . now()->format('Ymd_His');
 
@@ -89,6 +98,7 @@ class ReportsController extends Controller
         })->download('xlsx');
     }
 
+    // This exports the report data to a PDF file.
     public function exportPdf()
     {
         $payload = request()->session()->get('reports.payload');
@@ -98,6 +108,7 @@ class ReportsController extends Controller
             return redirect()->route('reports')->with('status', 'Please generate a report before exporting.');
         }
 
+        // This names the PDF using the report key and timestamp.
         $fileName = $reportKey . '_' . now()->format('Ymd_His') . '.pdf';
 
         return Pdf::loadView('reports-pdf', [
@@ -105,6 +116,7 @@ class ReportsController extends Controller
         ])->setPaper('a4', 'portrait')->download($fileName);
     }
 
+    // This defines validation rules for report filters.
     private function rules(ReportsService $reports): array
     {
         $keys = array_keys($reports->availableReports());
@@ -123,6 +135,7 @@ class ReportsController extends Controller
         ];
     }
 
+    // This normalizes optional filters into a consistent shape.
     private function normalizeFilters(array $validated): array
     {
         return [
@@ -138,6 +151,7 @@ class ReportsController extends Controller
         ];
     }
 
+    // This provides default filter values for first load.
     private function defaultFilters(): array
     {
         return [
@@ -153,6 +167,7 @@ class ReportsController extends Controller
         ];
     }
 
+    // This loads clusters from the most recent AI run for report filters.
     private function latestClusters()
     {
         $run = AiClusterRun::query()->orderByDesc('id')->first();

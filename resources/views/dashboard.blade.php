@@ -1,13 +1,18 @@
+{{-- This view renders the admin dashboard with summary KPIs, charts, and recent trends. --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- The title uses the app name configuration with a fallback for local/dev environments. --}}
         <title>{{ config('app.name', 'NexLoyal') }} - Dashboard</title>
+        {{-- Preconnect and load the UI font used across the admin experience. --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        {{-- Vite builds and injects the compiled CSS for this page. --}}
         @vite(['resources/css/app.css'])
         <style>
+            {{-- These styles toggle light-mode colors and dashboard filter styles. --}}
             :root {
                 color-scheme: dark;
             }
@@ -108,11 +113,14 @@
             <div class="min-h-screen bg-[radial-gradient(700px_circle_at_bottom,rgba(30,64,175,0.22),transparent_60%)]">
                 <div class="min-h-screen bg-[linear-gradient(120deg,rgba(15,23,42,0.9),rgba(2,6,23,0.95))] nl-shell">
                     <div class="flex min-h-screen">
+                        {{-- The admin sidebar is shared across the dashboard and provides navigation. --}}
                         @include('partials.admin-sidebar')
 
                         <main class="flex-1 px-10 py-8">
+                            {{-- The header displays primary dashboard actions. --}}
                             <x-page-header eyebrow="" title="Dashobaord" subtitle="">
                                 <x-slot name="actions">
+                                    {{-- Export and campaign actions are placeholders for reporting workflows. --}}
                                     <button class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-sm text-slate-200 nl-panel-muted">Export report</button>
                                     <button class="rounded-xl bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-sky-500/30">Create campaign</button>
                                     <button id="theme-toggle" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-sm text-slate-200 nl-panel-muted" type="button">
@@ -120,6 +128,7 @@
                                     </button>
                                 </x-slot>
                             </x-page-header>
+                            {{-- Filters are visual controls only; no backend logic is wired here yet. --}}
                             <section class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5 nl-panel">
                                 <div class="flex flex-wrap items-center gap-2 border-b border-slate-800/70 pb-3">
                                     <span class="text-xs uppercase tracking-[0.3em] text-slate-400 nl-text-muted">Filters</span>
@@ -172,6 +181,7 @@
                                 </div>
                             </section>
 
+                            {{-- KPI tiles summarize high-level loyalty metrics. --}}
                             <section class="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5">
                                     <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Points outstanding</p>
@@ -195,6 +205,7 @@
                                 </div>
                             </section>
 
+                            {{-- Charts and breakdowns provide a deeper view into earned, spent, and engagement data. --}}
                             <section class="mt-8 grid gap-6 lg:grid-cols-2">
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
                                     <div class="flex items-center justify-between">
@@ -219,6 +230,7 @@
                                         <span class="text-xs text-slate-400">This month</span>
                                     </div>
                                     <div class="mt-6 space-y-3 text-xs text-slate-300">
+                                        {{-- Each row shows a reward type and its share of redemptions. --}}
                                         @forelse ($redemption_mix as $label => $stats)
                                             <div>
                                                 <div class="flex items-center justify-between">
@@ -244,6 +256,7 @@
                                         <span class="text-xs text-slate-400">Active members</span>
                                     </div>
                                     <div class="mt-6 space-y-3 text-xs text-slate-300">
+                                        {{-- Tier bars show distribution of active members across tiers. --}}
                                         @forelse ($tier_distribution as $tier)
                                             <div>
                                                 <div class="flex items-center justify-between">
@@ -268,6 +281,7 @@
                                         <span class="text-xs text-slate-400">Weekly</span>
                                     </div>
                                     @php $maxWeekly = max($series['weekly_redemptions'] ?: [0]); @endphp
+                                    {{-- Weekly bars are scaled relative to the highest redemption count. --}}
                                     <div class="mt-6 grid grid-cols-7 items-end gap-2 text-xs text-slate-400">
                                         @foreach ($series['weekly_redemptions'] as $index => $count)
                                             @php
@@ -291,6 +305,7 @@
                                         <span class="text-xs text-slate-400">Top rewards</span>
                                     </div>
                                     @php $maxMystery = max($mystery_box_outcomes->pluck('count')->all() ?: [0]); @endphp
+                                    {{-- Reward bars are scaled relative to the most frequent outcome. --}}
                                     <div class="mt-6 grid grid-cols-5 items-end gap-3 text-xs text-slate-400">
                                         @foreach ($mystery_box_outcomes as $item)
                                             @php
@@ -301,6 +316,7 @@
                                                 <span class="text-[10px] text-center text-slate-400">{{ \Illuminate\Support\Str::limit($item['title'], 8) }}</span>
                                             </div>
                                         @endforeach
+                                        {{-- This empty state preserves layout when no outcomes exist. --}}
                                         @if ($mystery_box_outcomes->isEmpty())
                                             <p class="col-span-5 text-center text-xs text-slate-400">No mystery box claims yet.</p>
                                         @endif
@@ -327,11 +343,13 @@
         </div>
         <script>
             (function () {
+                // Store the theme preference locally so it persists between visits.
                 const storageKey = 'nl-theme';
                 const body = document.body;
                 const button = document.getElementById('theme-toggle');
                 if (!button) return;
 
+                // Apply light or dark styles and update the button label.
                 const applyTheme = (theme) => {
                     if (theme === 'light') {
                         body.classList.add('nl-theme-light');
@@ -345,11 +363,13 @@
                 applyTheme(stored || 'dark');
 
                 button.addEventListener('click', () => {
+                    // Toggle the theme and persist the choice.
                     const next = body.classList.contains('nl-theme-light') ? 'dark' : 'light';
                     localStorage.setItem(storageKey, next);
                     applyTheme(next);
                 });
 
+                // Keep the settings menu open when navigating within settings pages.
                 const settingsToggle = document.getElementById('settings-toggle');
                 const settingsMenu = document.getElementById('settings-menu');
                 const shouldOpenSettings = window.location.pathname.startsWith('/settings');
@@ -364,6 +384,7 @@
             })();
 
             (function () {
+                // Build simple SVG paths to avoid heavy chart dependencies.
                 const buildLinePath = (values, width, height, padding) => {
                     if (!values.length) {
                         return '';
@@ -392,11 +413,13 @@
                 const chatPath = document.getElementById('chat-votes-line');
 
                 if (earnedPath && spentPath) {
+                    // Earned and spent use different styles to show contrast.
                     earnedPath.setAttribute('d', buildLinePath(pointsEarned, 600, 160, 10));
                     spentPath.setAttribute('d', buildLinePath(pointsSpent, 600, 160, 10));
                 }
 
                 if (chatPath) {
+                    // Chat votes use a separate chart size and padding.
                     chatPath.setAttribute('d', buildLinePath(chatVotes, 600, 140, 12));
                 }
             })();

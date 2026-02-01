@@ -1,15 +1,18 @@
 <?php
 
+// This model represents a redeemable coupon in the loyalty program.
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+// This class stores coupon configuration and Shopify linkage fields.
 class Coupon extends Model
 {
     use HasFactory;
 
+    // These fields are mass assignable from the coupon management UI.
     protected $fillable = [
         'title',
         'type',
@@ -35,6 +38,7 @@ class Coupon extends Model
         'shopify_discount_code_id',
     ];
 
+    // These casts normalize numeric values, dates, and arrays.
     protected $casts = [
         'value' => 'decimal:2',
         'points_value' => 'integer',
@@ -50,6 +54,7 @@ class Coupon extends Model
         'buyx_discount_value' => 'decimal:2',
     ];
 
+    // This links the coupon to an optional loyalty tier.
     public function tier(): BelongsTo
     {
         return $this->belongsTo(Tier::class);

@@ -1,5 +1,6 @@
 <?php
 
+// This controller exposes manual AI feature and training tools for admins.
 namespace App\Http\Controllers;
 
 use App\Jobs\ComputeCustomerFeaturesJob;
@@ -12,8 +13,10 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 
+// This class supports the AI sandbox screens and test predictions.
 class AiSandboxController extends Controller
 {
+    // This shows the AI sandbox page with the latest run and configuration.
     public function index()
     {
         $latestRun = AiClusterRun::query()->orderByDesc('id')->first();
@@ -24,6 +27,7 @@ class AiSandboxController extends Controller
         ]);
     }
 
+    // This kicks off background computation of customer features.
     public function computeFeatures(): RedirectResponse
     {
         ComputeCustomerFeaturesJob::dispatch();
@@ -33,6 +37,7 @@ class AiSandboxController extends Controller
             ->with('status', 'Feature computation started.');
     }
 
+    // This runs a full training chain in the background.
     public function train(): RedirectResponse
     {
         Bus::chain([
@@ -45,8 +50,10 @@ class AiSandboxController extends Controller
             ->with('status', 'AI training started.');
     }
 
+    // This lists computed features with optional customer search filters.
     public function featurePreview(Request $request)
     {
+        // This uses a simple search to match customer ID, email, or Shopify ID.
         $search = trim((string) $request->query('search', ''));
 
         $query = CustomerFeature::query()->with('customer');
@@ -68,20 +75,25 @@ class AiSandboxController extends Controller
         ]);
     }
 
+    // This predicts a cluster for a specific customer and returns JSON.
     public function predict(Request $request, AiInsightsService $insights)
     {
+        // This validates that the customer exists locally.
         $validated = $request->validate([
             'customer_id' => ['required', 'integer', 'exists:customers,id'],
         ]);
 
         try {
+            // This calls the AI service to generate a prediction.
             $result = $insights->predictForCustomer((int) $validated['customer_id']);
         } catch (\Throwable $exception) {
+            // This returns a validation-style error when prediction fails.
             return response()->json([
                 'message' => $exception->getMessage(),
             ], 422);
         }
 
+        // This maps the numeric cluster ID to a human-readable label.
         $latestRun = AiClusterRun::query()->orderByDesc('id')->first();
         $clusterLabel = null;
         if ($latestRun && array_key_exists('cluster_id', $result)) {
@@ -92,6 +104,7 @@ class AiSandboxController extends Controller
             $clusterLabel = $cluster?->label;
         }
 
+        // This returns prediction details for the sandbox UI.
         return response()->json([
             'cluster_id' => $result['cluster_id'] ?? null,
             'cluster_label' => $clusterLabel,

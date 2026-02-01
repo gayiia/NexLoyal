@@ -1,11 +1,14 @@
 <?php
 
+// This model stores configurable rules for earning loyalty points.
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+// This class holds reward amounts and social link settings.
 class PointRule extends Model
 {
+    // These fields are mass assignable from the settings UI.
     protected $fillable = [
         'welcome_points',
         'birthday_points',
@@ -25,6 +28,7 @@ class PointRule extends Model
         'social_youtube_points',
     ];
 
+    // These casts ensure numeric values are treated as integers.
     protected $casts = [
         'welcome_points' => 'integer',
         'birthday_points' => 'integer',

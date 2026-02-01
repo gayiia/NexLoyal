@@ -1,5 +1,6 @@
 <?php
 
+// This migration adds earning rules and social link fields to point_rules.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,6 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // These columns configure welcome points, spend-to-point ratio, and social rewards.
         Schema::table('point_rules', function (Blueprint $table): void {
             $table->unsignedInteger('welcome_points')->default(0)->after('id');
             $table->unsignedInteger('amount_per_point')->default(100)->after('profile_completion_points');
@@ -28,6 +30,7 @@ return new class extends Migration
 
     public function down(): void
     {
+        // This removes the earning and social columns added in up().
         Schema::table('point_rules', function (Blueprint $table): void {
             $table->dropColumn([
                 'welcome_points',

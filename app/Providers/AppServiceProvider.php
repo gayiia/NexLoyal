@@ -1,9 +1,11 @@
 <?php
 
+// This provider configures application-wide services and startup checks.
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 
+// This class registers and boots core application services.
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -19,10 +21,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // This skips runtime env validation during automated tests.
         if ($this->app->environment('testing')) {
             return;
         }
 
+        // These settings are required for AI, Shopify, and queue processing.
         $required = [
             'AI_SERVICE_URL' => config('services.ai_service_url'),
             'AI_API_KEY' => config('ai.api_key'),
@@ -32,6 +36,7 @@ class AppServiceProvider extends ServiceProvider
             'QUEUE_CONNECTION' => config('queue.default'),
         ];
 
+        // This collects missing env values to show a single clear error.
         $missing = [];
         foreach ($required as $key => $value) {
             if ($value === null || $value === '') {
@@ -40,6 +45,7 @@ class AppServiceProvider extends ServiceProvider
         }
 
         if ($missing) {
+            // This fails fast when required configuration is not present.
             throw new \RuntimeException(
                 'Missing required environment variables: '.implode(', ', $missing)
             );

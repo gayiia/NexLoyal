@@ -1,5 +1,6 @@
 <?php
 
+// This queued job runs AI clustering and persists the resulting segments.
 namespace App\Jobs;
 
 use App\Models\AiCluster;
@@ -17,6 +18,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
+// This job coordinates feature computation, AI training, and cluster persistence.
 class RunAIClusteringJob implements ShouldQueue
 {
     use Dispatchable;
@@ -24,6 +26,7 @@ class RunAIClusteringJob implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
+    // This acquires a lock so clustering runs are not overlapping.
     public function handle(AiInsightsService $insights): void
     {
         $lock = Cache::lock('ai_cluster_run', 1200);
@@ -31,11 +34,13 @@ class RunAIClusteringJob implements ShouldQueue
             return;
         }
 
+        // These configuration values define the feature schema and clustering bounds.
         $featureKeys = (array) config('ai.feature_keys', []);
         $minK = (int) data_get(config('ai.k_range'), 'min', 2);
         $maxK = (int) data_get(config('ai.k_range'), 'max', 6);
         $minCustomers = (int) config('ai.min_customers_for_training', 20);
 
+        // This records the start of a clustering run for audit and status tracking.
         $run = AiClusterRun::create([
             'status' => AiRunStatus::RUNNING->value,
             'started_at' => now(),
@@ -53,11 +58,13 @@ class RunAIClusteringJob implements ShouldQueue
         ]);
 
         try {
+            // This computes features and prepares the training dataset.
             $dataset = $insights->computeCustomerFeatures(true);
             $customerIds = $dataset['customer_ids'] ?? [];
             $vectors = $dataset['vectors'] ?? [];
             $snapshots = $dataset['snapshots'] ?? [];
 
+            // This enforces a minimum sample size so clustering has meaningful data.
             if (count($customerIds) < $minCustomers) {
                 $run->update([
                     'status' => AiRunStatus::FAILED->value,
@@ -67,6 +74,7 @@ class RunAIClusteringJob implements ShouldQueue
                 return;
             }
 
+            // This calls the AI service to train and assign cluster labels.
             $response = $insights->train(
                 $vectors,
                 $featureKeys,
@@ -79,6 +87,7 @@ class RunAIClusteringJob implements ShouldQueue
                 throw new \RuntimeException('AI service returned mismatched labels.');
             }
 
+            // This groups customer IDs by their assigned cluster label.
             $clusterGroups = [];
             foreach ($labels as $index => $label) {
                 $labelKey = (string) $label;
@@ -88,6 +97,7 @@ class RunAIClusteringJob implements ShouldQueue
 
             $clusterRecords = [];
             foreach ($clusterGroups as $labelKey => $ids) {
+                // This aggregates summary stats used in cluster reporting.
                 $totals = [
                     'total_spent' => 0,
                     'orders_count' => 0,
@@ -102,6 +112,7 @@ class RunAIClusteringJob implements ShouldQueue
                     $totals['points_spent'] += (int) ($snapshot['points_spent_snapshot'] ?? 0);
                 }
 
+                // This calculates averages for cluster-level metrics.
                 $count = max(1, count($ids));
 
                 $clusterRecords[$labelKey] = [
@@ -119,8 +130,10 @@ class RunAIClusteringJob implements ShouldQueue
                 ];
             }
 
+            // This applies friendly labels based on spending rank.
             $clusterRecords = $this->applyClusterLabels($clusterRecords);
 
+            // This persists clusters and their customer assignments in a single transaction.
             DB::transaction(function () use ($run, $clusterRecords, $clusterGroups, $snapshots, $response): void {
                 $clusterIdMap = [];
                 foreach ($clusterRecords as $labelKey => $data) {
@@ -135,6 +148,7 @@ class RunAIClusteringJob implements ShouldQueue
                         continue;
                     }
                     foreach ($ids as $customerId) {
+                        // This stores a snapshot of customer features at clustering time.
                         $snapshot = $snapshots[$customerId] ?? [];
                         $customerRows[] = array_merge($snapshot, [
                             'ai_cluster_run_id' => $run->id,
@@ -146,10 +160,12 @@ class RunAIClusteringJob implements ShouldQueue
                     }
                 }
 
+                // This inserts in chunks to avoid large single insert statements.
                 foreach (array_chunk($customerRows, 500) as $chunk) {
                     AiClusterCustomer::insert($chunk);
                 }
 
+                // This finalizes the run with metrics returned by the AI service.
                 $run->update([
                     'status' => AiRunStatus::COMPLETED->value,
                     'completed_at' => now(),
@@ -171,6 +187,7 @@ class RunAIClusteringJob implements ShouldQueue
                 ]);
             });
         } catch (\Throwable $exception) {
+            // This logs failures and marks the run as failed for visibility.
             Log::error('AI clustering failed', [
                 'message' => $exception->getMessage(),
                 'trace' => $exception->getTraceAsString(),
@@ -181,16 +198,19 @@ class RunAIClusteringJob implements ShouldQueue
                 'completed_at' => now(),
             ]);
         } finally {
+            // This ensures the lock is released even when errors occur.
             optional($lock)->release();
         }
     }
 
+    // This assigns human-readable labels to clusters based on average spending.
     private function applyClusterLabels(array $clusterRecords): array
     {
         if (!$clusterRecords) {
             return $clusterRecords;
         }
 
+        // These labels are ordered from lowest to highest spender segments.
         $labelsByRank = [
             'Value Seekers',
             'Budget Buyers',
@@ -200,6 +220,7 @@ class RunAIClusteringJob implements ShouldQueue
             'VIP Loyalists',
         ];
 
+        // This ranks clusters by average spend so labels align with relative value.
         $sorted = $clusterRecords;
         uasort($sorted, function ($a, $b) {
             return ($a['avg_total_spent'] ?? 0) <=> ($b['avg_total_spent'] ?? 0);
@@ -209,10 +230,12 @@ class RunAIClusteringJob implements ShouldQueue
         $index = 0;
         $maxIndex = count($labelsByRank) - 1;
         foreach (array_keys($sorted) as $labelKey) {
+            // This caps label index when there are more clusters than labels.
             $rankMap[$labelKey] = $labelsByRank[min($index, $maxIndex)];
             $index++;
         }
 
+        // This replaces the numeric label with the ranked label while preserving the key.
         foreach ($clusterRecords as $labelKey => $data) {
             $clusterRecords[$labelKey]['label'] = $rankMap[$labelKey] ?? $data['label'];
         }

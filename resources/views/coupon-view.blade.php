@@ -1,13 +1,18 @@
+{{-- This view shows redemption activity and summary details for a single coupon. --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- The title uses the app name configuration with a fallback for local/dev environments. --}}
         <title>{{ config('app.name', 'NexLoyal') }} - Coupon View</title>
+        {{-- Preconnect and load the UI font used across the admin experience. --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        {{-- Vite builds and injects the compiled CSS for this page. --}}
         @vite(['resources/css/app.css'])
         <style>
+            {{-- These styles define light-mode overrides and table appearance. --}}
             :root {
                 color-scheme: dark;
             }
@@ -96,20 +101,25 @@
             <div class="min-h-screen bg-[radial-gradient(700px_circle_at_bottom,rgba(30,64,175,0.22),transparent_60%)]">
                 <div class="min-h-screen bg-[linear-gradient(120deg,rgba(15,23,42,0.9),rgba(2,6,23,0.95))] nl-shell">
                     <div class="flex min-h-screen flex-col lg:flex-row">
+                        {{-- The admin sidebar is shared across the dashboard and provides navigation. --}}
                         @include('partials.admin-sidebar')
 
                         <main class="flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+                            {{-- The header anchors coupon redemption reporting. --}}
                             <x-page-header eyebrow="" title="Coupon redemptions" breadcrumb="Rewards / Coupons / View">
                                 <x-slot name="actions">
+                                    {{-- Back navigates to the full coupon list. --}}
                                     <a href="{{ route('coupons') }}" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-200 nl-panel-muted">
                                         Back to coupons
                                     </a>
+                                    {{-- Export uses the current filters for the CSV output. --}}
                                     <a href="{{ route('coupons.export', ['coupon' => $coupon, 'status' => request('status', 'all'), 'search' => request('search')]) }}" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900">
                                         Export CSV
                                     </a>
                                 </x-slot>
                             </x-page-header>
 
+                            {{-- These labels normalize coupon values for display. --}}
                             @php
                                 $valueLabel = 'No value';
                                 if ($coupon->type === 'free-shipping') {
@@ -132,6 +142,7 @@
                                 ][$coupon->type] ?? $coupon->type;
                             @endphp
 
+                            {{-- Summary cards show core coupon metadata. --}}
                             <section class="mt-6 grid gap-4 lg:grid-cols-3">
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 nl-panel">
                                     <p class="text-xs uppercase tracking-[0.35em] text-slate-400">Summary</p>
@@ -173,12 +184,14 @@
                                 </div>
                             </section>
 
+                            {{-- The table below lists individual customer redemptions. --}}
                             <section class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-5 nl-panel">
                                 <div class="flex flex-wrap items-center justify-between gap-3">
                                     <div>
                                         <p class="text-sm font-semibold text-slate-100">Customer redemptions</p>
                                         <p class="text-xs text-slate-400">Search, filter, and review coupon usage.</p>
                                     </div>
+                                    {{-- Filters are sent as query parameters. --}}
                                     <form class="flex flex-wrap items-end gap-3" method="GET" action="{{ route('coupons.view', $coupon) }}">
                                         <label class="nl-filter-label text-slate-400">
                                             Search
@@ -212,7 +225,9 @@
                                             </tr>
                                         </thead>
                                         <tbody class="divide-y divide-slate-800/70">
+                                            {{-- Use the current page to calculate row numbering. --}}
                                             @php $rowStart = ($redemptions->currentPage() - 1) * $redemptions->perPage(); @endphp
+                                            {{-- Each row represents a customer's coupon redemption. --}}
                                             @forelse ($redemptions as $index => $redemption)
                                                 @php
                                                     $expiresAt = $redemption->expires_at ?? $coupon->end_date;
@@ -242,6 +257,7 @@
                                                     <td class="px-4 py-4 text-slate-300">{{ $validityLabel }}</td>
                                                 </tr>
                                             @empty
+                                                {{-- Empty state when no redemptions match the filters. --}}
                                                 <tr>
                                                     <td colspan="5" class="px-4 py-10 text-center text-slate-400">No redemptions match your filters.</td>
                                                 </tr>
@@ -255,6 +271,7 @@
                                         Showing {{ $redemptions->firstItem() ?? 0 }} to {{ $redemptions->lastItem() ?? 0 }} of {{ $redemptions->total() }} entries
                                     </div>
                                     <div class="flex items-center gap-2">
+                                        {{-- Pagination uses a small window around the current page. --}}
                                         @php
                                             $current = $redemptions->currentPage();
                                             $last = $redemptions->lastPage();

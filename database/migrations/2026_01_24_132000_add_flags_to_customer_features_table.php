@@ -1,5 +1,6 @@
 <?php
 
+// This migration adds customer feature flags used for AI filtering.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,6 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // These columns track tenure and exclusion status for AI features.
         Schema::table('customer_features', function (Blueprint $table): void {
             if (!Schema::hasColumn('customer_features', 'tenure_days')) {
                 $table->unsignedInteger('tenure_days')->nullable()->after('days_since_last_order');
@@ -26,6 +28,7 @@ return new class extends Migration
 
     public function down(): void
     {
+        // This removes the AI flag columns if they exist.
         $columns = ['tenure_days', 'is_new_customer', 'is_excluded', 'excluded_reason'];
         $toDrop = [];
         foreach ($columns as $column) {

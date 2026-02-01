@@ -1,13 +1,17 @@
 <?php
 
+// This service wraps Shopify discount and price rule operations used by coupon workflows.
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
 
+// This class centralizes Shopify Admin API calls for creating, updating, and deleting discounts.
 class ShopifyDiscountService
 {
+    // This creates a Shopify price rule and returns the created rule data.
     public function createPriceRule(array $payload): array
     {
+        // These credentials are required for Shopify Admin API access.
         $domain = config('services.shopify.shop_domain');
         $token = config('services.shopify.admin_token');
         $version = config('services.shopify.api_version', '2024-01');
@@ -16,6 +20,7 @@ class ShopifyDiscountService
             throw new \RuntimeException('Shopify credentials are not configured.');
         }
 
+        // This sends the price rule payload in Shopify's expected wrapper structure.
         $response = Http::withHeaders([
             'X-Shopify-Access-Token' => $token,
             'Accept' => 'application/json',
@@ -24,6 +29,7 @@ class ShopifyDiscountService
         ]);
 
         if (!$response->successful()) {
+            // This tries to extract a human-readable error message from Shopify's response.
             $status = $response->status();
             $body = $response->json();
             $message = null;
@@ -54,6 +60,7 @@ class ShopifyDiscountService
             throw new \RuntimeException("Shopify price rule creation failed ({$status}): {$message}");
         }
 
+        // This validates the expected response shape before returning it.
         $data = $response->json();
         $rule = is_array($data) ? ($data['price_rule'] ?? null) : null;
 
@@ -64,8 +71,10 @@ class ShopifyDiscountService
         return $rule;
     }
 
+    // This creates a discount code tied to an existing price rule.
     public function createDiscountCode(int $priceRuleId, string $code): array
     {
+        // These credentials are required for Shopify Admin API access.
         $domain = config('services.shopify.shop_domain');
         $token = config('services.shopify.admin_token');
         $version = config('services.shopify.api_version', '2024-01');
@@ -74,6 +83,7 @@ class ShopifyDiscountService
             throw new \RuntimeException('Shopify credentials are not configured.');
         }
 
+        // This posts the discount code under the specific price rule.
         $response = Http::withHeaders([
             'X-Shopify-Access-Token' => $token,
             'Accept' => 'application/json',
@@ -84,6 +94,7 @@ class ShopifyDiscountService
         ]);
 
         if (!$response->successful()) {
+            // This tries to extract a human-readable error message from Shopify's response.
             $status = $response->status();
             $body = $response->json();
             $message = null;
@@ -114,6 +125,7 @@ class ShopifyDiscountService
             throw new \RuntimeException("Shopify discount code creation failed ({$status}): {$message}");
         }
 
+        // This validates the expected response shape before returning it.
         $data = $response->json();
         $discount = is_array($data) ? ($data['discount_code'] ?? null) : null;
 
@@ -124,8 +136,10 @@ class ShopifyDiscountService
         return $discount;
     }
 
+    // This updates an existing price rule with new settings.
     public function updatePriceRule(int $priceRuleId, array $payload): array
     {
+        // These credentials are required for Shopify Admin API access.
         $domain = config('services.shopify.shop_domain');
         $token = config('services.shopify.admin_token');
         $version = config('services.shopify.api_version', '2024-01');
@@ -134,6 +148,7 @@ class ShopifyDiscountService
             throw new \RuntimeException('Shopify credentials are not configured.');
         }
 
+        // This sends updated price rule data in Shopify's expected wrapper structure.
         $response = Http::withHeaders([
             'X-Shopify-Access-Token' => $token,
             'Accept' => 'application/json',
@@ -142,6 +157,7 @@ class ShopifyDiscountService
         ]);
 
         if (!$response->successful()) {
+            // This tries to extract a human-readable error message from Shopify's response.
             $status = $response->status();
             $body = $response->json();
             $message = null;
@@ -172,6 +188,7 @@ class ShopifyDiscountService
             throw new \RuntimeException("Shopify price rule update failed ({$status}): {$message}");
         }
 
+        // This validates the expected response shape before returning it.
         $data = $response->json();
         $rule = is_array($data) ? ($data['price_rule'] ?? null) : null;
 
@@ -182,8 +199,10 @@ class ShopifyDiscountService
         return $rule;
     }
 
+    // This deletes a price rule from Shopify.
     public function deletePriceRule(int $priceRuleId): void
     {
+        // These credentials are required for Shopify Admin API access.
         $domain = config('services.shopify.shop_domain');
         $token = config('services.shopify.admin_token');
         $version = config('services.shopify.api_version', '2024-01');
@@ -192,12 +211,14 @@ class ShopifyDiscountService
             throw new \RuntimeException('Shopify credentials are not configured.');
         }
 
+        // This issues a delete request for the price rule ID.
         $response = Http::withHeaders([
             'X-Shopify-Access-Token' => $token,
             'Accept' => 'application/json',
         ])->delete("https://{$domain}/admin/api/{$version}/price_rules/{$priceRuleId}.json");
 
         if (!$response->successful()) {
+            // This tries to extract a human-readable error message from Shopify's response.
             $status = $response->status();
             $body = $response->json();
             $message = null;
@@ -229,8 +250,10 @@ class ShopifyDiscountService
         }
     }
 
+    // This looks up a discount code ID for a price rule so it can be deleted later.
     public function lookupDiscountCodeId(int $priceRuleId, string $code): ?int
     {
+        // These credentials are required for Shopify Admin API access.
         $domain = config('services.shopify.shop_domain');
         $token = config('services.shopify.admin_token');
         $version = config('services.shopify.api_version', '2024-01');
@@ -239,6 +262,7 @@ class ShopifyDiscountService
             throw new \RuntimeException('Shopify credentials are not configured.');
         }
 
+        // This calls Shopify's lookup endpoint to translate a code into its internal ID.
         $response = Http::withHeaders([
             'X-Shopify-Access-Token' => $token,
             'Accept' => 'application/json',
@@ -246,6 +270,7 @@ class ShopifyDiscountService
             'code' => $code,
         ]);
 
+        // This uses null when the code does not exist in Shopify.
         if ($response->status() === 404) {
             return null;
         }
@@ -265,8 +290,10 @@ class ShopifyDiscountService
         return (int) $discount['id'];
     }
 
+    // This deletes a specific discount code under a price rule.
     public function deleteDiscountCode(int $priceRuleId, int $discountCodeId): void
     {
+        // These credentials are required for Shopify Admin API access.
         $domain = config('services.shopify.shop_domain');
         $token = config('services.shopify.admin_token');
         $version = config('services.shopify.api_version', '2024-01');
@@ -275,6 +302,7 @@ class ShopifyDiscountService
             throw new \RuntimeException('Shopify credentials are not configured.');
         }
 
+        // This issues a delete request for the discount code ID.
         $response = Http::withHeaders([
             'X-Shopify-Access-Token' => $token,
             'Accept' => 'application/json',
@@ -287,6 +315,7 @@ class ShopifyDiscountService
         }
     }
 
+    // This disables a discount code by resolving its ID and then deleting it.
     public function disableDiscountCode(int $priceRuleId, string $code): void
     {
         $discountCodeId = $this->lookupDiscountCodeId($priceRuleId, $code);

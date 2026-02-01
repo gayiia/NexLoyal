@@ -1,10 +1,11 @@
+{{-- This layout powers Inertia-driven React pages and sets global theme assets for the app shell. --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" @class(['dark' => ($appearance ?? 'system') == 'dark'])>
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        {{-- Inline script to detect system dark mode preference and apply it immediately --}}
+        {{-- This script applies system dark mode early to avoid a flash of incorrect theme. --}}
         <script>
             (function() {
                 const appearance = '{{ $appearance ?? "system" }}';
@@ -19,7 +20,7 @@
             })();
         </script>
 
-        {{-- Inline style to set the HTML background color based on our theme in app.css --}}
+        {{-- This inline style keeps the background consistent with the selected theme. --}}
         <style>
             html {
                 background-color: oklch(1 0 0);
@@ -30,6 +31,7 @@
             }
         </style>
 
+        {{-- Inertia will replace the title per page, with a config fallback for defaults. --}}
         <title inertia>{{ config('app.name', 'Laravel') }}</title>
 
         <link rel="icon" href="/favicon.ico" sizes="any">
@@ -39,11 +41,14 @@
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
 
+        {{-- React refresh and Vite bundles are required for Inertia page rendering. --}}
         @viteReactRefresh
         @vite(['resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])
+        {{-- Inertia injects page-specific metadata here. --}}
         @inertiaHead
     </head>
     <body class="font-sans antialiased">
+        {{-- Inertia renders the active React page into this root. --}}
         @inertia
     </body>
 </html>

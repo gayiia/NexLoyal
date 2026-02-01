@@ -1,5 +1,6 @@
 <?php
 
+// This migration adds AI metadata fields to ai_cluster_runs.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,6 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // These columns store model selection metrics and scaler data.
         Schema::table('ai_cluster_runs', function (Blueprint $table): void {
             if (!Schema::hasColumn('ai_cluster_runs', 'selected_k')) {
                 $table->unsignedInteger('selected_k')->nullable()->after('silhouette_score');
@@ -50,6 +52,7 @@ return new class extends Migration
 
     public function down(): void
     {
+        // This removes the metadata columns added in up().
         $columns = [
             'selected_k',
             'final_inertia',

@@ -1,13 +1,16 @@
 <?php
 
+// This controller manages loyalty point rule settings in admin.
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Models\PointRule;
 use Illuminate\Http\Request;
 
+// This class loads and updates point rule configuration.
 class PointRuleController extends Controller
 {
+    // This shows the point rule settings form, creating defaults if missing.
     public function edit()
     {
         $rule = PointRule::query()->firstOrCreate([], [
@@ -22,8 +25,10 @@ class PointRuleController extends Controller
         ]);
     }
 
+    // This validates and saves point rule settings from the form.
     public function update(Request $request)
     {
+        // These validations enforce numeric ranges and valid URLs for social links.
         $validated = $request->validate([
             'welcome_points' => ['sometimes', 'integer', 'min:0'],
             'birthday_points' => ['sometimes', 'integer', 'min:0'],
@@ -43,6 +48,7 @@ class PointRuleController extends Controller
             'social_youtube_points' => ['sometimes', 'integer', 'min:0'],
         ]);
 
+        // This updates the single point rule record.
         $rule = PointRule::query()->firstOrCreate([]);
         $rule->fill($validated);
         $rule->save();

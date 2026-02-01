@@ -1,5 +1,6 @@
 <?php
 
+// This migration adds Shopify discount identifiers to coupons.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,6 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // These checks add Shopify linkage columns when missing.
         if (!Schema::hasColumn('coupons', 'code')) {
             Schema::table('coupons', function (Blueprint $table) {
                 $table->string('code')->nullable()->after('status');
@@ -27,6 +29,7 @@ return new class extends Migration
 
     public function down(): void
     {
+        // This removes the Shopify columns if they exist.
         $columns = [
             'code',
             'shopify_price_rule_id',

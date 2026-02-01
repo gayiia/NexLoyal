@@ -1,11 +1,13 @@
 <?php
 
+// This middleware supplies shared Inertia props and asset versioning.
 namespace App\Http\Middleware;
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
+// This class customizes Inertia responses for the app layout.
 class HandleInertiaRequests extends Middleware
 {
     /**
@@ -36,6 +38,7 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        // This selects a random quote for the UI header.
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
 
         return [
@@ -45,6 +48,7 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
+            // This remembers sidebar state based on a cookie.
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }

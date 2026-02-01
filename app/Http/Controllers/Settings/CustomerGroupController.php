@@ -1,5 +1,6 @@
 <?php
 
+// This controller serves the Inertia page for customer group settings.
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
@@ -7,8 +8,10 @@ use App\Models\Customer;
 use Inertia\Inertia;
 use Inertia\Response;
 
+// This class prepares customer data for grouping in settings UI.
 class CustomerGroupController extends Controller
 {
+    // This loads customers and static tier labels for the settings page.
     public function index(): Response
     {
         $customers = Customer::query()
@@ -16,6 +19,7 @@ class CustomerGroupController extends Controller
             ->orderBy('last_name')
             ->get()
             ->map(function (Customer $customer): array {
+                // This falls back to email or ID when name fields are missing.
                 $name = $customer->full_name;
 
                 if ($name === '') {
@@ -29,6 +33,7 @@ class CustomerGroupController extends Controller
             })
             ->values();
 
+        // These tier names are used by the UI to create groups.
         $tiers = [
             'Bronze',
             'Silver',

@@ -1,9 +1,12 @@
+{{-- This view renders a printable PDF version of a generated report. --}}
 <!doctype html>
 <html lang="en">
     <head>
         <meta charset="utf-8">
+        {{-- The title is sourced from the report payload when available. --}}
         <title>{{ $payload['title'] ?? 'Report' }}</title>
         <style>
+            {{-- PDF styles use simple, print-friendly typography and borders. --}}
             body { font-family: DejaVu Sans, Arial, sans-serif; color: #0f172a; font-size: 12px; }
             h1 { font-size: 20px; margin-bottom: 6px; }
             h2 { font-size: 14px; margin: 20px 0 8px; }
@@ -17,17 +20,21 @@
         </style>
     </head>
     <body>
+        {{-- Header and metadata provide report context for exported PDFs. --}}
         <h1>{{ $payload['title'] ?? 'Report' }}</h1>
         <div class="meta">Generated at {{ $payload['meta']['generated_at'] ?? '' }}</div>
         <div class="meta muted">
+            {{-- Filters are rendered as a compact summary string. --}}
             Filters: {{ collect($payload['meta']['filters'] ?? [])->reject(fn($v, $k) => str_starts_with((string) $k, '_'))->map(fn($v, $k) => $k.': '.(is_array($v) ? json_encode($v) : ($v ?? 'n/a')))->implode(' | ') }}
         </div>
 
+        {{-- Optional summary content appears only when generated. --}}
         @if(!empty($payload['sections']['summary']))
             <h2>Executive Summary</h2>
             <p>{{ $payload['sections']['summary'] }}</p>
         @endif
 
+        {{-- Insights provide bullet points for quick review. --}}
         @if(!empty($payload['sections']['insights']))
             <h2>Key Insights</h2>
             <ul>
@@ -37,6 +44,7 @@
             </ul>
         @endif
 
+        {{-- KPI tables show headline metrics. --}}
         @if(!empty($payload['kpis']))
             <h2>KPIs</h2>
             <table class="kpi-grid">
@@ -49,6 +57,7 @@
             </table>
         @endif
 
+        {{-- Methodology documents how the report was constructed. --}}
         @if(!empty($payload['sections']['methodology']))
             <h2>Methodology</h2>
             <ul>
@@ -58,6 +67,7 @@
             </ul>
         @endif
 
+        {{-- The main results table is always present, even if empty. --}}
         <h2>Table Results</h2>
         <table>
             <thead>
@@ -68,6 +78,7 @@
                 </tr>
             </thead>
             <tbody>
+                {{-- Rows come directly from the report payload. --}}
                 @forelse(($payload['table']['rows'] ?? []) as $row)
                     <tr>
                         @foreach($row as $cell)
@@ -75,6 +86,7 @@
                         @endforeach
                     </tr>
                 @empty
+                    {{-- Empty state when no rows exist. --}}
                     <tr>
                         <td colspan="8" class="muted">No data available.</td>
                     </tr>
@@ -82,6 +94,7 @@
             </tbody>
         </table>
 
+        {{-- Evidence rows provide traceability for the report outputs. --}}
         @if(!empty($payload['sections']['evidence']['rows']))
             <h2>Evidence & Records</h2>
             <table>

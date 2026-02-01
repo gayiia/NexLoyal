@@ -1,5 +1,6 @@
 <?php
 
+// This controller manages coupon CRUD, activation, and redemption reporting.
 namespace App\Http\Controllers;
 
 use App\Models\Coupon;
@@ -11,12 +12,15 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
+// This class handles coupon listing, creation, Shopify sync, and exports.
 class CouponController extends Controller
 {
+    // This lists coupons with filters and loads Shopify products for selection.
     public function index(Request $request, ShopifyProductService $shopifyProducts)
     {
         $query = Coupon::query()->with('tier');
 
+        // These filters narrow the coupon list by type, status, tier, and points.
         if ($request->filled('type') && $request->input('type') !== 'all') {
             $query->where('type', $request->input('type'));
         }
@@ -59,12 +63,14 @@ class CouponController extends Controller
             $query->where('title', 'like', "%{$search}%");
         }
 
+        // This enforces allowed page sizes to keep responses predictable.
         $perPage = (int) $request->input('per_page', 10);
         $perPage = in_array($perPage, [10, 25, 50], true) ? $perPage : 10;
 
         $coupons = $query->orderByDesc('id')->paginate($perPage)->withQueryString();
         $tiers = Tier::query()->orderBy('min_points')->get();
 
+        // This loads Shopify products for product-specific coupon types.
         $products = [];
         $productError = null;
         try {
@@ -76,8 +82,10 @@ class CouponController extends Controller
         return view('coupons', compact('coupons', 'tiers', 'products', 'productError'));
     }
 
+    // This validates input and stores a new coupon in draft status.
     public function store(Request $request)
     {
+        // These validations enforce business rules for each coupon type.
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:160'],
             'type' => ['required', 'in:amount-order,amount-product,buy-x-get-y,free-shipping'],
@@ -102,11 +110,13 @@ class CouponController extends Controller
             'buyx_discount_value' => ['nullable', 'numeric', 'min:0'],
         ]);
 
+        // These defaults normalize nullable fields before validation logic.
         $validated['value_type'] = $validated['value_type'] ?? null;
         $validated['value'] = $validated['value'] ?? null;
         $validated['buyx_discount_type'] = $validated['buyx_discount_type'] ?? null;
         $validated['buyx_discount_value'] = $validated['buyx_discount_value'] ?? null;
 
+        // Amount-based coupons require a value type and value.
         if (in_array($validated['type'], ['amount-order', 'amount-product'], true)) {
             if (!$request->filled('value_type') || $validated['value_type'] === 'none') {
                 return back()
@@ -120,6 +130,7 @@ class CouponController extends Controller
             }
         }
 
+        // Buy X Get Y coupons need discount settings to compute value.
         if ($validated['type'] === 'buy-x-get-y') {
             if (($validated['buyx_discount_type'] ?? '') !== 'free' && !$request->filled('buyx_discount_value')) {
                 return back()
@@ -139,15 +150,18 @@ class CouponController extends Controller
                 ->withInput();
         }
 
+        // A "none" value type is stored as null for consistency.
         if ($validated['value_type'] === 'none') {
             $validated['value'] = null;
         }
 
+        // Free shipping is represented as 100% off.
         if ($validated['type'] === 'free-shipping') {
             $validated['value_type'] = 'percentage';
             $validated['value'] = 100;
         }
 
+        // These fields are only relevant for certain coupon types.
         $productIds = [];
         $buyProductIds = [];
         $getProductIds = [];
@@ -165,6 +179,7 @@ class CouponController extends Controller
             $getQuantity = (int) $validated['get_quantity'];
         }
 
+        // This creates the coupon in draft status before Shopify activation.
         Coupon::create([
             'title' => $validated['title'],
             'type' => $validated['type'],
@@ -190,12 +205,14 @@ class CouponController extends Controller
         return redirect()->route('coupons');
     }
 
+    // This shows the edit form for a draft coupon.
     public function edit(Request $request, Coupon $coupon, ShopifyProductService $shopifyProducts)
     {
         if ($coupon->status !== 'draft') {
             return redirect()->route('coupons')->withErrors(['coupon' => 'Active coupons cannot be edited.']);
         }
 
+        // These lookups populate dropdowns in the edit form.
         $tiers = Tier::query()->orderBy('min_points')->get();
         $products = [];
         $productError = null;
@@ -208,12 +225,14 @@ class CouponController extends Controller
         return view('coupons-edit', compact('coupon', 'tiers', 'products', 'productError'));
     }
 
+    // This updates a draft coupon with new configuration.
     public function update(Request $request, Coupon $coupon)
     {
         if ($coupon->status !== 'draft') {
             return redirect()->route('coupons')->withErrors(['coupon' => 'Active coupons cannot be edited.']);
         }
 
+        // These validations enforce business rules for each coupon type.
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:160'],
             'type' => ['required', 'in:amount-order,amount-product,buy-x-get-y,free-shipping'],
@@ -238,11 +257,13 @@ class CouponController extends Controller
             'buyx_discount_value' => ['nullable', 'numeric', 'min:0'],
         ]);
 
+        // These defaults normalize nullable fields before validation logic.
         $validated['value_type'] = $validated['value_type'] ?? null;
         $validated['value'] = $validated['value'] ?? null;
         $validated['buyx_discount_type'] = $validated['buyx_discount_type'] ?? null;
         $validated['buyx_discount_value'] = $validated['buyx_discount_value'] ?? null;
 
+        // Amount-based coupons require a value type and value.
         if (in_array($validated['type'], ['amount-order', 'amount-product'], true)) {
             if (!$request->filled('value_type') || $validated['value_type'] === 'none') {
                 return back()
@@ -256,6 +277,7 @@ class CouponController extends Controller
             }
         }
 
+        // Buy X Get Y coupons need discount settings to compute value.
         if ($validated['type'] === 'buy-x-get-y') {
             if (($validated['buyx_discount_type'] ?? '') !== 'free' && !$request->filled('buyx_discount_value')) {
                 return back()
@@ -275,15 +297,18 @@ class CouponController extends Controller
                 ->withInput();
         }
 
+        // A "none" value type is stored as null for consistency.
         if ($validated['value_type'] === 'none') {
             $validated['value'] = null;
         }
 
+        // Free shipping is represented as 100% off.
         if ($validated['type'] === 'free-shipping') {
             $validated['value_type'] = 'percentage';
             $validated['value'] = 100;
         }
 
+        // This updates the coupon fields, only keeping product data for relevant types.
         $coupon->update([
             'title' => $validated['title'],
             'type' => $validated['type'],
@@ -308,12 +333,14 @@ class CouponController extends Controller
         return redirect()->route('coupons');
     }
 
+    // This activates a coupon in Shopify and marks it active locally.
     public function activate(Coupon $coupon, ShopifyDiscountService $shopifyDiscounts)
     {
         if ($coupon->status === 'active') {
             return redirect()->route('coupons');
         }
 
+        // This validates dates and generates a code if needed.
         $startDate = Carbon::now();
         $endDate = Carbon::parse($coupon->end_date);
         $code = $coupon->code ?: $this->generateCode($coupon->title);
@@ -322,6 +349,7 @@ class CouponController extends Controller
             return back()->withErrors(['shopify' => 'End date must be in the future to activate this coupon.']);
         }
 
+        // This builds the Shopify price rule payload based on coupon settings.
         $payload = $this->buildPriceRulePayload([
             'title' => $coupon->title,
             'type' => $coupon->type,
@@ -337,6 +365,7 @@ class CouponController extends Controller
         ], $startDate, $endDate, $code);
 
         try {
+            // This updates existing price rules or creates new ones in Shopify.
             if ($coupon->shopify_price_rule_id) {
                 $shopifyDiscounts->updatePriceRule((int) $coupon->shopify_price_rule_id, [
                     'starts_at' => $startDate->toIso8601String(),
@@ -358,12 +387,14 @@ class CouponController extends Controller
             return back()->withErrors(['shopify' => $exception->getMessage()]);
         }
 
+        // This updates local status after a successful Shopify sync.
         $coupon->status = 'active';
         $coupon->save();
 
         return redirect()->route('coupons');
     }
 
+    // This pauses an active coupon by ending it in Shopify and locally.
     public function deactivate(Coupon $coupon, ShopifyDiscountService $shopifyDiscounts)
     {
         if ($coupon->status !== 'active') {
@@ -372,6 +403,7 @@ class CouponController extends Controller
 
         if ($coupon->shopify_price_rule_id) {
             try {
+                // This ends the price rule immediately in Shopify.
                 $shopifyDiscounts->updatePriceRule((int) $coupon->shopify_price_rule_id, [
                     'ends_at' => Carbon::now()->toIso8601String(),
                 ]);
@@ -380,12 +412,14 @@ class CouponController extends Controller
             }
         }
 
+        // This marks the coupon as paused locally.
         $coupon->status = 'paused';
         $coupon->save();
 
         return redirect()->route('coupons');
     }
 
+    // This deletes a coupon and removes the Shopify price rule if present.
     public function destroy(Coupon $coupon, ShopifyDiscountService $shopifyDiscounts)
     {
         if ($coupon->shopify_price_rule_id) {
@@ -401,12 +435,14 @@ class CouponController extends Controller
         return redirect()->route('coupons');
     }
 
+    // This shows redemption details for a specific coupon.
     public function view(Request $request, Coupon $coupon)
     {
         if ($coupon->status !== 'active') {
             return redirect()->route('coupons')->withErrors(['coupon' => 'Coupon must be active to view redemptions.']);
         }
 
+        // These counts build the summary stats panel.
         $now = now();
         $baseQuery = CustomerCoupon::query()
             ->where('coupon_id', $coupon->id);
@@ -436,6 +472,7 @@ class CouponController extends Controller
             })
             ->count();
 
+        // This prepares the filtered redemption list for the page.
         $query = CustomerCoupon::query()
             ->with('customer')
             ->where('coupon_id', $coupon->id);
@@ -482,6 +519,7 @@ class CouponController extends Controller
             ->paginate(15)
             ->withQueryString();
 
+        // This renders the coupon view with summary and redemption data.
         return view('coupon-view', [
             'coupon' => $coupon->load('tier'),
             'redemptions' => $redemptions,
@@ -494,10 +532,12 @@ class CouponController extends Controller
         ]);
     }
 
+    // This streams a CSV export of coupons matching the filter set.
     public function exportList(Request $request)
     {
         $query = Coupon::query()->with('tier');
 
+        // These filters match the list view filters for export consistency.
         if ($request->filled('type') && $request->input('type') !== 'all') {
             $query->where('type', $request->input('type'));
         }
@@ -540,12 +580,14 @@ class CouponController extends Controller
             $query->where('title', 'like', "%{$search}%");
         }
 
+        // This builds a timestamped filename for the export.
         $fileName = 'coupons_' . now()->format('Ymd_His') . '.csv';
         $headers = [
             'Content-Type' => 'text/csv',
             'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
         ];
 
+        // This streams results in chunks to avoid loading all rows into memory.
         return response()->streamDownload(function () use ($query) {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
@@ -566,6 +608,7 @@ class CouponController extends Controller
 
             $query->orderByDesc('id')->chunk(500, function ($coupons) use ($handle) {
                 foreach ($coupons as $coupon) {
+                    // This writes a single coupon row to the CSV output.
                     fputcsv($handle, [
                         $coupon->id,
                         $coupon->title,
@@ -588,12 +631,14 @@ class CouponController extends Controller
         }, $fileName, $headers);
     }
 
+    // This streams a CSV export of coupon redemptions for a specific coupon.
     public function export(Request $request, Coupon $coupon)
     {
         if ($coupon->status !== 'active') {
             return redirect()->route('coupons')->withErrors(['coupon' => 'Coupon must be active to export redemptions.']);
         }
 
+        // These filters mirror the redemption list view.
         $status = $request->input('status', 'all');
         $search = $request->input('search');
         $now = now();
@@ -639,6 +684,7 @@ class CouponController extends Controller
 
         $filename = 'coupon-redemptions-'.$coupon->id.'.csv';
 
+        // This streams the redemption rows to a CSV file.
         return response()->streamDownload(function () use ($query, $coupon, $now) {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
@@ -657,6 +703,7 @@ class CouponController extends Controller
                 $nameParts = array_filter([$customer?->first_name, $customer?->last_name]);
                 $name = $nameParts ? implode(' ', $nameParts) : ($customer?->email ?? 'Customer');
 
+                // This derives a human-friendly redemption status label.
                 $statusLabel = 'Unused';
                 if ($record->status === 'used' || $record->used_at) {
                     $statusLabel = 'Used';
@@ -686,6 +733,7 @@ class CouponController extends Controller
         }, $filename, ['Content-Type' => 'text/csv']);
     }
 
+    // This generates a readable coupon code based on the title.
     private function generateCode(string $title): string
     {
         $prefix = strtoupper(Str::slug($title));
@@ -695,6 +743,7 @@ class CouponController extends Controller
         return trim($prefix.'-'.$suffix, '-');
     }
 
+    // This builds the Shopify price rule payload for the coupon type.
     private function buildPriceRulePayload(array $validated, Carbon $startDate, Carbon $endDate, string $code): array
     {
         $type = $validated['type'];
@@ -714,6 +763,7 @@ class CouponController extends Controller
             'once_per_customer' => false,
         ];
 
+        // Free shipping discounts target shipping lines and apply 100% off.
         if ($type === 'free-shipping') {
             $payload['target_type'] = 'shipping_line';
             $payload['value_type'] = 'percentage';
@@ -721,12 +771,14 @@ class CouponController extends Controller
             $payload['allocation_method'] = 'each';
         }
 
+        // Product-level discounts must specify entitled products.
         if ($type === 'amount-product') {
             $payload['target_selection'] = 'entitled';
             $payload['entitled_product_ids'] = array_map('intval', $validated['product_ids'] ?? []);
             $payload['allocation_method'] = 'each';
         }
 
+        // Buy X Get Y discounts define prerequisite and entitled products plus quantity ratio.
         if ($type === 'buy-x-get-y') {
             $payload['target_selection'] = 'entitled';
             $payload['entitled_product_ids'] = array_map('intval', $validated['get_product_ids'] ?? []);
@@ -734,6 +786,7 @@ class CouponController extends Controller
             $payload['allocation_method'] = 'each';
             $discountType = $validated['buyx_discount_type'] ?? 'free';
             $discountValue = (float) ($validated['buyx_discount_value'] ?? 0);
+            // These branches translate internal discount settings to Shopify fields.
             if ($discountType === 'amount') {
                 $payload['value_type'] = 'fixed_amount';
                 $payload['value'] = -$discountValue;

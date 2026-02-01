@@ -1,13 +1,18 @@
+{{-- This view lists customers and provides filtering, export, and manual creation tools for admins. --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- The title uses the app name configuration with a fallback for local/dev environments. --}}
         <title>{{ config('app.name', 'NexLoyal') }} - Customers</title>
+        {{-- Preconnect and load the UI font used across the admin experience. --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        {{-- Vite builds and injects the compiled CSS for this page. --}}
         @vite(['resources/css/app.css'])
         <style>
+            {{-- These styles define light-mode overrides and table/modal appearance. --}}
             :root {
                 color-scheme: dark;
             }
@@ -160,9 +165,11 @@
             <div class="min-h-screen bg-[radial-gradient(700px_circle_at_bottom,rgba(30,64,175,0.22),transparent_60%)]">
                 <div class="min-h-screen bg-[linear-gradient(120deg,rgba(15,23,42,0.9),rgba(2,6,23,0.95))] nl-shell">
                     <div class="flex min-h-screen">
+                        {{-- The admin sidebar is shared across the dashboard and provides navigation. --}}
                         @include('partials.admin-sidebar')
 
                         <main class="flex-1 px-10 py-8">
+                            {{-- The header establishes context for customer management. --}}
                             <x-page-header eyebrow="" title="Customers" breadcrumb="Customers / Customers">
                                 <x-slot name="actions">
                                     <button id="theme-toggle" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-200 nl-panel-muted" type="button">
@@ -177,14 +184,17 @@
                                         <p class="text-sm font-semibold text-slate-100">Customer List</p>
                                     </div>
                                     <div class="flex flex-wrap items-center gap-2">
+                                        {{-- Opening the modal allows manual customer entry when needed. --}}
                                         <button id="open-create-customer" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900" type="button">
                                             Create customer
                                         </button>
+                                        {{-- Export includes active filters from the current query string. --}}
                                         <a class="nl-export-button text-xs" href="{{ route('customers.export', request()->query()) }}">Export CSV</a>
                                     </div>
                                 </div>
 
                                 <div class="px-6 py-5">
+                                    {{-- Filters and search are sent as query parameters on GET. --}}
                                     <form method="GET" class="space-y-5">
                                         <div class="flex items-center gap-2 text-xs font-semibold text-slate-300">
                                             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -242,6 +252,7 @@
                                             </div>
                                             <div class="flex flex-wrap items-center gap-2">
                                                 <span>Search:</span>
+                                                {{-- Search applies to names, email, or identifiers depending on backend logic. --}}
                                                 <input name="search" class="h-7 w-44 rounded-lg border border-slate-700 bg-slate-950/60 px-2 text-xs text-slate-200" type="text" value="{{ request('search') }}" placeholder="Search">
                                                 <button type="submit" class="rounded-lg bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-900">Apply</button>
                                                 <a class="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-200" href="{{ route('customers') }}">Reset</a>
@@ -262,6 +273,7 @@
                                                 </tr>
                                             </thead>
                                             <tbody class="divide-y divide-slate-800/80 text-slate-200">
+                                                {{-- Each row maps to a paginated customer record. --}}
                                                 @forelse ($customers as $customer)
                                                     <tr class="nl-table-row">
                                                         <td class="px-4 py-4">{{ ($customers->currentPage() - 1) * $customers->perPage() + $loop->iteration }}</td>
@@ -270,10 +282,12 @@
                                                         <td class="px-4 py-4 text-slate-300">{{ $customer->phone ?: '—' }}</td>
                                                         <td class="px-4 py-4 text-slate-300">{{ $customer->status ?: '—' }}</td>
                                                         <td class="px-4 py-4 text-center">
+                                                            {{-- The view link opens a detailed customer profile page. --}}
                                                             <a class="nl-view-button text-slate-200" href="{{ route('customers.show', $customer) }}">View</a>
                                                         </td>
                                                     </tr>
                                                 @empty
+                                                    {{-- When Shopify sync has not run yet, show a descriptive empty state. --}}
                                                     <tr>
                                                         <td colspan="6" class="px-4 py-10 text-center text-slate-400">No customers yet. Shopify webhook sync will populate this list.</td>
                                                     </tr>
@@ -287,6 +301,7 @@
                                             Showing {{ $customers->firstItem() ?? 0 }} to {{ $customers->lastItem() ?? 0 }} of {{ $customers->total() }} entries
                                         </div>
                                         <div class="flex items-center gap-2">
+                                            {{-- Pagination uses a small window around the current page. --}}
                                             @php
                                                 $current = $customers->currentPage();
                                                 $last = $customers->lastPage();
@@ -307,6 +322,7 @@
                 </div>
             </div>
         </div>
+        {{-- The create-customer modal supports manual entry when Shopify data is missing. --}}
         <div id="create-customer-modal" class="nl-modal-backdrop" aria-hidden="true">
             <div class="nl-modal-panel">
                 <div class="flex items-start justify-between border-b border-slate-800 px-6 py-5 nl-modal-divider">
@@ -321,6 +337,7 @@
                 </div>
                 <form id="create-customer-form" class="px-6 py-6" method="POST" action="{{ route('customers.store') }}">
                     @csrf
+                    {{-- Validation errors from the POST are surfaced inside the modal. --}}
                     @if ($errors->any())
                         <div class="mb-5 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-xs text-rose-200" data-error-banner>
                             <p class="font-semibold text-rose-100">Fix the highlighted fields to continue.</p>
@@ -331,6 +348,7 @@
                     @endif
                     <div class="grid gap-4 sm:grid-cols-2">
                         <div class="flex flex-col gap-2">
+                            {{-- Names and contact fields are required for customer creation. --}}
                             <label class="nl-modal-label uppercase text-slate-400">First name</label>
                             <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="text" name="first_name" value="{{ old('first_name') }}" placeholder="e.g. Jamie" required>
                             @error('first_name')
@@ -345,6 +363,7 @@
                             @enderror
                         </div>
                         <div class="flex flex-col gap-2">
+                            {{-- Gender is collected for analytics and personalization where available. --}}
                             <label class="nl-modal-label uppercase text-slate-400">Gender</label>
                             <select class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" name="gender" required>
                                 <option value="" disabled @selected(!old('gender'))>Select</option>
@@ -368,6 +387,7 @@
                         <div class="flex flex-col gap-2 sm:col-span-2">
                             <label class="nl-modal-label uppercase text-slate-400">Mobile number</label>
                             <div class="flex flex-col gap-2 sm:flex-row">
+                                {{-- Country code is captured separately for consistent formatting. --}}
                                 <select class="nl-modal-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200 sm:max-w-[160px]" name="phone_country" required>
                                     <option value="" disabled @selected(!old('phone_country'))>Country code</option>
                                     <option value="+1" @selected(old('phone_country') === '+1')>US (+1)</option>
@@ -388,6 +408,7 @@
                         </div>
                     </div>
                     <div class="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-slate-800 pt-5 nl-modal-divider">
+                        {{-- Cancel closes the modal without submitting. --}}
                         <button type="button" class="rounded-xl border border-slate-700 px-4 py-2 text-xs text-slate-200" data-modal-close>
                             Cancel
                         </button>
@@ -400,6 +421,7 @@
         </div>
         <script>
             (function () {
+                // Store the theme preference locally so it persists between visits.
                 const storageKey = 'nl-theme';
                 const body = document.body;
                 const button = document.getElementById('theme-toggle');
@@ -407,6 +429,7 @@
                 const openModalButton = document.getElementById('open-create-customer');
                 const closeButtons = modal ? modal.querySelectorAll('[data-modal-close]') : [];
 
+                // Apply light or dark styles and update the button label.
                 const applyTheme = (theme) => {
                     if (theme === 'light') {
                         body.classList.add('nl-theme-light');
@@ -423,12 +446,14 @@
 
                 if (button) {
                     button.addEventListener('click', () => {
+                        // Toggle the theme and persist the choice.
                         const next = body.classList.contains('nl-theme-light') ? 'dark' : 'light';
                         localStorage.setItem(storageKey, next);
                         applyTheme(next);
                     });
                 }
 
+                // Keep the settings menu open when navigating within settings pages.
                 const settingsToggle = document.getElementById('settings-toggle');
                 const settingsMenu = document.getElementById('settings-menu');
                 const shouldOpenSettings = window.location.pathname.startsWith('/settings');
@@ -442,6 +467,7 @@
                 }
 
                 const form = document.getElementById('create-customer-form');
+                // Remove any server-rendered error blocks when closing the modal.
                 const clearErrors = () => {
                     if (!modal) {
                         return;
@@ -455,6 +481,7 @@
                     }
                 };
 
+                // Reset fields to a clean state after closing the modal.
                 const resetForm = () => {
                     if (!form) {
                         return;
@@ -468,6 +495,7 @@
                     });
                 };
 
+                // Toggle modal visibility and cleanup state when it closes.
                 const setModalOpen = (isOpen) => {
                     if (!modal) {
                         return;
@@ -485,6 +513,7 @@
                 }
 
                 if (modal) {
+                    // Clicking the backdrop closes the modal.
                     modal.addEventListener('click', (event) => {
                         if (event.target === modal) {
                             setModalOpen(false);
@@ -497,11 +526,13 @@
                 });
 
                 document.addEventListener('keydown', (event) => {
+                    // Escape is a common accessibility shortcut for modal close.
                     if (event.key === 'Escape') {
                         setModalOpen(false);
                     }
                 });
 
+                // If the server returned validation errors, keep the modal open.
                 const shouldOpen = {{ $errors->any() ? 'true' : 'false' }};
                 if (shouldOpen) {
                     setModalOpen(true);

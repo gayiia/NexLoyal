@@ -1,13 +1,18 @@
+{{-- This view shows poll analytics and voter drill-down for an exclusive chat poll. --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- The title uses the app name configuration with a fallback for local/dev environments. --}}
         <title>{{ config('app.name', 'NexLoyal') }} - Poll Analytics</title>
+        {{-- Preconnect and load the UI font used across the admin experience. --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        {{-- Vite builds and injects the compiled CSS for this page. --}}
         @vite(['resources/css/app.css'])
         <style>
+            {{-- These styles define light-mode overrides and modal behavior. --}}
             :root { color-scheme: dark; }
             body { letter-spacing: 0.01em; }
             .nl-theme-light { color-scheme: light; background-color: #f8fafc; color: #0f172a; }
@@ -35,9 +40,11 @@
         <div class="min-h-screen bg-[radial-gradient(900px_circle_at_top,rgba(56,189,248,0.18),transparent_60%)]">
             <div class="min-h-screen bg-[linear-gradient(120deg,rgba(15,23,42,0.9),rgba(2,6,23,0.95))] nl-shell">
                 <div class="flex min-h-screen flex-col lg:flex-row">
+                    {{-- The admin sidebar is shared across the dashboard and provides navigation. --}}
                     @include('partials.admin-sidebar')
 
                     <main class="flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+                        {{-- The header anchors poll analytics and export actions. --}}
                         <x-page-header eyebrow="" title="Poll analytics" breadcrumb="Notifications / Exclusive Chat / Poll">
                             <x-slot name="actions">
                                 <a href="{{ route('exclusive-chat') }}" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-200 nl-panel-muted">
@@ -49,6 +56,7 @@
                             </x-slot>
                         </x-page-header>
 
+                        {{-- The message card summarizes the poll and total votes. --}}
                         <section class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-6 nl-panel">
                             <div class="flex flex-wrap items-start justify-between gap-4">
                                 <div>
@@ -63,6 +71,7 @@
 
                             @if ($message->attachments->count())
                                 <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                                    {{-- Attachments are shown as a visual reference for the poll. --}}
                                     @foreach ($message->attachments as $attachment)
                                         @if ($attachment->resolved_url)
                                             <img src="{{ $attachment->resolved_url }}" alt="Attachment" class="w-full rounded-xl border border-slate-800 object-cover">
@@ -72,6 +81,7 @@
                             @endif
                         </section>
 
+                        {{-- Results show option percentages and allow voter drill-down. --}}
                         <section class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-6 nl-panel">
                             <div class="flex items-center justify-between">
                                 <div>
@@ -81,6 +91,7 @@
                             </div>
 
                             <div class="mt-4 grid gap-4">
+                                {{-- Each option displays its count and percentage. --}}
                                 @foreach ($options as $option)
                                     <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
                                         <div class="flex items-center justify-between">
@@ -92,6 +103,7 @@
                                             </button>
                                         </div>
                                         <div class="mt-3 h-2 w-full rounded-full bg-slate-800/80">
+                                            {{-- The bar width matches the percent value. --}}
                                             <div class="h-2 rounded-full bg-sky-400/80" style="width: {{ $option['percent'] }}%"></div>
                                         </div>
                                     </div>
@@ -103,6 +115,7 @@
             </div>
         </div>
 
+        {{-- The voters modal is populated via an API call on demand. --}}
         <div id="voters-modal" class="nl-modal-backdrop" aria-hidden="true">
             <div class="w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-950 p-6 text-slate-100">
                 <div class="flex items-center justify-between">
@@ -114,6 +127,7 @@
                 </div>
 
                 <div class="mt-4 flex flex-wrap items-center gap-2">
+                    {{-- Search filters voters by name or email. --}}
                     <input id="voters-search" class="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-slate-200" placeholder="Search name or email">
                     <button type="button" id="voters-search-button" class="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200">Search</button>
                 </div>
@@ -138,6 +152,7 @@
 
         <script>
             (function () {
+                // Modal controls and search state for the voters list.
                 const modal = document.getElementById('voters-modal');
                 const closeButton = document.getElementById('voters-close');
                 const tableBody = document.getElementById('voters-table');
@@ -147,6 +162,7 @@
                 let activeOption = null;
                 let activePage = 1;
 
+                // Show the modal overlay.
                 const openModal = () => {
                     if (modal) {
                         modal.classList.add('is-open');
@@ -154,6 +170,7 @@
                     }
                 };
 
+                // Hide the modal overlay.
                 const closeModal = () => {
                     if (modal) {
                         modal.classList.remove('is-open');
@@ -161,6 +178,7 @@
                     }
                 };
 
+                // Render voters into the table body.
                 const renderRows = (rows) => {
                     if (!tableBody) {
                         return;
@@ -177,6 +195,7 @@
                         : '<tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">No voters found.</td></tr>';
                 };
 
+                // Render pagination controls based on API metadata.
                 const renderPagination = (meta) => {
                     if (!pagination) {
                         return;
@@ -201,6 +220,7 @@
                     });
                 };
 
+                // Fetch voters for the selected poll option.
                 const fetchVoters = () => {
                     if (!activeOption) {
                         return;
@@ -214,11 +234,13 @@
                             renderPagination(payload.meta || { current_page: 1, last_page: 1 });
                         })
                         .catch(() => {
+                            // On errors, show an empty state instead of crashing.
                             renderRows([]);
                             renderPagination({ current_page: 1, last_page: 1 });
                         });
                 };
 
+                // Clicking an option opens the modal and loads voters.
                 document.querySelectorAll('[data-option-id]').forEach((button) => {
                     button.addEventListener('click', () => {
                         activeOption = button.getAttribute('data-option-id');
@@ -233,6 +255,7 @@
                 }
 
                 if (modal) {
+                    // Clicking the backdrop closes the modal.
                     modal.addEventListener('click', (event) => {
                         if (event.target === modal) {
                             closeModal();
@@ -241,6 +264,7 @@
                 }
 
                 if (searchButton) {
+                    // Search restarts at page 1 to match the new filter.
                     searchButton.addEventListener('click', () => {
                         activePage = 1;
                         fetchVoters();

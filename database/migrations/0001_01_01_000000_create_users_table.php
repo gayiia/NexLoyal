@@ -1,5 +1,6 @@
 <?php
 
+// This migration creates core authentication and session tables.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -11,6 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // This stores application users and their credentials.
         Schema::create('users', function (Blueprint $table) {
             $table->id();
             $table->string('name');
@@ -21,12 +23,14 @@ return new class extends Migration
             $table->timestamps();
         });
 
+        // This stores password reset tokens for email-based resets.
         Schema::create('password_reset_tokens', function (Blueprint $table) {
             $table->string('email')->primary();
             $table->string('token');
             $table->timestamp('created_at')->nullable();
         });
 
+        // This stores session data for authentication and remember-me behavior.
         Schema::create('sessions', function (Blueprint $table) {
             $table->string('id')->primary();
             $table->foreignId('user_id')->nullable()->index();
@@ -42,6 +46,7 @@ return new class extends Migration
      */
     public function down(): void
     {
+        // This removes tables created in the up() method.
         Schema::dropIfExists('users');
         Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');

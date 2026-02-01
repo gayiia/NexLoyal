@@ -1,13 +1,18 @@
+{{-- This view lets the authenticated user change their password. --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- The title uses the app name configuration with a fallback for local/dev environments. --}}
         <title>{{ config('app.name', 'NexLoyal') }} - Password</title>
+        {{-- Preconnect and load the UI font used across the admin experience. --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        {{-- Vite builds and injects the compiled CSS for this page. --}}
         @vite(['resources/css/app.css'])
         <style>
+            {{-- These styles define light-mode overrides and input sizing. --}}
             :root {
                 color-scheme: dark;
             }
@@ -70,9 +75,11 @@
             <div class="min-h-screen bg-[radial-gradient(700px_circle_at_bottom,rgba(30,64,175,0.22),transparent_60%)]">
                 <div class="min-h-screen bg-[linear-gradient(120deg,rgba(15,23,42,0.9),rgba(2,6,23,0.95))] nl-shell">
                     <div class="flex min-h-screen">
+                        {{-- The admin sidebar is shared across the dashboard and provides navigation. --}}
                         @include('partials.admin-sidebar')
 
                         <main class="flex-1 px-10 py-8">
+                            {{-- The header anchors password settings. --}}
                             <x-page-header eyebrow="" title="Password" breadcrumb="Settings / Password">
                                 <x-slot name="actions">
                                     <button id="theme-toggle" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-200 nl-panel-muted" type="button">
@@ -88,10 +95,13 @@
                                 </div>
 
                                 <div class="px-6 py-6">
+                                    {{-- This form updates the current user's password. --}}
                                     <form method="POST" action="{{ route('user-password.update') }}" class="space-y-5">
                                         @csrf
+                                        {{-- PUT signals a full update of the password resource. --}}
                                         @method('PUT')
                                         <div class="grid gap-2">
+                                            {{-- Current password validates that the user is authorized. --}}
                                             <label class="text-xs uppercase tracking-[0.2em] text-slate-400">Current password</label>
                                             <input class="nl-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="password" name="current_password" required>
                                             @error('current_password')
@@ -99,6 +109,7 @@
                                             @enderror
                                         </div>
                                         <div class="grid gap-2">
+                                            {{-- New password must meet the backend validation rules. --}}
                                             <label class="text-xs uppercase tracking-[0.2em] text-slate-400">New password</label>
                                             <input class="nl-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="password" name="password" required>
                                             @error('password')
@@ -106,9 +117,11 @@
                                             @enderror
                                         </div>
                                         <div class="grid gap-2">
+                                            {{-- Confirmation helps prevent typing mistakes. --}}
                                             <label class="text-xs uppercase tracking-[0.2em] text-slate-400">Confirm password</label>
                                             <input class="nl-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="password" name="password_confirmation" required>
                                         </div>
+                                        {{-- Submit persists the new password. --}}
                                         <button type="submit" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900">
                                             Save password
                                         </button>
@@ -122,10 +135,12 @@
         </div>
         <script>
             (function () {
+                // Store the theme preference locally so it persists between visits.
                 const storageKey = 'nl-theme';
                 const body = document.body;
                 const button = document.getElementById('theme-toggle');
 
+                // Apply light or dark styles and update the button label.
                 const applyTheme = (theme) => {
                     if (theme === 'light') {
                         body.classList.add('nl-theme-light');
@@ -142,6 +157,7 @@
 
                 if (button) {
                     button.addEventListener('click', () => {
+                        // Toggle the theme and persist the choice.
                         const next = body.classList.contains('nl-theme-light') ? 'dark' : 'light';
                         localStorage.setItem(storageKey, next);
                         applyTheme(next);
@@ -150,6 +166,7 @@
 
                 const settingsToggle = document.getElementById('settings-toggle');
                 const settingsMenu = document.getElementById('settings-menu');
+                // Settings submenu toggles via the sidebar caret.
                 if (settingsToggle && settingsMenu) {
                     settingsToggle.addEventListener('click', () => {
                         settingsMenu.classList.toggle('hidden');

@@ -1,13 +1,18 @@
+{{-- This view shows a single customer's profile, activity metrics, and points history. --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- The title uses the app name configuration with a fallback for local/dev environments. --}}
         <title>{{ config('app.name', 'NexLoyal') }} - Customer</title>
+        {{-- Preconnect and load the UI font used across the admin experience. --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        {{-- Vite builds and injects the compiled CSS for this page. --}}
         @vite(['resources/css/app.css'])
         <style>
+            {{-- These styles set light-mode overrides and history badge colors. --}}
             :root {
                 color-scheme: dark;
             }
@@ -87,9 +92,11 @@
             <div class="min-h-screen bg-[radial-gradient(700px_circle_at_bottom,rgba(30,64,175,0.22),transparent_60%)]">
                 <div class="min-h-screen bg-[linear-gradient(120deg,rgba(15,23,42,0.9),rgba(2,6,23,0.95))] nl-shell">
                     <div class="flex min-h-screen">
+                        {{-- The admin sidebar is shared across the dashboard and provides navigation. --}}
                         @include('partials.admin-sidebar')
 
                         <main class="flex-1 px-10 py-8">
+                            {{-- The header identifies the customer and provides navigation back to the list. --}}
                             <x-page-header eyebrow="Customer" title="{{ $customer->full_name ?: 'Unnamed customer' }}" subtitle="Shopify ID {{ $customer->shopify_id }}" breadcrumb="Customers / View">
                                 <x-slot name="actions">
                                     <a class="rounded-xl border border-slate-700 px-4 py-2 text-slate-200" href="{{ route('customers') }}">Back to customers</a>
@@ -99,6 +106,7 @@
                                 </x-slot>
                             </x-page-header>
 
+                            {{-- Profile cards summarize contact and activity information. --}}
                             <section class="mt-6 grid gap-4 lg:grid-cols-3">
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
                                     <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Contact</p>
@@ -131,6 +139,7 @@
                                         <div>
                                             <p class="text-xs text-slate-400">Total spent</p>
                                             <p class="text-slate-100">
+                                                {{-- Currency formatting is displayed when available. --}}
                                                 {{ $customer->currency ? $customer->currency.' ' : '' }}{{ number_format($customer->total_spent, 2) }}
                                             </p>
                                         </div>
@@ -142,18 +151,21 @@
                                 </div>
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
                                     <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Notes</p>
+                                    {{-- This note clarifies how customer data reaches the system. --}}
                                     <p class="mt-4 text-sm text-slate-300">
                                         Syncs via Shopify webhooks. Loyalty tiering and notes can be added after profile enrichment.
                                     </p>
                                 </div>
                             </section>
 
+                            {{-- The points history table shows earned and redeemed transactions. --}}
                             <section class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
                                 <div class="flex items-center justify-between">
                                     <div>
                                         <p class="text-sm font-semibold text-slate-100">Point history</p>
                                         <p class="text-xs text-slate-400">Latest earn and redeem activity.</p>
                                     </div>
+                                    {{-- Export provides a CSV download of the customer's history. --}}
                                     <a class="rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-200" href="{{ route('customers.show.export', $customer) }}">
                                         Export CSV
                                     </a>
@@ -171,6 +183,7 @@
                                             </tr>
                                         </thead>
                                         <tbody class="divide-y divide-slate-800/60">
+                                            {{-- Each row represents a normalized points transaction. --}}
                                             @forelse ($transactions as $transaction)
                                                 @php
                                                     $isEarn = $transaction['direction'] === 'EARN';
@@ -182,6 +195,7 @@
                                                         <span class="nl-history-badge {{ $isEarn ? 'nl-history-earned' : 'nl-history-redeemed' }}">
                                                             {{ $statusLabel }}
                                                         </span>
+                                                        {{-- Pending transactions are labeled to avoid confusion with completed points. --}}
                                                         @if ($transaction['status'] === 'PENDING')
                                                             <span class="ml-2 nl-history-badge nl-history-pending">In progress</span>
                                                         @endif
@@ -192,10 +206,12 @@
                                                     <td class="px-3 py-3 text-slate-200">{{ $transaction['title'] }}</td>
                                                     <td class="px-3 py-3 text-slate-300">{{ $transaction['type'] }}</td>
                                                     <td class="px-3 py-3 text-slate-400">
+                                                        {{-- Times are formatted consistently for auditability. --}}
                                                         {{ \Carbon\Carbon::parse($transaction['created_at'])->format('Y-m-d H:i:s') }}
                                                     </td>
                                                 </tr>
                                             @empty
+                                                {{-- Empty state when there is no point activity. --}}
                                                 <tr>
                                                     <td colspan="5" class="px-3 py-6 text-center text-slate-400">No point activity yet.</td>
                                                 </tr>
@@ -209,6 +225,7 @@
                                         Showing {{ $transactions->firstItem() ?? 0 }} to {{ $transactions->lastItem() ?? 0 }} of {{ $transactions->total() }} entries
                                     </div>
                                     <div class="flex items-center gap-2">
+                                        {{-- Pagination uses a small window around the current page. --}}
                                         @php
                                             $current = $transactions->currentPage();
                                             $last = $transactions->lastPage();
@@ -230,10 +247,12 @@
         </div>
         <script>
             (function () {
+                // Store the theme preference locally so it persists between visits.
                 const storageKey = 'nl-theme';
                 const body = document.body;
                 const button = document.getElementById('theme-toggle');
 
+                // Apply light or dark styles and update the button label.
                 const applyTheme = (theme) => {
                     if (theme === 'light') {
                         body.classList.add('nl-theme-light');
@@ -248,6 +267,7 @@
                 if (button) {
                     button.textContent = body.classList.contains('nl-theme-light') ? 'Switch to dark' : 'Switch to light';
                     button.addEventListener('click', () => {
+                        // Toggle the theme and persist the choice.
                         const next = body.classList.contains('nl-theme-light') ? 'dark' : 'light';
                         localStorage.setItem(storageKey, next);
                         applyTheme(next);
@@ -255,6 +275,7 @@
                     });
                 }
 
+                // Keep the settings menu open when navigating within settings pages.
                 const settingsToggle = document.getElementById('settings-toggle');
                 const settingsMenu = document.getElementById('settings-menu');
                 const shouldOpenSettings = window.location.pathname.startsWith('/settings');

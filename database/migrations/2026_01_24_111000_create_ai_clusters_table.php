@@ -1,5 +1,6 @@
 <?php
 
+// This migration creates the ai_clusters table for clustering results.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,6 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // This table stores cluster metrics and centroids for each run.
         Schema::create('ai_clusters', function (Blueprint $table) {
             $table->id();
             $table->foreignId('ai_cluster_run_id')->constrained()->cascadeOnDelete();
@@ -26,6 +28,7 @@ return new class extends Migration
 
     public function down(): void
     {
+        // This removes the ai_clusters table created in up().
         Schema::dropIfExists('ai_clusters');
     }
 };

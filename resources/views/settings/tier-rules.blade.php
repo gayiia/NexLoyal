@@ -1,13 +1,18 @@
+{{-- This view manages tier definitions, ranges, and activation states. --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- The title uses the app name configuration with a fallback for local/dev environments. --}}
         <title>{{ config('app.name', 'NexLoyal') }} - Tier Rules</title>
+        {{-- Preconnect and load the UI font used across the admin experience. --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        {{-- Vite builds and injects the compiled CSS for this page. --}}
         @vite(['resources/css/app.css'])
         <style>
+            {{-- These styles define light-mode overrides plus action menus and modals. --}}
             :root {
                 color-scheme: dark;
             }
@@ -243,9 +248,11 @@
             <div class="min-h-screen bg-[radial-gradient(700px_circle_at_bottom,rgba(30,64,175,0.22),transparent_60%)]">
                 <div class="min-h-screen bg-[linear-gradient(120deg,rgba(15,23,42,0.9),rgba(2,6,23,0.95))] nl-shell">
                     <div class="flex min-h-screen">
+                        {{-- The admin sidebar is shared across the dashboard and provides navigation. --}}
                         @include('partials.admin-sidebar')
 
                         <main class="flex-1 px-10 py-8">
+                            {{-- The header anchors tier management. --}}
                             <x-page-header eyebrow="" title="Tier Rules" breadcrumb="Settings / Tier rules">
                                 <x-slot name="actions">
                                     <button id="theme-toggle" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-200 nl-panel-muted" type="button">
@@ -260,6 +267,7 @@
                                         <p class="text-sm font-semibold text-slate-100">Tier list</p>
                                         <p class="text-xs text-slate-400">Define point ranges and rewards for each tier.</p>
                                     </div>
+                                    {{-- This opens the create tier modal. --}}
                                     <button id="open-create-tier" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900" type="button">
                                         Add new tier
                                     </button>
@@ -281,12 +289,14 @@
                                                 </tr>
                                             </thead>
                                             <tbody class="divide-y divide-slate-800/80 text-slate-200">
+                                                {{-- Each row represents a tier with its range and status. --}}
                                                 @forelse ($tiers as $tier)
                                                     <tr class="nl-table-row">
                                                         <td class="px-4 py-4">{{ ($tiers->currentPage() - 1) * $tiers->perPage() + $loop->iteration }}</td>
                                                         <td class="px-4 py-4 font-semibold text-slate-100">{{ $tier->title }}</td>
                                                         <td class="px-4 py-4">
                                                             <div class="flex items-center gap-2">
+                                                                {{-- Tier color is shown as a swatch for quick recognition. --}}
                                                                 <span class="nl-color-chip" style="background-color: {{ $tier->color }}"></span>
                                                                 <span class="text-slate-300">{{ strtoupper($tier->color) }}</span>
                                                             </div>
@@ -309,6 +319,7 @@
                                                                     Actions
                                                                 </button>
                                                                 <div class="nl-action-menu" data-action-menu>
+                                                                    {{-- Edit opens the modal with the existing tier values. --}}
                                                                     <button
                                                                         class="nl-action-item"
                                                                         type="button"
@@ -326,6 +337,7 @@
                                                                     <form method="POST" action="{{ route('tier-rules.status', $tier) }}">
                                                                         @csrf
                                                                         @method('PATCH')
+                                                                        {{-- Toggle status between active and inactive. --}}
                                                                         <input type="hidden" name="status" value="{{ $tier->status === 'active' ? 'inactive' : 'active' }}">
                                                                         <button class="nl-action-item" type="submit">
                                                                             {{ $tier->status === 'active' ? 'Deactivate' : 'Activate' }}
@@ -334,6 +346,7 @@
                                                                     <form method="POST" action="{{ route('tier-rules.destroy', $tier) }}">
                                                                         @csrf
                                                                         @method('DELETE')
+                                                                        {{-- Deleting removes the tier definition. --}}
                                                                         <button class="nl-action-item nl-action-item-danger" type="submit">Delete</button>
                                                                     </form>
                                                                 </div>
@@ -341,6 +354,7 @@
                                                         </td>
                                                     </tr>
                                                 @empty
+                                                    {{-- Empty state when there are no tiers configured. --}}
                                                     <tr>
                                                         <td colspan="8" class="px-4 py-10 text-center text-slate-400">
                                                             No tiers yet. Add the first tier to begin.
@@ -355,6 +369,7 @@
                                             Showing {{ $tiers->firstItem() ?? 0 }} to {{ $tiers->lastItem() ?? 0 }} of {{ $tiers->total() }} entries
                                         </div>
                                         <div class="flex items-center gap-2">
+                                            {{-- Pagination uses a small window around the current page. --}}
                                             @php
                                                 $current = $tiers->currentPage();
                                                 $last = $tiers->lastPage();
@@ -376,6 +391,7 @@
             </div>
         </div>
 
+        {{-- The create/edit modal reuses one form for tier management. --}}
         <div id="create-tier-modal" class="nl-modal-backdrop" aria-hidden="true">
             <div class="nl-modal-panel">
                 <div class="flex items-start justify-between border-b border-slate-800 px-6 py-5 nl-modal-divider">
@@ -396,7 +412,9 @@
                     data-store-action="{{ route('tier-rules.store') }}"
                 >
                     @csrf
+                    {{-- Method switches between create and update via JS. --}}
                     <input type="hidden" name="_method" value="POST" data-tier-method>
+                    {{-- Validation errors are rendered inside the modal. --}}
                     @if ($errors->any())
                         <div class="mb-5 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-xs text-rose-200" data-error-banner>
                             <p class="font-semibold text-rose-100">Fix the highlighted fields to continue.</p>
@@ -405,6 +423,7 @@
                     @endif
                     <div class="grid gap-4 sm:grid-cols-2">
                         <div class="flex flex-col gap-2 sm:col-span-2">
+                            {{-- Title identifies the tier for admins and customers. --}}
                             <label class="nl-modal-label uppercase text-slate-400">Title</label>
                             <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="text" name="title" value="{{ old('title') }}" placeholder="e.g. Platinum" required>
                             @error('title')
@@ -412,6 +431,7 @@
                             @enderror
                         </div>
                         <div class="flex flex-col gap-2">
+                            {{-- Minimum points define the lower bound for this tier. --}}
                             <label class="nl-modal-label uppercase text-slate-400">Minimum points</label>
                             <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="min_points" min="0" value="{{ old('min_points') }}" placeholder="0" required>
                             @error('min_points')
@@ -419,6 +439,7 @@
                             @enderror
                         </div>
                         <div class="flex flex-col gap-2">
+                            {{-- Maximum points define the upper bound for this tier. --}}
                             <label class="nl-modal-label uppercase text-slate-400">Maximum points</label>
                             <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="max_points" min="0" value="{{ old('max_points') }}" placeholder="9999" required>
                             @error('max_points')
@@ -426,6 +447,7 @@
                             @enderror
                         </div>
                         <div class="flex flex-col gap-2">
+                            {{-- Single point value is used for monetary conversions. --}}
                             <label class="nl-modal-label uppercase text-slate-400">Single point value</label>
                             <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="single_point_value" min="0" step="0.01" value="{{ old('single_point_value') }}" placeholder="1.00" required>
                             @error('single_point_value')
@@ -433,6 +455,7 @@
                             @enderror
                         </div>
                         <div class="flex flex-col gap-2">
+                            {{-- Tier color is used for UI theming. --}}
                             <label class="nl-modal-label uppercase text-slate-400">Tier color</label>
                             <div class="flex items-center gap-3">
                                 <input id="tier-color-input" class="nl-color-input w-full rounded-lg border border-slate-700 bg-slate-950/60 text-slate-200" type="color" name="color" value="{{ old('color', '#38bdf8') }}">
@@ -443,6 +466,7 @@
                             @enderror
                         </div>
                         <div class="flex flex-col gap-2 sm:col-span-2">
+                            {{-- Description provides optional context for admins. --}}
                             <label class="nl-modal-label uppercase text-slate-400">Description</label>
                             <textarea class="min-h-[120px] rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-slate-200" name="description" placeholder="Short description about this tier">{{ old('description') }}</textarea>
                             @error('description')
@@ -451,9 +475,11 @@
                         </div>
                     </div>
                     <div class="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-slate-800 pt-5 nl-modal-divider">
+                        {{-- Cancel closes the modal without saving. --}}
                         <button type="button" class="rounded-xl border border-slate-700 px-4 py-2 text-xs text-slate-200" data-modal-close>
                             Cancel
                         </button>
+                        {{-- Submit creates or updates the tier. --}}
                         <button id="tier-modal-submit" type="submit" class="nl-modal-primary rounded-xl px-5 py-2 text-xs">
                             Create
                         </button>
@@ -464,6 +490,7 @@
 
         <script>
             (function () {
+                // Store the theme preference locally so it persists between visits.
                 const storageKey = 'nl-theme';
                 const body = document.body;
                 const button = document.getElementById('theme-toggle');
@@ -496,6 +523,7 @@
                     submit: 'Save changes',
                 };
 
+                // Apply light or dark styles and update the button label.
                 const applyTheme = (theme) => {
                     if (theme === 'light') {
                         body.classList.add('nl-theme-light');
@@ -512,6 +540,7 @@
 
                 if (button) {
                     button.addEventListener('click', () => {
+                        // Toggle the theme and persist the choice.
                         const next = body.classList.contains('nl-theme-light') ? 'dark' : 'light';
                         localStorage.setItem(storageKey, next);
                         applyTheme(next);
@@ -520,12 +549,14 @@
 
                 const settingsToggle = document.getElementById('settings-toggle');
                 const settingsMenu = document.getElementById('settings-menu');
+                // Settings submenu toggles via the sidebar caret.
                 if (settingsToggle && settingsMenu) {
                     settingsToggle.addEventListener('click', () => {
                         settingsMenu.classList.toggle('hidden');
                     });
                 }
 
+                // Reset the modal to create mode defaults.
                 const resetForm = () => {
                     if (!form) {
                         return;
@@ -552,12 +583,14 @@
                     }
                 };
 
+                // Close any open action dropdowns.
                 const closeAllMenus = () => {
                     actionMenus.forEach((menu) => {
                         menu.classList.remove('is-open');
                     });
                 };
 
+                // Open or close the modal and reset when closing.
                 const setModalOpen = (isOpen) => {
                     if (!modal) {
                         return;
@@ -569,6 +602,7 @@
                     }
                 };
 
+                // Populate the modal with tier data for editing.
                 const setEditMode = (button) => {
                     if (!form || !button) {
                         return;
@@ -602,6 +636,7 @@
 
                 if (openModalButton) {
                     openModalButton.addEventListener('click', () => {
+                        // Start in create mode when adding a tier.
                         closeAllMenus();
                         resetForm();
                         setModalOpen(true);
@@ -610,6 +645,7 @@
 
                 editButtons.forEach((button) => {
                     button.addEventListener('click', () => {
+                        // Switch to edit mode when clicking an existing tier.
                         closeAllMenus();
                         setEditMode(button);
                         setModalOpen(true);
@@ -618,6 +654,7 @@
 
                 actionToggles.forEach((button) => {
                     button.addEventListener('click', (event) => {
+                        // Prevent global click handler from closing the menu.
                         event.stopPropagation();
                         const menu = button.parentElement ? button.parentElement.querySelector('[data-action-menu]') : null;
                         const willOpen = menu && !menu.classList.contains('is-open');
@@ -630,6 +667,7 @@
 
                 if (modal) {
                     modal.addEventListener('click', (event) => {
+                        // Clicking the backdrop closes the modal.
                         if (event.target === modal) {
                             setModalOpen(false);
                         }
@@ -641,22 +679,26 @@
                 });
 
                 document.addEventListener('keydown', (event) => {
+                    // Escape closes both the modal and any open menus.
                     if (event.key === 'Escape') {
                         setModalOpen(false);
                         closeAllMenus();
                     }
                 });
 
+                // Clicks outside action menus close them.
                 document.addEventListener('click', () => {
                     closeAllMenus();
                 });
 
                 if (colorInput && colorPreview) {
+                    // Live preview the selected tier color.
                     colorInput.addEventListener('input', () => {
                         colorPreview.style.backgroundColor = colorInput.value;
                     });
                 }
 
+                // Reopen the modal if validation failed on a previous submit.
                 const shouldOpen = {{ $errors->any() ? 'true' : 'false' }};
                 if (shouldOpen) {
                     setModalOpen(true);

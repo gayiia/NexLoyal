@@ -1,5 +1,7 @@
 <?php
 
+// This file defines all web routes for the admin UI, widget, and webhook endpoints.
+
 use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\Admin\ReportsController;
 use App\Http\Controllers\AiClusterAwardController;
@@ -16,6 +18,7 @@ use App\Http\Controllers\MysteryBoxController;
 use App\Http\Controllers\ShopifyWebhookController;
 use Illuminate\Support\Facades\Route;
 
+// Shopify webhooks are throttled to protect the app from bursts and retries.
 Route::middleware('throttle:60,1')->group(function () {
     Route::post('webhooks/shopify/customers', [ShopifyWebhookController::class, 'handleCustomers'])
         ->name('webhooks.shopify.customers');
@@ -33,6 +36,7 @@ Route::middleware('throttle:60,1')->group(function () {
         ->name('webhooks.shopify.orders.cancelled');
 });
 
+// Widget endpoints are throttled separately because they can be called frequently from storefronts.
 Route::middleware('throttle:120,1')->group(function () {
     Route::get('loyalty/token', [LoyaltyWidgetController::class, 'token'])->name('loyalty.token');
     Route::options('loyalty/token', [LoyaltyWidgetController::class, 'tokenOptions']);
@@ -78,10 +82,12 @@ Route::middleware('throttle:120,1')->group(function () {
         ->name('widget.points.history');
 });
 
+// Root redirects to the login page for the admin experience.
 Route::get('/', function () {
     return redirect()->route('login');
 })->name('home');
 
+// All admin routes require authentication and verified email.
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
     Route::get('customers', [CustomerController::class, 'index'])->name('customers');
@@ -113,6 +119,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('coupons/mystery-box/{mysteryBox}/deactivate', [MysteryBoxController::class, 'deactivate'])->name('mystery-boxes.deactivate');
     Route::delete('coupons/mystery-box/{mysteryBox}', [MysteryBoxController::class, 'destroy'])->name('mystery-boxes.destroy');
 
+    // Exclusive chat admin UI and exports.
     Route::prefix('admin/notifications/exclusive-chat')->group(function () {
         Route::get('/', [ExclusiveChatController::class, 'index'])->name('exclusive-chat');
         Route::get('export', [ExclusiveChatController::class, 'exportMessages'])->name('exclusive-chat.export');
@@ -124,6 +131,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('{message}', [ExclusiveChatController::class, 'destroy'])->name('exclusive-chat.destroy');
     });
 
+    // Admin API endpoints used by poll analytics modals.
     Route::prefix('admin/api/chat')->group(function () {
         Route::get('polls/{poll}/analytics', [ExclusiveChatAdminApiController::class, 'analytics'])
             ->name('exclusive-chat.polls.analytics');
@@ -131,6 +139,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('exclusive-chat.polls.voters');
     });
 
+    // AI insights and clustering workflows.
     Route::get('admin/ai-insights', [AiInsightsController::class, 'index'])->name('ai-insights');
     Route::post('admin/ai-insights/run', [AiInsightsController::class, 'run'])
         ->middleware('throttle:6,1')
@@ -168,10 +177,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('admin/ai-insights/awards/{award}/export', [AiClusterAwardController::class, 'export'])
         ->name('ai-insights.awards.export');
 
+    // Report builder endpoints for generating and exporting summaries.
     Route::get('admin/reports', [ReportsController::class, 'index'])->name('reports');
     Route::post('admin/reports/generate', [ReportsController::class, 'generate'])->name('reports.generate');
     Route::get('admin/reports/export/excel', [ReportsController::class, 'exportExcel'])->name('reports.export.excel');
     Route::get('admin/reports/export/pdf', [ReportsController::class, 'exportPdf'])->name('reports.export.pdf');
 });
 
+// Settings routes are separated for clarity.
 require __DIR__.'/settings.php';

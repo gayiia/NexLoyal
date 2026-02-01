@@ -1,13 +1,18 @@
+{{-- This view provides a lightweight customer group manager for the settings area. --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- The title uses the app name configuration with a fallback for local/dev environments. --}}
         <title>{{ config('app.name', 'NexLoyal') }} - Customer Groups</title>
+        {{-- Preconnect and load the UI font used across the admin experience. --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        {{-- Vite builds and injects the compiled CSS for this page. --}}
         @vite(['resources/css/app.css'])
         <style>
+            {{-- These styles define light-mode overrides and modal presentation. --}}
             :root {
                 color-scheme: dark;
             }
@@ -119,9 +124,11 @@
             <div class="min-h-screen bg-[radial-gradient(700px_circle_at_bottom,rgba(30,64,175,0.22),transparent_60%)]">
                 <div class="min-h-screen bg-[linear-gradient(120deg,rgba(15,23,42,0.9),rgba(2,6,23,0.95))] nl-shell">
                     <div class="flex min-h-screen">
+                        {{-- The admin sidebar is shared across the dashboard and provides navigation. --}}
                         @include('partials.admin-sidebar')
 
                         <main class="flex-1 px-10 py-8">
+                            {{-- The header clarifies this page lives under settings. --}}
                             <x-page-header eyebrow="" title="Customer groups" breadcrumb="Settings / Customer groups">
                                 <x-slot name="actions">
                                     <button id="theme-toggle" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-200 nl-panel-muted" type="button">
@@ -136,6 +143,7 @@
                                         <p class="text-sm font-semibold text-slate-100">Customer groups</p>
                                         <p class="text-xs text-slate-400">Organize customers by tiers or hand-picked lists.</p>
                                     </div>
+                                    {{-- This opens the modal to create a new group. --}}
                                     <button id="open-create-group" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900" type="button">
                                         Create group
                                     </button>
@@ -154,6 +162,7 @@
                                                 </tr>
                                             </thead>
                                             <tbody id="group-rows" class="divide-y divide-slate-800/80 text-slate-200">
+                                                {{-- Rows are rendered on the client for this demo manager. --}}
                                                 <tr id="group-empty">
                                                     <td colspan="5" class="px-4 py-10 text-center text-slate-400">No groups yet. Create one to get started.</td>
                                                 </tr>
@@ -168,6 +177,7 @@
             </div>
         </div>
 
+        {{-- This modal allows creating and editing a group without leaving the page. --}}
         <div id="create-group-modal" class="nl-modal-backdrop" aria-hidden="true">
             <div class="nl-modal-panel">
                 <div class="flex items-start justify-between border-b border-slate-800 px-6 py-5 nl-modal-divider">
@@ -182,15 +192,18 @@
                 </div>
                 <form id="create-group-form" class="px-6 py-6">
                     <input id="group-id" type="hidden" value="">
+                    {{-- Validation is client-side only here, so errors are shown inline. --}}
                     <div id="group-error" class="mb-5 hidden rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
                         Please complete the group name and select at least one item.
                     </div>
                     <div class="grid gap-4">
                         <div class="flex flex-col gap-2">
+                            {{-- Group name is required regardless of the selected type. --}}
                             <label class="nl-modal-label uppercase text-slate-400">Group name</label>
                             <input id="group-name" class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="text" placeholder="VIP Launch List">
                         </div>
                         <div class="flex flex-col gap-2">
+                            {{-- Group type controls which selector UI is shown. --}}
                             <label class="nl-modal-label uppercase text-slate-400">Type</label>
                             <select id="group-type" class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200">
                                 <option value="">Select type</option>
@@ -201,6 +214,7 @@
                         <div id="tier-options" class="hidden rounded-xl border border-slate-800 bg-slate-950/40 p-4">
                             <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Select tiers</p>
                             <div class="mt-3 grid gap-2 text-sm text-slate-200">
+                                {{-- Tiers are injected from the backend for selection. --}}
                                 @foreach ($tiers as $tier)
                                     <label class="flex items-center gap-2">
                                         <input type="checkbox" class="tier-checkbox rounded border-slate-600 bg-slate-900 text-sky-400" value="{{ $tier }}">
@@ -212,6 +226,7 @@
                         <div id="customer-options" class="hidden rounded-xl border border-slate-800 bg-slate-950/40 p-4">
                             <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Select customers</p>
                             <div class="mt-3 max-h-52 overflow-y-auto space-y-2 text-sm text-slate-200">
+                                {{-- Customers are injected from the backend for selection. --}}
                                 @foreach ($customers as $customer)
                                     <label class="flex items-center gap-2">
                                         <input type="checkbox" class="customer-checkbox rounded border-slate-600 bg-slate-900 text-sky-400" value="{{ $customer['id'] }}">
@@ -222,6 +237,7 @@
                         </div>
                     </div>
                     <div class="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-slate-800 pt-5 nl-modal-divider">
+                        {{-- Cancel closes the modal without saving. --}}
                         <button type="button" class="rounded-xl border border-slate-700 px-4 py-2 text-xs text-slate-200" data-modal-close>
                             Cancel
                         </button>
@@ -235,6 +251,7 @@
 
         <script>
             (function () {
+                // Store the theme preference locally so it persists between visits.
                 const storageKey = 'nl-theme';
                 const body = document.body;
                 const button = document.getElementById('theme-toggle');
@@ -254,8 +271,10 @@
                 const modalTitle = document.getElementById('group-modal-title');
                 const modalSubtitle = document.getElementById('group-modal-subtitle');
 
+                // Groups are managed client-side here and reset on refresh.
                 const groups = [];
 
+                // Apply light or dark styles and update the button label.
                 const applyTheme = (theme) => {
                     if (theme === 'light') {
                         body.classList.add('nl-theme-light');
@@ -272,12 +291,14 @@
 
                 if (button) {
                     button.addEventListener('click', () => {
+                        // Toggle the theme and persist the choice.
                         const next = body.classList.contains('nl-theme-light') ? 'dark' : 'light';
                         localStorage.setItem(storageKey, next);
                         applyTheme(next);
                     });
                 }
 
+                // Open or close the modal and reset it when closing.
                 const setModalOpen = (isOpen) => {
                     if (!modal) {
                         return;
@@ -333,6 +354,7 @@
                 });
 
                 document.addEventListener('keydown', (event) => {
+                    // Escape is a common accessibility shortcut for modal close.
                     if (event.key === 'Escape') {
                         setModalOpen(false);
                     }
@@ -340,6 +362,7 @@
 
                 if (groupType) {
                     groupType.addEventListener('change', () => {
+                        // Only show the selector for the chosen group type.
                         const value = groupType.value;
                         if (tierOptions) {
                             tierOptions.classList.toggle('hidden', value !== 'tiers');
@@ -362,6 +385,7 @@
                     });
                 };
 
+                // Render the current group list into the table body.
                 const renderGroups = () => {
                     if (!groupRows) {
                         return;
@@ -376,6 +400,7 @@
                     }
 
                     groups.forEach((group, index) => {
+                        // Build each row with a view button for editing.
                         const row = document.createElement('tr');
                         row.className = 'nl-table-row';
                         row.innerHTML = `
@@ -391,6 +416,7 @@
                     });
                 };
 
+                // Open the modal with the selected group's values for editing.
                 const openEditModal = (group) => {
                     if (!groupName || !groupType || !groupIdInput) {
                         return;
@@ -439,6 +465,7 @@
                             (type === 'customers' && selectedCustomers.length > 0)
                         );
 
+                        // Show a simple error banner when required fields are missing.
                         if (!isValid) {
                             if (errorBanner) {
                                 errorBanner.classList.remove('hidden');
@@ -450,6 +477,7 @@
                             errorBanner.classList.add('hidden');
                         }
 
+                        // Date labels are used for display only in this front-end mock. 
                         const now = new Date();
                         const createdAt = now.toLocaleDateString('en-US', {
                             month: 'short',
@@ -466,6 +494,7 @@
                             createdAt: groupId ? null : createdAt,
                         };
 
+                        // Update existing groups or append a new one.
                         if (groupId) {
                             const index = groups.findIndex((group) => group.id === payload.id);
                             if (index !== -1) {
@@ -495,6 +524,7 @@
 
                 if (groupRows) {
                     groupRows.addEventListener('click', (event) => {
+                        // The view button triggers the edit modal for that group.
                         const target = event.target;
                         if (!target || !target.classList.contains('group-view')) {
                             return;
@@ -509,6 +539,7 @@
 
                 const settingsToggle = document.getElementById('settings-toggle');
                 const settingsMenu = document.getElementById('settings-menu');
+                // Settings submenu toggles via the sidebar caret.
                 if (settingsToggle && settingsMenu) {
                     settingsToggle.addEventListener('click', () => {
                         settingsMenu.classList.toggle('hidden');

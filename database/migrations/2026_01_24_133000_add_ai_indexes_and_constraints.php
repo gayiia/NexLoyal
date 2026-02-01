@@ -1,5 +1,6 @@
 <?php
 
+// This migration adds indexes to speed up AI-related queries.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -9,6 +10,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // These indexes optimize feature and transaction lookups for AI.
         if (Schema::hasTable('customer_features')) {
             if (!$this->hasIndex('customer_features', 'customer_features_customer_id_idx')) {
                 Schema::table('customer_features', function (Blueprint $table): void {
@@ -17,6 +19,7 @@ return new class extends Migration
             }
         }
 
+        // These indexes improve query performance on points transactions.
         if (Schema::hasTable('points_transactions')) {
             if (!$this->hasIndex('points_transactions', 'points_transactions_customer_id_idx')) {
                 Schema::table('points_transactions', function (Blueprint $table): void {
@@ -36,6 +39,7 @@ return new class extends Migration
             }
         }
 
+        // These indexes speed up cluster/customer joins.
         if (Schema::hasTable('ai_cluster_customers')) {
             if (!$this->hasIndex('ai_cluster_customers', 'ai_cluster_customers_customer_id_idx')) {
                 Schema::table('ai_cluster_customers', function (Blueprint $table): void {
@@ -52,6 +56,7 @@ return new class extends Migration
 
     public function down(): void
     {
+        // This removes indexes added in up() when present.
         if (Schema::hasTable('customer_features') && $this->hasIndex('customer_features', 'customer_features_customer_id_idx')) {
             Schema::table('customer_features', function (Blueprint $table): void {
                 $table->dropIndex('customer_features_customer_id_idx');
@@ -90,6 +95,7 @@ return new class extends Migration
         }
     }
 
+    // This checks for an index in the database to avoid duplicate creation.
     private function hasIndex(string $table, string $index): bool
     {
         $database = DB::getDatabaseName();

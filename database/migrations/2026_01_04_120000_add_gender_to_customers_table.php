@@ -1,5 +1,6 @@
 <?php
 
+// This migration adds an optional gender field to customers.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,6 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // This stores a customer-provided gender label.
         Schema::table('customers', function (Blueprint $table): void {
             $table->string('gender', 20)->nullable()->after('last_name');
         });
@@ -15,6 +17,7 @@ return new class extends Migration
 
     public function down(): void
     {
+        // This removes the gender column added in up().
         Schema::table('customers', function (Blueprint $table): void {
             $table->dropColumn('gender');
         });

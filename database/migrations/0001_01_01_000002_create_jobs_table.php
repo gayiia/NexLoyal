@@ -1,5 +1,6 @@
 <?php
 
+// This migration creates queue and job tracking tables.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -11,6 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // This table stores queued jobs for the worker.
         Schema::create('jobs', function (Blueprint $table) {
             $table->id();
             $table->string('queue')->index();
@@ -21,6 +23,7 @@ return new class extends Migration
             $table->unsignedInteger('created_at');
         });
 
+        // This table tracks batches of queued jobs.
         Schema::create('job_batches', function (Blueprint $table) {
             $table->string('id')->primary();
             $table->string('name');
@@ -34,6 +37,7 @@ return new class extends Migration
             $table->integer('finished_at')->nullable();
         });
 
+        // This table logs failed jobs for later inspection.
         Schema::create('failed_jobs', function (Blueprint $table) {
             $table->id();
             $table->string('uuid')->unique();
@@ -50,6 +54,7 @@ return new class extends Migration
      */
     public function down(): void
     {
+        // This removes job tables created in the up() method.
         Schema::dropIfExists('jobs');
         Schema::dropIfExists('job_batches');
         Schema::dropIfExists('failed_jobs');

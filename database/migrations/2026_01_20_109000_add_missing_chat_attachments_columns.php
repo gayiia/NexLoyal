@@ -1,5 +1,6 @@
 <?php
 
+// This migration backfills missing columns and data for chat_attachments.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -11,10 +12,12 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // This avoids running when the base table is missing.
         if (!Schema::hasTable('chat_attachments')) {
             return;
         }
 
+        // These flags determine which columns still need to be added.
         $addMessageId = !Schema::hasColumn('chat_attachments', 'chat_message_id');
         $addFileUrl = !Schema::hasColumn('chat_attachments', 'file_url');
         $addFileType = !Schema::hasColumn('chat_attachments', 'file_type');
@@ -30,6 +33,7 @@ return new class extends Migration
             $addCreatedAt,
             $addUpdatedAt
         ) {
+            // Each column is added only if missing to prevent migration errors.
             if ($addMessageId) {
                 $table->unsignedBigInteger('chat_message_id')->nullable();
             }
@@ -50,6 +54,7 @@ return new class extends Migration
             }
         });
 
+        // These updates migrate legacy column data into the new columns.
         if (Schema::hasColumn('chat_attachments', 'message_id')) {
             DB::statement('UPDATE `chat_attachments` SET `chat_message_id` = `message_id` WHERE `chat_message_id` IS NULL AND `message_id` IS NOT NULL');
         }
@@ -65,6 +70,7 @@ return new class extends Migration
                 ->whereNotNull('file_path')
                 ->get();
 
+            // This converts stored file paths into public URLs.
             foreach ($rows as $row) {
                 $path = (string) $row->file_path;
                 $url = Str::startsWith($path, ['http://', 'https://'])
@@ -83,6 +89,7 @@ return new class extends Migration
                 ->whereNotNull('path')
                 ->get();
 
+            // This converts legacy path values into public URLs.
             foreach ($rows as $row) {
                 $path = (string) $row->path;
                 $url = Str::startsWith($path, ['http://', 'https://'])

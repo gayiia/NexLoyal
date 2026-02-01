@@ -1,5 +1,6 @@
 <?php
 
+// This migration adds a pending points balance to customers.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,6 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // This column tracks points awaiting approval.
         Schema::table('customers', function (Blueprint $table): void {
             $table->unsignedInteger('points_pending')->default(0)->after('loyalty_points');
         });
@@ -15,6 +17,7 @@ return new class extends Migration
 
     public function down(): void
     {
+        // This removes the points_pending column.
         Schema::table('customers', function (Blueprint $table): void {
             $table->dropColumn('points_pending');
         });

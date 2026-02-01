@@ -1,15 +1,21 @@
 
+{{-- This view presents AI clustering results, charts, and award management for administrators. --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- The title uses the app name configuration with a fallback for local/dev environments. --}}
         <title>{{ config('app.name', 'NexLoyal') }} - AI Insights</title>
+        {{-- Preconnect and load the UI font used across the admin experience. --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        {{-- Vite builds and injects the compiled CSS for this page. --}}
         @vite(['resources/css/app.css'])
+        {{-- Chart.js renders the clustering charts in the dashboard. --}}
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
         <style>
+            {{-- These styles toggle light-mode colors for admin previews within the dark theme. --}}
             :root {
                 color-scheme: dark;
             }
@@ -113,6 +119,7 @@
             .nl-theme-light .nl-modal-divider {
                 border-color: rgba(148, 163, 184, 0.3);
             }
+            /* The progress bar animates while clustering jobs are running. */
             .nl-progress { position: relative; height: 6px; border-radius: 999px; background: rgba(148,163,184,0.18); overflow: hidden; }
 .nl-progress::after { content: ''; position: absolute; inset: 0; width: 40%; background: linear-gradient(90deg, rgba(56,189,248,0.1), rgba(56,189,248,0.8), rgba(56,189,248,0.1)); animation: nl-progress-move 1.2s linear infinite; }
 @keyframes nl-progress-move { 0% { transform: translateX(-120%); } 100% { transform: translateX(220%); } }
@@ -124,17 +131,21 @@
             <div class="min-h-screen bg-[radial-gradient(700px_circle_at_bottom,rgba(30,64,175,0.22),transparent_60%)]">
                 <div class="min-h-screen bg-[linear-gradient(120deg,rgba(15,23,42,0.9),rgba(2,6,23,0.95))] nl-shell">
                     <div class="flex min-h-screen">
+                        {{-- The admin sidebar is shared across the dashboard and provides navigation. --}}
                         @include('partials.admin-sidebar')
 
                         <main class="flex-1 px-10 py-8">
+                            {{-- The header provides actions to run clustering and manage awards. --}}
                             <x-page-header eyebrow="Insights" title="AI Insights ?" subtitle="Cluster-based customer intelligence">
                                 <x-slot name="actions">
+                                    {{-- Running clustering triggers the backend pipeline to compute segments. --}}
                                     <form method="POST" action="{{ route('ai-insights.run') }}">
                                         @csrf
                                         <button class="rounded-xl bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-sky-500/30" type="submit">
                                             Run clustering
                                         </button>
                                     </form>
+                                    {{-- Awards are created from clustering results. --}}
                                     <a href="{{ route('ai-insights.awards.create') }}" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-sm text-slate-200 nl-panel-muted">
                                         Create award
                                     </a>
@@ -144,17 +155,20 @@
                                 </x-slot>
                             </x-page-header>
 
+                            {{-- Status flashes are shown after actions like running clustering. --}}
                             @if (session('status'))
                                 <div class="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
                                     {{ session('status') }}
                                 </div>
                             @endif
 
+                            {{-- Award-specific errors are displayed near the top of the page. --}}
                             @if ($errors->has('award'))
                                 <div class="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
                                     {{ $errors->first('award') }}
                                 </div>
                             @endif
+                            {{-- This panel displays the current clustering run status with refresh support. --}}
 <div id="ai-status-panel" class="mt-4 rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-4 text-xs text-slate-300">
     <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -174,6 +188,7 @@
 
                             <section class="mt-6 grid gap-4 lg:grid-cols-4">
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5">
+                                    {{-- The latest run summary helps confirm the current model state. --}}
                                     <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Latest run</p>
                                     <p class="mt-3 text-2xl font-semibold text-slate-50">
                                         {{ $latestRun?->status ? ucfirst($latestRun->status) : 'No runs' }}
@@ -183,11 +198,13 @@
                                     </p>
                                 </div>
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5">
+                                    {{-- Clusters and K show how many segments were produced. --}}
                                     <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Clusters</p>
                                     <p class="mt-3 text-2xl font-semibold text-slate-50">{{ $latestRun?->total_clusters ?? 0 }}</p>
                                     <p class="mt-1 text-xs text-slate-400">Selected K: {{ $latestRun?->selected_k ?? '-' }}</p>
                                 </div>
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5">
+                                    {{-- Silhouette and inertia give model quality signals. --}}
                                     <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Silhouette</p>
                                     <p class="mt-3 text-2xl font-semibold text-slate-50">
                                         {{ $latestRun?->silhouette_score !== null ? number_format($latestRun->silhouette_score, 3) : '-' }}
@@ -195,6 +212,7 @@
                                     <p class="mt-1 text-xs text-slate-400">Inertia: {{ $latestRun?->final_inertia ?? '-' }}</p>
                                 </div>
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5">
+                                    {{-- Customer counts show how many were included in clustering. --}}
                                     <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Customers</p>
                                     <p class="mt-3 text-2xl font-semibold text-slate-50">{{ number_format($latestRun?->total_customers ?? 0) }}</p>
                                     <p class="mt-1 text-xs text-slate-400">Included in latest run.</p>
@@ -210,6 +228,7 @@
                                         </div>
                                     </div>
                                     <div class="mt-6">
+                                        {{-- The chart renders when data is available; otherwise the empty message shows. --}}
                                         <canvas id="cluster-distribution-chart" height="180"></canvas>
                                         <p id="cluster-distribution-empty" class="mt-4 text-xs text-slate-400 hidden">No clustering data yet.</p>
                                     </div>
@@ -222,6 +241,7 @@
                                         </div>
                                     </div>
                                     <div class="mt-6">
+                                        {{-- The chart renders when spend data exists for clusters. --}}
                                         <canvas id="cluster-spend-chart" height="180"></canvas>
                                         <p id="cluster-spend-empty" class="mt-4 text-xs text-slate-400 hidden">No spend data yet.</p>
                                     </div>
@@ -234,6 +254,7 @@
                                         </div>
                                     </div>
                                     <div class="mt-6">
+                                        {{-- The chart renders only when awards have been issued. --}}
                                         <canvas id="award-mix-chart" height="180"></canvas>
                                         <p id="award-mix-empty" class="mt-4 text-xs text-slate-400 hidden">No awards issued yet.</p>
                                     </div>
@@ -248,6 +269,7 @@
                                     </div>
                                 </div>
                                 <div class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                    {{-- Each card summarizes a single cluster and offers drill-down actions. --}}
                                     @forelse ($clusters as $cluster)
                                         <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5">
                                             <div class="flex items-center justify-between">
@@ -273,6 +295,7 @@
                                                 </div>
                                             </div>
                                             <div class="mt-5 flex flex-wrap gap-2">
+                                                {{-- The modal shows the customer list without leaving the page. --}}
                                                 <button class="rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-200" data-modal-open="cluster-{{ $cluster->id }}">
                                                     View customers
                                                 </button>
@@ -282,6 +305,7 @@
                                             </div>
                                         </div>
                                     @empty
+                                        {{-- Encourage running clustering when no cluster data exists. --}}
                                         <div class="col-span-full rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6 text-sm text-slate-400">
                                             Run clustering to generate AI segments.
                                         </div>
@@ -295,6 +319,7 @@
                                         <p class="text-sm font-semibold text-slate-100">Award history</p>
                                         <p class="text-xs text-slate-400">Drafts and active AI rewards.</p>
                                     </div>
+                                    {{-- Shortcut for creating a new award from insights. --}}
                                     <a href="{{ route('ai-insights.awards.create') }}" class="rounded-xl bg-sky-400 px-4 py-2 text-xs font-semibold text-slate-950">
                                         New award
                                     </a>
@@ -312,6 +337,7 @@
                                             </tr>
                                         </thead>
                                         <tbody class="divide-y divide-slate-800/60">
+                                            {{-- Each row represents an AI award and the actions available for its status. --}}
                                             @forelse ($awards as $award)
                                                 <tr>
                                                     <td class="px-3 py-3 text-slate-200">{{ $award->title }}</td>
@@ -320,17 +346,21 @@
                                                     <td class="px-3 py-3 text-slate-300">{{ ucfirst($award->status) }}</td>
                                                     <td class="px-3 py-3">
                                                         <div class="flex flex-wrap gap-2">
+                                                            {{-- Draft awards can be edited before activation. --}}
                                                             @if ($award->status === 'draft')
                                                                 <a class="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-200" href="{{ route('ai-insights.awards.edit', $award) }}">Edit</a>
                                                             @endif
+                                                            {{-- Export provides a CSV of targeted customers. --}}
                                                             <a class="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-200" href="{{ route('ai-insights.awards.export', $award) }}">Export</a>
                                                             @if ($award->status !== 'active')
+                                                                {{-- Activating makes the award available for issuance. --}}
                                                                 <form method="POST" action="{{ route('ai-insights.awards.activate', $award) }}">
                                                                     @csrf
                                                                     @method('PATCH')
                                                                     <button class="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-200" type="submit">Activate</button>
                                                                 </form>
                                                             @else
+                                                                {{-- Deactivation pauses issuance for the award. --}}
                                                                 <form method="POST" action="{{ route('ai-insights.awards.deactivate', $award) }}">
                                                                     @csrf
                                                                     @method('PATCH')
@@ -338,6 +368,7 @@
                                                                 </form>
                                                             @endif
                                                             @if ($award->status === 'draft')
+                                                                {{-- Deleting is only allowed while the award is still a draft. --}}
                                                                 <form method="POST" action="{{ route('ai-insights.awards.destroy', $award) }}" onsubmit="return confirm('Delete this award?');">
                                                                     @csrf
                                                                     @method('DELETE')
@@ -348,6 +379,7 @@
                                                     </td>
                                                 </tr>
                                             @empty
+                                                {{-- Empty state when no awards exist. --}}
                                                 <tr>
                                                     <td colspan="5" class="px-3 py-6 text-center text-slate-400">No awards created yet.</td>
                                                 </tr>
@@ -362,6 +394,7 @@
             </div>
         </div>
 
+        {{-- Modals render per cluster to show customer details on demand. --}}
         @foreach ($clusters as $cluster)
             @php $customers = $clusterCustomers[$cluster->id] ?? collect(); @endphp
             <div class="nl-modal-backdrop" id="cluster-{{ $cluster->id }}" aria-hidden="true">
@@ -387,6 +420,7 @@
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-800/60">
+                                {{-- Each row shows a customer snapshot captured during clustering. --}}
                                 @forelse ($customers as $row)
                                     <tr>
                                         <td class="px-3 py-3 text-slate-200">{{ $row->customer?->full_name ?: $row->customer?->email ?: 'Customer' }}</td>
@@ -396,6 +430,7 @@
                                         <td class="px-3 py-3 text-slate-300">{{ number_format($row->loyalty_points_snapshot) }}</td>
                                     </tr>
                                 @empty
+                                    {{-- Empty state if the cluster has no attached customers. --}}
                                     <tr>
                                         <td colspan="5" class="px-3 py-6 text-center text-slate-400">No customers in this cluster.</td>
                                     </tr>
@@ -414,10 +449,12 @@
 
         <script>
             (function () {
+                // Store the theme preference locally so it persists between visits.
                 const storageKey = 'nl-theme';
                 const body = document.body;
                 const button = document.getElementById('theme-toggle');
 
+                // Apply light or dark styles and update the button label.
                 const applyTheme = (theme) => {
                     if (theme === 'light') {
                         body.classList.add('nl-theme-light');
@@ -429,17 +466,20 @@
                     }
                 };
 
+                // Default to dark when no preference is stored.
                 const stored = localStorage.getItem(storageKey);
                 applyTheme(stored || 'dark');
 
                 if (button) {
                     button.addEventListener('click', () => {
+                        // Toggle the theme and persist the choice.
                         const next = body.classList.contains('nl-theme-light') ? 'dark' : 'light';
                         localStorage.setItem(storageKey, next);
                         applyTheme(next);
                     });
                 }
 
+                // Keep the settings menu open when navigating within settings pages.
                 const settingsToggle = document.getElementById('settings-toggle');
                 const settingsMenu = document.getElementById('settings-menu');
                 const shouldOpenSettings = window.location.pathname.startsWith('/settings');
@@ -454,11 +494,13 @@
             })();
 
             (function () {
+                // Chart data is injected from the server-side insights calculations.
                 const labels = @json($charts['labels']);
                 const distribution = @json($charts['distribution']);
                 const avgSpend = @json($charts['avg_spend']);
                 const awardMix = @json($charts['award_mix']);
 
+                // Shared chart styling matches the dark theme.
                 const chartOptions = {
                     responsive: true,
                     plugins: {
@@ -480,6 +522,7 @@
                     },
                 };
 
+                // Only show the distribution chart when data exists.
                 const hasDistribution = labels.length > 0 && distribution.some((value) => value > 0);
                 const distributionCanvas = document.getElementById('cluster-distribution-chart');
                 const distributionEmpty = document.getElementById('cluster-distribution-empty');
@@ -502,6 +545,7 @@
                     });
                 }
 
+                // Only show the spend chart when data exists.
                 const hasSpend = labels.length > 0 && avgSpend.some((value) => value > 0);
                 const spendCanvas = document.getElementById('cluster-spend-chart');
                 const spendEmpty = document.getElementById('cluster-spend-empty');
@@ -524,6 +568,7 @@
                     });
                 }
 
+                // Only show the award mix chart when there are issued awards.
                 const awardCanvas = document.getElementById('award-mix-chart');
                 const awardEmpty = document.getElementById('award-mix-empty');
                 const awardValues = [awardMix.points || 0, awardMix.coupon || 0];
@@ -557,6 +602,7 @@
             })();
 
             (function () {
+                // Modal open/close handlers provide an inline customer drill-down.
                 const openButtons = document.querySelectorAll('[data-modal-open]');
                 const closeButtons = document.querySelectorAll('[data-modal-close]');
                 openButtons.forEach((button) => {
@@ -580,6 +626,7 @@
                     });
                 });
 
+                // Clicking outside the modal panel closes the overlay.
                 document.querySelectorAll('.nl-modal-backdrop').forEach((modal) => {
                     modal.addEventListener('click', (event) => {
                         if (event.target === modal) {
@@ -592,6 +639,7 @@
         </script>
         <script>
 (function () {
+    // This block polls the backend for clustering status and updates the status panel.
     const statusText = document.getElementById('ai-status-text');
     const statusError = document.getElementById('ai-status-error');
     const progress = document.getElementById('ai-progress');
@@ -613,10 +661,12 @@
     };
 
     const fetchStatus = () => {
+        // The status endpoint returns the latest clustering run state as JSON.
         fetch('{{ route('ai-insights.status') }}', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then((r) => r.json())
             .then(updateUi)
             .catch(() => {
+                // Failures show a brief message rather than throwing.
                 if (statusError) {
                     statusError.textContent = 'Unable to fetch status right now.';
                     statusError.classList.remove('hidden');
@@ -624,9 +674,11 @@
             });
     };
 
+    // Polling continues only while a run is pending or running.
     const startPolling = () => { if (!pollTimer) pollTimer = setInterval(fetchStatus, 5000); };
     const stopPolling = () => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } };
 
+    // Manual refresh is available for administrators.
     if (refresh) refresh.addEventListener('click', fetchStatus);
     fetchStatus();
 })();

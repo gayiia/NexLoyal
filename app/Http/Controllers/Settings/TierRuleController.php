@@ -1,5 +1,6 @@
 <?php
 
+// This controller manages tier rules in the settings area.
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
@@ -8,8 +9,10 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
+// This class handles CRUD operations for loyalty tiers.
 class TierRuleController extends Controller
 {
+    // This lists tiers with pagination for the settings screen.
     public function index(): View
     {
         $tiers = Tier::query()
@@ -20,6 +23,7 @@ class TierRuleController extends Controller
         return view('settings.tier-rules', compact('tiers'));
     }
 
+    // This creates a new tier in inactive status by default.
     public function store(Request $request): RedirectResponse
     {
         $validated = $this->validateTier($request);
@@ -30,6 +34,7 @@ class TierRuleController extends Controller
         return redirect()->route('tier-rules');
     }
 
+    // This updates an existing tier's configuration.
     public function update(Request $request, Tier $tier): RedirectResponse
     {
         $validated = $this->validateTier($request, $tier->id);
@@ -39,6 +44,7 @@ class TierRuleController extends Controller
         return redirect()->route('tier-rules');
     }
 
+    // This toggles the active status of a tier.
     public function updateStatus(Request $request, Tier $tier): RedirectResponse
     {
         $validated = $request->validate([
@@ -50,6 +56,7 @@ class TierRuleController extends Controller
         return redirect()->route('tier-rules');
     }
 
+    // This deletes a tier from the system.
     public function destroy(Tier $tier): RedirectResponse
     {
         $tier->delete();
@@ -57,6 +64,7 @@ class TierRuleController extends Controller
         return redirect()->route('tier-rules');
     }
 
+    // This validates tier fields and enforces numeric boundaries.
     private function validateTier(Request $request, ?int $tierId = null): array
     {
         return $request->validate([

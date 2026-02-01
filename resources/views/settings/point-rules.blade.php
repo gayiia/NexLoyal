@@ -1,13 +1,18 @@
+{{-- This view configures how customers earn points across loyalty actions. --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- The title uses the app name configuration with a fallback for local/dev environments. --}}
         <title>{{ config('app.name', 'NexLoyal') }} - Point Rules</title>
+        {{-- Preconnect and load the UI font used across the admin experience. --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        {{-- Vite builds and injects the compiled CSS for this page. --}}
         @vite(['resources/css/app.css'])
         <style>
+            {{-- These styles define light-mode overrides and layout helpers. --}}
             :root {
                 color-scheme: dark;
             }
@@ -119,10 +124,12 @@
             <div class="min-h-screen bg-[radial-gradient(700px_circle_at_bottom,rgba(30,64,175,0.22),transparent_60%)]">
                 <div class="min-h-screen bg-[linear-gradient(120deg,rgba(15,23,42,0.9),rgba(2,6,23,0.95))] nl-shell">
                     <div class="flex min-h-screen flex-col lg:flex-row">
+                        {{-- The admin sidebar is shared across the dashboard and provides navigation. --}}
                         @include('partials.admin-sidebar')
 
                         <main class="flex-1 px-4 py-6 sm:px-6 lg:px-10">
                             <div class="mx-auto w-full max-w-6xl">
+                                {{-- The header anchors point rules configuration. --}}
                                 <x-page-header eyebrow="" title="Point Rules" breadcrumb="Settings / Point rules">
                                     <x-slot name="actions">
                                         <button id="theme-toggle" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-200 nl-panel-muted" type="button">
@@ -137,6 +144,7 @@
                                         <p class="text-xs text-slate-400">Set how many points customers earn for the core actions in your store.</p>
                                     </div>
 
+                                    {{-- This form updates general point earning rules. --}}
                                     <form method="POST" action="{{ route('point-rules.update') }}" class="space-y-3 px-6 py-4">
                                         @csrf
                                         <div class="nl-row grid gap-3 sm:grid-cols-[220px_1fr] sm:items-center">
@@ -144,6 +152,7 @@
                                                 <p class="nl-row-title">Welcome bonus points</p>
                                                 <p class="nl-row-help">Granted when a customer joins.</p>
                                             </div>
+                                            {{-- Welcome points are granted once at signup. --}}
                                             <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="welcome_points" min="0" value="{{ old('welcome_points', $rule->welcome_points ?? 0) }}" placeholder="100" required>
                                         </div>
                                         <div class="nl-row grid gap-3 sm:grid-cols-[220px_1fr] sm:items-center">
@@ -152,6 +161,7 @@
                                                 <p class="nl-row-help">Customer earns 1 point for every (Rs).</p>
                                             </div>
                                             <div class="space-y-1">
+                                                {{-- Amount per point controls the purchase-based earning rate. --}}
                                                 <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="amount_per_point" min="1" value="{{ old('amount_per_point', $rule->amount_per_point ?? 100) }}" placeholder="100" required>
                                                 <p class="text-[11px] text-slate-400">Example: 100 means 1 point per Rs 100 spent.</p>
                                             </div>
@@ -161,6 +171,7 @@
                                                 <p class="nl-row-title">Birthday reward points</p>
                                                 <p class="nl-row-help">Applied once per year.</p>
                                             </div>
+                                            {{-- Birthday points are granted annually when a birthday is known. --}}
                                             <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="birthday_points" min="0" value="{{ old('birthday_points', $rule->birthday_points ?? 0) }}" placeholder="250" required>
                                         </div>
                                         <div class="nl-row grid gap-3 sm:grid-cols-[220px_1fr] sm:items-center">
@@ -168,6 +179,7 @@
                                                 <p class="nl-row-title">Profile completion points</p>
                                                 <p class="nl-row-help">Reward for finishing required fields.</p>
                                             </div>
+                                            {{-- Profile completion points encourage richer customer data. --}}
                                             <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="profile_completion_points" min="0" value="{{ old('profile_completion_points', $rule->profile_completion_points ?? 0) }}" placeholder="75" required>
                                         </div>
                                         <div class="nl-row grid gap-3 sm:grid-cols-[220px_1fr] sm:items-center">
@@ -175,6 +187,7 @@
                                                 <p class="nl-row-title">Newsletter sign up points</p>
                                                 <p class="nl-row-help">One-time reward on signup.</p>
                                             </div>
+                                            {{-- Newsletter rewards are shown but disabled in this UI. --}}
                                             <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" min="0" placeholder="50" disabled>
                                         </div>
                                         <div class="nl-row grid gap-3 sm:grid-cols-[220px_1fr] sm:items-center">
@@ -182,9 +195,11 @@
                                                 <p class="nl-row-title">Newsletter sign up link</p>
                                                 <p class="nl-row-help">Where customers opt in.</p>
                                             </div>
+                                            {{-- Newsletter link is a placeholder and currently disabled. --}}
                                             <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" placeholder="https://yourbrand.com/newsletter" disabled>
                                         </div>
                                         <div class="flex items-center justify-end pb-2">
+                                            {{-- Save commits the general settings. --}}
                                             <button type="submit" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900">
                                                 Save general settings
                                             </button>
@@ -198,6 +213,7 @@
                                         <p class="text-xs text-slate-400">Add the profile links customers should visit and the points earned once per platform.</p>
                                     </div>
 
+                                    {{-- This form updates social reward links and points. --}}
                                     <form method="POST" action="{{ route('point-rules.update') }}" class="space-y-3 px-6 py-4">
                                         @csrf
                                         <div class="nl-row grid gap-3 sm:grid-cols-[140px_1fr_120px] sm:items-center">
@@ -207,10 +223,12 @@
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Link</label>
+                                                {{-- Link points users to the brand profile. --}}
                                                 <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" name="social_linkedin_url" value="{{ old('social_linkedin_url', $rule->social_linkedin_url ?? '') }}" placeholder="https://linkedin.com/company/yourbrand">
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Points</label>
+                                                {{-- Points control the reward for completing this action. --}}
                                                 <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="social_linkedin_points" min="0" value="{{ old('social_linkedin_points', $rule->social_linkedin_points ?? 0) }}" placeholder="25">
                                             </div>
                                         </div>
@@ -221,10 +239,12 @@
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Link</label>
+                                                {{-- Link points users to the brand profile. --}}
                                                 <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" name="social_tiktok_url" value="{{ old('social_tiktok_url', $rule->social_tiktok_url ?? '') }}" placeholder="https://www.tiktok.com/@yourbrand">
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Points</label>
+                                                {{-- Points control the reward for completing this action. --}}
                                                 <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="social_tiktok_points" min="0" value="{{ old('social_tiktok_points', $rule->social_tiktok_points ?? 0) }}" placeholder="30">
                                             </div>
                                         </div>
@@ -235,10 +255,12 @@
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Link</label>
+                                                {{-- Link points users to the brand profile. --}}
                                                 <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" name="social_facebook_url" value="{{ old('social_facebook_url', $rule->social_facebook_url ?? '') }}" placeholder="https://facebook.com/yourbrand">
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Points</label>
+                                                {{-- Points control the reward for completing this action. --}}
                                                 <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="social_facebook_points" min="0" value="{{ old('social_facebook_points', $rule->social_facebook_points ?? 0) }}" placeholder="20">
                                             </div>
                                         </div>
@@ -249,10 +271,12 @@
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Link</label>
+                                                {{-- Link points users to the brand profile. --}}
                                                 <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" name="social_x_url" value="{{ old('social_x_url', $rule->social_x_url ?? '') }}" placeholder="https://x.com/yourbrand">
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Points</label>
+                                                {{-- Points control the reward for completing this action. --}}
                                                 <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="social_x_points" min="0" value="{{ old('social_x_points', $rule->social_x_points ?? 0) }}" placeholder="15">
                                             </div>
                                         </div>
@@ -263,10 +287,12 @@
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Link</label>
+                                                {{-- Link points users to the brand profile. --}}
                                                 <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" name="social_instagram_url" value="{{ old('social_instagram_url', $rule->social_instagram_url ?? '') }}" placeholder="https://instagram.com/yourbrand">
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Points</label>
+                                                {{-- Points control the reward for completing this action. --}}
                                                 <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="social_instagram_points" min="0" value="{{ old('social_instagram_points', $rule->social_instagram_points ?? 0) }}" placeholder="20">
                                             </div>
                                         </div>
@@ -277,14 +303,17 @@
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Link</label>
+                                                {{-- Link points users to the brand profile. --}}
                                                 <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="url" name="social_youtube_url" value="{{ old('social_youtube_url', $rule->social_youtube_url ?? '') }}" placeholder="https://youtube.com/@yourbrand">
                                             </div>
                                             <div class="grid gap-2">
                                                 <label class="nl-row-label sm:sr-only">Points</label>
+                                                {{-- Points control the reward for completing this action. --}}
                                                 <input class="nl-input w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="social_youtube_points" min="0" value="{{ old('social_youtube_points', $rule->social_youtube_points ?? 0) }}" placeholder="40">
                                             </div>
                                         </div>
                                         <div class="flex items-center justify-end pt-2">
+                                            {{-- Save commits the social reward settings. --}}
                                             <button type="submit" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900">
                                                 Save social rewards
                                             </button>
@@ -299,10 +328,12 @@
         </div>
         <script>
             (function () {
+                // Store the theme preference locally so it persists between visits.
                 const storageKey = 'nl-theme';
                 const body = document.body;
                 const button = document.getElementById('theme-toggle');
 
+                // Apply light or dark styles and update the button label.
                 const applyTheme = (theme) => {
                     if (theme === 'light') {
                         body.classList.add('nl-theme-light');
@@ -319,6 +350,7 @@
 
                 if (button) {
                     button.addEventListener('click', () => {
+                        // Toggle the theme and persist the choice.
                         const next = body.classList.contains('nl-theme-light') ? 'dark' : 'light';
                         localStorage.setItem(storageKey, next);
                         applyTheme(next);
@@ -327,6 +359,7 @@
 
                 const settingsToggle = document.getElementById('settings-toggle');
                 const settingsMenu = document.getElementById('settings-menu');
+                // Settings submenu toggles via the sidebar caret.
                 if (settingsToggle && settingsMenu) {
                     settingsToggle.addEventListener('click', () => {
                         settingsMenu.classList.toggle('hidden');

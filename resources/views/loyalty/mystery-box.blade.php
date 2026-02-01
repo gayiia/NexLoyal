@@ -1,13 +1,18 @@
+{{-- This widget view lets customers claim a mystery box reward. --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- The title uses the app name configuration with a fallback for local/dev environments. --}}
         <title>{{ config('app.name', 'NexLoyal') }} - Mystery Box</title>
+        {{-- Preconnect and load the UI font used for the widget. --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        {{-- Vite builds and injects the compiled CSS for this page. --}}
         @vite(['resources/css/app.css'])
         <style>
+            {{-- These styles are self-contained to avoid Shopify theme conflicts. --}}
             :root { color-scheme: dark; }
             body {
                 font-family: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
@@ -59,10 +64,12 @@
             <header>
                 <p class="text-xs uppercase tracking-[0.3em] text-slate-400">Rewards</p>
                 <h1 class="text-3xl font-semibold text-slate-100">Mystery Box</h1>
+                {{-- This subtitle explains the interaction to customers. --}}
                 <p class="mt-2 text-sm text-slate-400">Spin the wheel to reveal your reward.</p>
             </header>
 
             <section class="nl-card">
+                {{-- If the widget cannot load, show a friendly error. --}}
                 @if (!empty($error))
                     <p class="text-sm text-rose-300">{{ $error }}</p>
                 @else
@@ -76,9 +83,11 @@
             </section>
         </div>
 
+        {{-- The widget logic only runs when the backend didn't return an error. --}}
         @if (empty($error))
         <script>
             (function () {
+                // Token identifies the customer and is required for all widget API calls.
                 const token = @json($token ?? '');
                 const content = document.getElementById('mystery-box-content');
 
@@ -87,6 +96,7 @@
                     return;
                 }
 
+                // Fetch the active mystery box for this customer.
                 const activeUrl = `/api/widget/mystery-box/active?token=${encodeURIComponent(token)}`;
 
                 fetch(activeUrl, { method: 'GET' })
@@ -100,6 +110,7 @@
                             return;
                         }
 
+                        // Can claim indicates whether the user is currently eligible.
                         const canClaim = !!box.can_claim;
                         const nextClaim = box.next_claim_at ? new Date(box.next_claim_at) : null;
                         const nextLabel = nextClaim && !isNaN(nextClaim.getTime())
@@ -129,9 +140,11 @@
                             if (claimButton.disabled) {
                                 return;
                             }
+                            // Disable the button while the claim is processed.
                             claimButton.disabled = true;
                             claimButton.textContent = 'Spinning...';
 
+                            // Claiming triggers the backend to select a reward.
                             fetch(`/api/widget/mystery-box/${box.id}/claim?token=${encodeURIComponent(token)}`, { method: 'POST' })
                                 .then((response) => response.json())
                                 .then((result) => {
@@ -139,6 +152,7 @@
                                         throw new Error(result && result.message ? result.message : 'Unable to claim right now');
                                     }
 
+                                    // Build a looping wheel from the reward titles.
                                     const won = result.won;
                                     let titles = (Array.isArray(result.wheel_items) ? result.wheel_items : wheelItems)
                                         .map((item) => item.title)
@@ -169,12 +183,14 @@
                                         baseIndex = 0;
                                     }
                                     const targetIndex = baseIndex + (titles.length * 2);
+                                    // Animate the wheel to the winning position.
                                     setTimeout(() => {
                                         if (wheelList) {
                                             wheelList.style.transform = `translateY(${-targetIndex * itemHeight}px)`;
                                         }
                                     }, 60);
 
+                                    // Show the reward details after the spin completes.
                                     setTimeout(() => {
                                         const resultEl = document.getElementById('wheel-result');
                                         if (!resultEl) {
@@ -190,11 +206,13 @@
                                     }, 2700);
                                 })
                                 .catch((error) => {
+                                    // Fall back to a plain error message on failure.
                                     content.textContent = error.message || 'Unable to claim right now';
                                 });
                         });
                     })
                     .catch(() => {
+                        // Network or server errors show a simple fallback message.
                         content.textContent = 'Unable to load Mystery Box right now.';
                     });
             })();

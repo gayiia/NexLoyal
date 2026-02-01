@@ -1,13 +1,18 @@
+{{-- This view lists all mystery boxes and provides lifecycle actions for admins. --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- The title uses the app name configuration with a fallback for local/dev environments. --}}
         <title>{{ config('app.name', 'NexLoyal') }} - Mystery Box</title>
+        {{-- Preconnect and load the UI font used across the admin experience. --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        {{-- Vite builds and injects the compiled CSS for this page. --}}
         @vite(['resources/css/app.css'])
         <style>
+            {{-- These styles define light-mode overrides and table badges. --}}
             :root { color-scheme: dark; }
             .nl-theme-light {
                 color-scheme: light;
@@ -54,9 +59,11 @@
         <div class="min-h-screen bg-[radial-gradient(900px_circle_at_top,rgba(56,189,248,0.18),transparent_60%)]">
             <div class="min-h-screen bg-[linear-gradient(120deg,rgba(15,23,42,0.9),rgba(2,6,23,0.95))] nl-shell">
                 <div class="flex min-h-screen flex-col lg:flex-row">
+                    {{-- The admin sidebar is shared across the dashboard and provides navigation. --}}
                     @include('partials.admin-sidebar')
 
                     <main class="flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+                        {{-- The header anchors the mystery box list. --}}
                         <x-page-header eyebrow="" title="Mystery Box" breadcrumb="Coupons / Mystery Box">
                             <x-slot name="actions">
                                 <button id="theme-toggle" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-200 nl-panel-muted" type="button">
@@ -66,21 +73,23 @@
                         </x-page-header>
 
                         <section class="mt-6 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel">
+                            {{-- Any action-level error is shown at the top of the list. --}}
                             @if ($errors->has('mysteryBox'))
                                 <div class="border-b border-slate-800/70 px-6 py-4 text-xs text-rose-200">
                                     <p class="font-semibold text-rose-100">Action failed.</p>
                                     <p class="mt-1 text-rose-200">{{ $errors->first('mysteryBox') }}</p>
                                 </div>
                             @endif
-                            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/70 px-6 py-4">
-                                <div>
-                                    <p class="text-sm font-semibold text-slate-100">Mystery Box list</p>
-                                    <p class="mt-1 text-xs text-slate-400">Manage wheel picker rewards by tier.</p>
+                                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/70 px-6 py-4">
+                                    <div>
+                                        <p class="text-sm font-semibold text-slate-100">Mystery Box list</p>
+                                        <p class="mt-1 text-xs text-slate-400">Manage wheel picker rewards by tier.</p>
+                                    </div>
+                                    {{-- This opens the create form for a new mystery box. --}}
+                                    <a href="{{ route('mystery-boxes.create') }}" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900">
+                                        Create mystery box
+                                    </a>
                                 </div>
-                                <a href="{{ route('mystery-boxes.create') }}" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900">
-                                    Create mystery box
-                                </a>
-                            </div>
 
                             <div class="overflow-x-auto px-6 py-5">
                                 <table class="min-w-full text-left text-sm">
@@ -94,8 +103,10 @@
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-slate-800/70 text-slate-200">
+                                        {{-- Each row represents a configured mystery box. --}}
                                         @forelse ($boxes as $box)
                                             @php
+                                                // Tiers are stored as IDs, so they are mapped to titles here.
                                                 $tierIds = collect($box->tiers ?? [])->map(fn ($id) => (int) $id)->all();
                                                 $tierNames = $tiers->whereIn('id', $tierIds)->pluck('title')->all();
                                             @endphp
@@ -105,6 +116,7 @@
                                                     {{ $tierNames ? implode(', ', $tierNames) : 'All tiers' }}
                                                 </td>
                                                 <td class="px-4 py-4">
+                                                    {{-- Status indicates whether the box can be claimed. --}}
                                                     @if ($box->is_active)
                                                         <span class="nl-badge border border-emerald-400/40 bg-emerald-400/10 text-emerald-200">Active</span>
                                                     @else
@@ -117,10 +129,12 @@
                                                 <td class="px-4 py-4 text-right text-xs">
                                                     <div class="flex flex-wrap justify-end gap-2">
                                                         <a href="{{ route('mystery-boxes.view', $box) }}" class="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-200">View</a>
+                                                        {{-- Editing is allowed only when the box is inactive. --}}
                                                         @if (!$box->is_active)
                                                             <a href="{{ route('mystery-boxes.edit', $box) }}" class="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-200">Edit</a>
                                                         @endif
                                                         @if ($box->is_active)
+                                                            {{-- Active boxes can be deactivated but not deleted. --}}
                                                             <form method="POST" action="{{ route('mystery-boxes.deactivate', $box) }}">
                                                                 @csrf
                                                                 @method('PATCH')
@@ -129,6 +143,7 @@
                                                                 </button>
                                                             </form>
                                                         @else
+                                                            {{-- Inactive boxes can be activated or removed. --}}
                                                             <form method="POST" action="{{ route('mystery-boxes.activate', $box) }}">
                                                                 @csrf
                                                                 @method('PATCH')
@@ -148,6 +163,7 @@
                                                 </td>
                                             </tr>
                                         @empty
+                                            {{-- Empty state when no boxes exist. --}}
                                             <tr>
                                                 <td colspan="5" class="px-4 py-6 text-center text-slate-400">No mystery boxes yet.</td>
                                             </tr>
@@ -163,10 +179,12 @@
 
         <script>
             (function () {
+                // Store the theme preference locally so it persists between visits.
                 const storageKey = 'nl-theme';
                 const body = document.body;
                 const button = document.getElementById('theme-toggle');
 
+                // Apply light or dark styles and update the button label.
                 const applyTheme = (theme) => {
                     body.classList.toggle('nl-theme-light', theme === 'light');
                     if (button) {
@@ -179,12 +197,14 @@
 
                 if (button) {
                     button.addEventListener('click', () => {
+                        // Toggle the theme and persist the choice.
                         const next = body.classList.contains('nl-theme-light') ? 'dark' : 'light';
                         localStorage.setItem(storageKey, next);
                         applyTheme(next);
                     });
                 }
 
+                // Keep the settings menu open when navigating within settings pages.
                 const settingsToggle = document.getElementById('settings-toggle');
                 const settingsMenu = document.getElementById('settings-menu');
                 const shouldOpenSettings = window.location.pathname.startsWith('/settings');

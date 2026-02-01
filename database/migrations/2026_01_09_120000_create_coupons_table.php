@@ -1,5 +1,6 @@
 <?php
 
+// This migration creates the coupons table for reward definitions.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,6 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // This table stores coupon configuration and Shopify linkage fields.
         Schema::create('coupons', function (Blueprint $table) {
             $table->id();
             $table->string('title');
@@ -37,6 +39,7 @@ return new class extends Migration
 
     public function down(): void
     {
+        // This removes the coupons table created in up().
         Schema::dropIfExists('coupons');
     }
 };

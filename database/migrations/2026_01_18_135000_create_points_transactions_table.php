@@ -1,5 +1,6 @@
 <?php
 
+// This migration creates the points_transactions ledger table.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,6 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // This table records all points earn/spend events for customers.
         Schema::create('points_transactions', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('customer_id')->constrained()->cascadeOnDelete();
@@ -28,6 +30,7 @@ return new class extends Migration
 
     public function down(): void
     {
+        // This removes the points_transactions table created in up().
         Schema::dropIfExists('points_transactions');
     }
 };

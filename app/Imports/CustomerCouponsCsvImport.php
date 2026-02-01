@@ -1,11 +1,14 @@
 <?php
 
+// This import class maps CSV rows to customer coupon redemptions.
 namespace App\Imports;
 
 use App\Models\Coupon;
 use App\Models\Customer;
 use App\Models\CustomerCoupon;
 use Illuminate\Support\Carbon;
+
+// This class upserts customer coupon records and tracks import stats.
 class CustomerCouponsCsvImport
 {
     public int $imported = 0;
@@ -13,9 +16,11 @@ class CustomerCouponsCsvImport
     public int $skipped = 0;
     public array $skippedRows = [];
 
+    // This processes each CSV row, linking customers to coupons by code.
     public function import(array $rows): void
     {
         foreach ($rows as $row) {
+            // Both a Shopify customer ID and coupon code are required to link records.
             $shopifyId = trim((string) ($row['customer_shopify_id'] ?? ''));
             $couponCode = trim((string) ($row['coupon_code'] ?? ''));
 
@@ -24,6 +29,7 @@ class CustomerCouponsCsvImport
                 continue;
             }
 
+            // This resolves the local customer and coupon before creating a join record.
             $customer = Customer::query()->where('shopify_id', $shopifyId)->first();
             if (!$customer) {
                 $this->pushSkipped($row, 'customer_not_found');
@@ -36,8 +42,10 @@ class CustomerCouponsCsvImport
                 continue;
             }
 
+            // This parses redemption timestamps if the CSV provides them.
             $redeemedAt = $this->toDate($row['redeemed_at'] ?? null);
 
+            // This upserts the customer coupon and marks it as imported.
             $model = CustomerCoupon::query()->updateOrCreate(
                 ['customer_id' => $customer->id, 'code' => $couponCode],
                 [
@@ -49,6 +57,7 @@ class CustomerCouponsCsvImport
                 ]
             );
 
+            // These counters help the UI summarize what the import changed.
             if ($model->wasRecentlyCreated) {
                 $this->imported++;
             } else {
@@ -57,6 +66,7 @@ class CustomerCouponsCsvImport
         }
     }
 
+    // This attempts multiple date formats and falls back to Carbon parsing.
     private function toDate($value): ?Carbon
     {
         if ($value === null) {
@@ -67,6 +77,7 @@ class CustomerCouponsCsvImport
             return null;
         }
 
+        // These formats cover common CSV export patterns.
         $formats = ['Y-m-d H:i:s', 'Y-m-d', 'm/d/Y H:i:s', 'm/d/Y H:i', 'm/d/Y'];
         foreach ($formats as $format) {
             try {
@@ -76,6 +87,7 @@ class CustomerCouponsCsvImport
             }
         }
 
+        // This fallback may still fail if the value is not a recognizable date string.
         try {
             return Carbon::parse($stringValue);
         } catch (\Throwable $exception) {
@@ -83,6 +95,7 @@ class CustomerCouponsCsvImport
         }
     }
 
+    // This tracks a skipped row and stores a small sample for debugging.
     private function pushSkipped($row, string $reason): void
     {
         $this->skipped++;

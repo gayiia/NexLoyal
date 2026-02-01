@@ -1,13 +1,18 @@
+{{-- This view edits an existing coupon while it is still in an editable state. --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- The title uses the app name configuration with a fallback for local/dev environments. --}}
         <title>{{ config('app.name', 'NexLoyal') }} - Edit Coupon</title>
+        {{-- Preconnect and load the UI font used across the admin experience. --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        {{-- Vite builds and injects the compiled CSS for this page. --}}
         @vite(['resources/css/app.css'])
         <style>
+            {{-- These styles define light-mode overrides and product selectors. --}}
             :root {
                 color-scheme: dark;
             }
@@ -136,9 +141,11 @@
             <div class="min-h-screen bg-[radial-gradient(700px_circle_at_bottom,rgba(30,64,175,0.22),transparent_60%)]">
                 <div class="min-h-screen bg-[linear-gradient(120deg,rgba(15,23,42,0.9),rgba(2,6,23,0.95))] nl-shell">
                     <div class="flex min-h-screen flex-col lg:flex-row">
+                        {{-- The admin sidebar is shared across the dashboard and provides navigation. --}}
                         @include('partials.admin-sidebar')
 
                         <main class="flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+                            {{-- The header anchors the edit flow and provides a return link. --}}
                             <x-page-header eyebrow="" title="Edit coupon" breadcrumb="Rewards / Coupons / Edit">
                                 <x-slot name="actions">
                                     <a href="{{ route('coupons') }}" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-200 nl-panel-muted">
@@ -153,15 +160,19 @@
                                     <p class="mt-1 text-xs text-slate-400">Draft coupons can be edited before activation.</p>
                                 </div>
                                 <div class="px-6 py-6">
+                                    {{-- This form updates the existing coupon in the backend. --}}
                                     <form method="POST" action="{{ route('coupons.update', $coupon) }}" class="space-y-6">
                                         @csrf
+                                        {{-- PATCH signals a partial update for the existing record. --}}
                                         @method('PATCH')
+                                        {{-- Validation errors are displayed inline. --}}
                                         @if ($errors->any())
                                             <div class="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
                                                 <p class="font-semibold text-rose-100">Fix the highlighted fields to continue.</p>
                                                 <p class="mt-1 text-rose-200">{{ $errors->first() }}</p>
                                             </div>
                                         @endif
+                                        {{-- Product data issues are surfaced to prevent invalid selection. --}}
                                         @if ($productError)
                                             <div class="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
                                                 <p class="font-semibold text-amber-100">Shopify products unavailable.</p>
@@ -170,6 +181,7 @@
                                         @endif
                                         <div class="grid gap-4 sm:grid-cols-2">
                                             <div class="flex flex-col gap-2 sm:col-span-2">
+                                                {{-- Title is the human-readable label for the coupon. --}}
                                                 <label class="nl-modal-label uppercase text-slate-400">Title</label>
                                                 <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="text" name="title" value="{{ old('title', $coupon->title) }}" required>
                                                 @error('title')
@@ -177,6 +189,7 @@
                                                 @enderror
                                             </div>
                                             <div class="flex flex-col gap-2">
+                                                {{-- Type controls which discount fields are shown below. --}}
                                                 <label class="nl-modal-label uppercase text-slate-400">Type</label>
                                                 <select class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" name="type" required>
                                                     <option value="amount-order" @selected(old('type', $coupon->type) === 'amount-order')>Amount off order</option>
@@ -189,6 +202,7 @@
                                                 @enderror
                                             </div>
                                             <div class="flex flex-col gap-2" data-type-section="amount-order,amount-product">
+                                                {{-- Value type determines whether the discount is percentage or fixed. --}}
                                                 <label class="nl-modal-label uppercase text-slate-400">Value type</label>
                                                 <select class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" name="value_type" data-required>
                                                     <option value="percentage" @selected(old('value_type', $coupon->value_type) === 'percentage')>Percentage</option>
@@ -200,6 +214,7 @@
                                                 @enderror
                                             </div>
                                             <div class="flex flex-col gap-2" data-type-section="amount-order,amount-product">
+                                                {{-- Value is interpreted based on the selected value type. --}}
                                                 <label class="nl-modal-label uppercase text-slate-400">Value</label>
                                                 <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="text" name="value" value="{{ old('value', $coupon->value) }}" data-required>
                                                 @error('value')
@@ -207,6 +222,7 @@
                                                 @enderror
                                             </div>
                                               <div class="flex flex-col gap-2">
+                                                  {{-- Points value controls the cost to redeem this coupon. --}}
                                                   <label class="nl-modal-label uppercase text-slate-400">Points value</label>
                                                   <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="points_value" min="0" value="{{ old('points_value', $coupon->points_value) }}" required>
                                                   @error('points_value')
@@ -214,6 +230,7 @@
                                                   @enderror
                                               </div>
                                         <div class="flex flex-col gap-2">
+                                            {{-- Flags indicate coupons reserved for mystery box rewards. --}}
                                             <label class="nl-modal-label uppercase text-slate-400">Mystery Box coupon</label>
                                             <label class="inline-flex items-center gap-2 text-sm text-slate-200">
                                                 <input type="checkbox" name="is_mystery_box_coupon" value="1" @checked(old('is_mystery_box_coupon', $coupon->is_mystery_box_coupon))>
@@ -221,6 +238,7 @@
                                             </label>
                                         </div>
                                         <div class="flex flex-col gap-2">
+                                            {{-- Flags indicate coupons issued by AI clustering. --}}
                                             <label class="nl-modal-label uppercase text-slate-400">AI Insights coupon</label>
                                             <label class="inline-flex items-center gap-2 text-sm text-slate-200">
                                                 <input type="checkbox" name="is_ai_cluster_coupon" value="1" @checked(old('is_ai_cluster_coupon', $coupon->is_ai_cluster_coupon))>
@@ -228,6 +246,7 @@
                                             </label>
                                         </div>
                                               <div class="flex flex-col gap-2">
+                                                {{-- Tier limits coupon visibility to eligible customers. --}}
                                                 <label class="nl-modal-label uppercase text-slate-400">Tier</label>
                                                 <select class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" name="tier_id">
                                                     <option value="" @selected(!old('tier_id', $coupon->tier_id))>All tiers</option>
@@ -240,10 +259,12 @@
                                                 @enderror
                                             </div>
                                             <div class="flex flex-col gap-2 sm:col-span-2" data-type-section="amount-product">
+                                                {{-- Product-specific discounts require selecting eligible products. --}}
                                                 <label class="nl-modal-label uppercase text-slate-400">Eligible products</label>
                                                 <div class="nl-product-shell">
                                                     <div class="nl-product-scroll">
                                                         <div class="nl-product-grid">
+                                                            {{-- Products are sourced from Shopify and selectable for this discount. --}}
                                                             @forelse ($products as $product)
                                                                 <label class="nl-product-card">
                                                                     <input type="checkbox" name="product_ids[]" value="{{ $product['id'] }}" @checked(in_array($product['id'], old('product_ids', $coupon->product_ids ?? []), true))>
@@ -260,10 +281,12 @@
                                                 @enderror
                                             </div>
                                             <div class="flex flex-col gap-2 sm:col-span-2" data-type-section="buy-x-get-y">
+                                                {{-- Buy X get Y discounts require selecting the buy products. --}}
                                                 <label class="nl-modal-label uppercase text-slate-400">Buy products</label>
                                                 <div class="nl-product-shell">
                                                     <div class="nl-product-scroll">
                                                         <div class="nl-product-grid">
+                                                            {{-- Products are sourced from Shopify and selectable for this discount. --}}
                                                             @forelse ($products as $product)
                                                                 <label class="nl-product-card">
                                                                     <input type="checkbox" name="buy_product_ids[]" value="{{ $product['id'] }}" @checked(in_array($product['id'], old('buy_product_ids', $coupon->buy_product_ids ?? []), true))>
@@ -280,6 +303,7 @@
                                                 @enderror
                                             </div>
                                             <div class="flex flex-col gap-2" data-type-section="buy-x-get-y">
+                                                {{-- Quantity required to trigger the discount. --}}
                                                 <label class="nl-modal-label uppercase text-slate-400">Buy quantity</label>
                                                 <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="buy_quantity" min="1" value="{{ old('buy_quantity', $coupon->buy_quantity ?? 1) }}">
                                                 @error('buy_quantity')
@@ -287,6 +311,7 @@
                                                 @enderror
                                             </div>
                                             <div class="flex flex-col gap-2" data-type-section="buy-x-get-y">
+                                                {{-- Quantity granted when the buy threshold is met. --}}
                                                 <label class="nl-modal-label uppercase text-slate-400">Get quantity</label>
                                                 <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" name="get_quantity" min="1" value="{{ old('get_quantity', $coupon->get_quantity ?? 1) }}">
                                                 @error('get_quantity')
@@ -294,10 +319,12 @@
                                                 @enderror
                                             </div>
                                             <div class="flex flex-col gap-2 sm:col-span-2" data-type-section="buy-x-get-y">
+                                                {{-- Select which products are granted in the offer. --}}
                                                 <label class="nl-modal-label uppercase text-slate-400">Get products</label>
                                                 <div class="nl-product-shell">
                                                     <div class="nl-product-scroll">
                                                         <div class="nl-product-grid">
+                                                            {{-- Products are sourced from Shopify and selectable for this discount. --}}
                                                             @forelse ($products as $product)
                                                                 <label class="nl-product-card">
                                                                     <input type="checkbox" name="get_product_ids[]" value="{{ $product['id'] }}" @checked(in_array($product['id'], old('get_product_ids', $coupon->get_product_ids ?? []), true))>
@@ -314,6 +341,7 @@
                                                 @enderror
                                             </div>
                                             <div class="flex flex-col gap-3 sm:col-span-2" data-type-section="buy-x-get-y">
+                                                {{-- Discount type determines how the "get" items are priced. --}}
                                                 <label class="nl-modal-label uppercase text-slate-400">At a discounted value</label>
                                                 <div class="flex flex-wrap gap-4 text-sm text-slate-200">
                                                     <label class="inline-flex items-center gap-2">
@@ -330,6 +358,7 @@
                                                     </label>
                                                 </div>
                                                 <div>
+                                                    {{-- Discount value is disabled when the selection is free. --}}
                                                     <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="number" step="0.01" min="0" name="buyx_discount_value" value="{{ old('buyx_discount_value', $coupon->buyx_discount_value) }}" placeholder="Discount value" data-buyx-value>
                                                     @error('buyx_discount_type')
                                                         <p class="text-xs text-rose-300">{{ $message }}</p>
@@ -340,6 +369,7 @@
                                                 </div>
                                             </div>
                                             <div class="flex flex-col gap-2">
+                                                {{-- Start and end dates control coupon availability. --}}
                                                 <label class="nl-modal-label uppercase text-slate-400">Start date</label>
                                                 <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="date" name="start_date" value="{{ old('start_date', optional($coupon->start_date)->format('Y-m-d')) }}" required>
                                                 @error('start_date')
@@ -347,6 +377,7 @@
                                                 @enderror
                                             </div>
                                             <div class="flex flex-col gap-2">
+                                                {{-- End date is required to align with Shopify price rules. --}}
                                                 <label class="nl-modal-label uppercase text-slate-400">End date</label>
                                                 <input class="nl-modal-input rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-slate-200" type="date" name="end_date" value="{{ old('end_date', optional($coupon->end_date)->format('Y-m-d')) }}" required>
                                                 @error('end_date')
@@ -354,6 +385,7 @@
                                                 @enderror
                                             </div>
                                             <div class="flex flex-col gap-2 sm:col-span-2">
+                                                {{-- Description is internal-only for admin context. --}}
                                                 <label class="nl-modal-label uppercase text-slate-400">Description</label>
                                                 <textarea class="min-h-[100px] rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-slate-200" name="description">{{ old('description', $coupon->description) }}</textarea>
                                                 @error('description')
@@ -362,7 +394,9 @@
                                             </div>
                                         </div>
                                         <div class="flex flex-wrap items-center justify-end gap-3 border-t border-slate-800 pt-5">
+                                            {{-- Cancel returns to the coupon list without saving. --}}
                                             <a href="{{ route('coupons') }}" class="rounded-xl border border-slate-700 px-4 py-2 text-xs text-slate-200">Cancel</a>
+                                            {{-- Submit saves the updated coupon. --}}
                                             <button type="submit" class="nl-modal-primary rounded-xl px-5 py-2 text-xs">
                                                 Save changes
                                             </button>
@@ -377,11 +411,13 @@
         </div>
         <script>
             (function () {
+                // Store the theme preference locally so it persists between visits.
                 const storageKey = 'nl-theme';
                 const body = document.body;
                 const settingsToggle = document.getElementById('settings-toggle');
                 const settingsMenu = document.getElementById('settings-menu');
 
+                // Apply light or dark styles based on the stored preference.
                 const applyTheme = (theme) => {
                     if (theme === 'light') {
                         body.classList.add('nl-theme-light');
@@ -393,6 +429,7 @@
                 const stored = localStorage.getItem(storageKey);
                 applyTheme(stored || 'dark');
 
+                // Keep the settings menu open when navigating within settings pages.
                 const shouldOpenSettings = window.location.pathname.startsWith('/settings');
                 if (settingsMenu) {
                     settingsMenu.classList.toggle('hidden', !shouldOpenSettings);
@@ -405,6 +442,7 @@
 
                 const typeSelect = document.querySelector('[name="type"]');
                 const typeSections = document.querySelectorAll('[data-type-section]');
+                // Show or hide fields based on the selected coupon type.
                 const updateTypeSections = () => {
                     const activeType = typeSelect ? typeSelect.value : '';
                     typeSections.forEach((section) => {
@@ -420,6 +458,7 @@
 
                 const discountRadios = document.querySelectorAll('[data-buyx-discount]');
                 const discountValueInput = document.querySelector('[data-buyx-value]');
+                // Disable discount value input when the selection is "free".
                 const updateBuyXDiscount = () => {
                     if (!discountValueInput) {
                         return;

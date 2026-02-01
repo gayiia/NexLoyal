@@ -1,5 +1,6 @@
 <?php
 
+// This controller manages admin CRUD and reporting for mystery boxes.
 namespace App\Http\Controllers;
 
 use App\Models\Coupon;
@@ -10,8 +11,10 @@ use App\Enums\SourceType;
 use App\Models\Tier;
 use Illuminate\Http\Request;
 
+// This class creates, updates, activates, and exports mystery box data.
 class MysteryBoxController extends Controller
 {
+    // This lists all mystery boxes and tiers for the admin view.
     public function index()
     {
         $boxes = MysteryBox::query()
@@ -26,6 +29,7 @@ class MysteryBoxController extends Controller
         ]);
     }
 
+    // This shows the create form with eligible tiers and coupons.
     public function create()
     {
         $tiers = Tier::query()->orderBy('min_points')->get();
@@ -40,8 +44,10 @@ class MysteryBoxController extends Controller
         ]);
     }
 
+    // This validates and stores a new mystery box in inactive state.
     public function store(Request $request)
     {
+        // These validations enforce required tiers, coupons, and claim rules.
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:160'],
             'tiers' => ['required', 'array', 'min:1'],
@@ -53,6 +59,7 @@ class MysteryBoxController extends Controller
             'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
         ]);
 
+        // This ensures all selected coupons are flagged for mystery box use.
         $eligibleCoupons = Coupon::query()
             ->whereIn('id', $validated['coupons'])
             ->where('is_mystery_box_coupon', true)
@@ -63,6 +70,7 @@ class MysteryBoxController extends Controller
                 ->withInput();
         }
 
+        // This creates the box and stores the tier list and schedule.
         $box = MysteryBox::create([
             'name' => $validated['name'],
             'tiers' => array_values(array_map('intval', $validated['tiers'])),
@@ -72,6 +80,7 @@ class MysteryBoxController extends Controller
             'is_active' => false,
         ]);
 
+        // This creates one item per coupon with default weight.
         $items = array_map(function ($couponId) use ($box) {
             return [
                 'mystery_box_id' => $box->id,
@@ -87,6 +96,7 @@ class MysteryBoxController extends Controller
         return redirect()->route('mystery-boxes');
     }
 
+    // This shows the edit form for an inactive mystery box.
     public function edit(MysteryBox $mysteryBox)
     {
         if ($mysteryBox->is_active) {
@@ -94,6 +104,7 @@ class MysteryBoxController extends Controller
                 ->withErrors(['mysteryBox' => 'Active mystery boxes cannot be edited.']);
         }
 
+        // These lookups populate the form with options and selected items.
         $tiers = Tier::query()->orderBy('min_points')->get();
         $coupons = Coupon::query()
             ->where('is_mystery_box_coupon', true)
@@ -110,6 +121,7 @@ class MysteryBoxController extends Controller
         ]);
     }
 
+    // This updates an inactive mystery box and its items.
     public function update(Request $request, MysteryBox $mysteryBox)
     {
         if ($mysteryBox->is_active) {
@@ -117,6 +129,7 @@ class MysteryBoxController extends Controller
                 ->withErrors(['mysteryBox' => 'Active mystery boxes cannot be edited.']);
         }
 
+        // These validations enforce required tiers, coupons, and claim rules.
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:160'],
             'tiers' => ['required', 'array', 'min:1'],
@@ -128,6 +141,7 @@ class MysteryBoxController extends Controller
             'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
         ]);
 
+        // This ensures all selected coupons are flagged for mystery box use.
         $eligibleCoupons = Coupon::query()
             ->whereIn('id', $validated['coupons'])
             ->where('is_mystery_box_coupon', true)
@@ -138,6 +152,7 @@ class MysteryBoxController extends Controller
                 ->withInput();
         }
 
+        // This updates the box settings and schedule.
         $mysteryBox->update([
             'name' => $validated['name'],
             'tiers' => array_values(array_map('intval', $validated['tiers'])),
@@ -146,6 +161,7 @@ class MysteryBoxController extends Controller
             'ends_at' => $validated['ends_at'] ?? null,
         ]);
 
+        // This replaces the set of items to match the selected coupons.
         $mysteryBox->items()->delete();
         $items = array_map(function ($couponId) use ($mysteryBox) {
             return [
@@ -161,6 +177,7 @@ class MysteryBoxController extends Controller
         return redirect()->route('mystery-boxes');
     }
 
+    // This activates a mystery box for customer use.
     public function activate(MysteryBox $mysteryBox)
     {
         if ($mysteryBox->is_active) {
@@ -172,6 +189,7 @@ class MysteryBoxController extends Controller
         return redirect()->route('mystery-boxes');
     }
 
+    // This deactivates a mystery box so it is no longer claimable.
     public function deactivate(MysteryBox $mysteryBox)
     {
         if (!$mysteryBox->is_active) {
@@ -183,6 +201,7 @@ class MysteryBoxController extends Controller
         return redirect()->route('mystery-boxes');
     }
 
+    // This deletes an inactive mystery box.
     public function destroy(MysteryBox $mysteryBox)
     {
         if ($mysteryBox->is_active) {
@@ -195,6 +214,7 @@ class MysteryBoxController extends Controller
         return redirect()->route('mystery-boxes');
     }
 
+    // This shows claim history and summary for a specific mystery box.
     public function view(Request $request, MysteryBox $mysteryBox)
     {
         $now = now();
@@ -206,6 +226,7 @@ class MysteryBoxController extends Controller
             ->where('mystery_box_id', $mysteryBox->id)
             ->where('source', SourceType::MYSTERY_BOX->value);
 
+        // These totals are used in the summary panel.
         $totalClaims = (clone $baseQuery)->count();
         $usedClaims = (clone $baseQuery)
             ->where(function ($query) {
@@ -231,6 +252,7 @@ class MysteryBoxController extends Controller
             })
             ->count();
 
+        // These filters control the claims table.
         $status = $request->input('status', 'all');
         $search = $request->input('search');
 
@@ -275,6 +297,7 @@ class MysteryBoxController extends Controller
             });
         }
 
+        // This paginates claims in reverse chronological order.
         $claims = $query->orderByDesc('redeemed_at')->paginate(15)->withQueryString();
 
         return view('mystery-boxes-view', [
@@ -290,6 +313,7 @@ class MysteryBoxController extends Controller
         ]);
     }
 
+    // This exports mystery box claim records to CSV.
     public function export(Request $request, MysteryBox $mysteryBox)
     {
         $status = $request->input('status', 'all');
@@ -339,6 +363,7 @@ class MysteryBoxController extends Controller
 
         $filename = 'mystery-box-claims-'.$mysteryBox->id.'.csv';
 
+        // This streams the export to avoid loading all rows into memory.
         return response()->streamDownload(function () use ($query, $now) {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
@@ -359,6 +384,7 @@ class MysteryBoxController extends Controller
                 $nameParts = array_filter([$customer?->first_name, $customer?->last_name]);
                 $name = $nameParts ? implode(' ', $nameParts) : ($customer?->email ?? 'Customer');
 
+                // This derives a human-friendly status label for export.
                 $statusLabel = 'Unused';
                 if ($record->status === 'used' || $record->used_at) {
                     $statusLabel = 'Used';

@@ -1,5 +1,6 @@
 <?php
 
+// This migration creates the customers table sourced from Shopify data.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,6 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // This table stores customer identity, status, and Shopify metrics.
         Schema::create('customers', function (Blueprint $table): void {
             $table->id();
             $table->string('shopify_id')->unique();
@@ -26,6 +28,7 @@ return new class extends Migration
 
     public function down(): void
     {
+        // This removes the customers table created in up().
         Schema::dropIfExists('customers');
     }
 };

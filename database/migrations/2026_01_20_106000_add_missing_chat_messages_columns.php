@@ -1,5 +1,6 @@
 <?php
 
+// This migration backfills missing columns on chat_messages for older installs.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -9,10 +10,12 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // This avoids running when the base table is missing.
         if (!Schema::hasTable('chat_messages')) {
             return;
         }
 
+        // These flags determine which columns still need to be added.
         $addStoreId = !Schema::hasColumn('chat_messages', 'store_id');
         $addType = !Schema::hasColumn('chat_messages', 'type');
         $addTitle = !Schema::hasColumn('chat_messages', 'title');
@@ -32,6 +35,7 @@ return new class extends Migration
             $addCreatedAt,
             $addUpdatedAt
         ) {
+            // Each column is added only if missing to prevent migration errors.
             if ($addStoreId) {
                 $table->unsignedBigInteger('store_id')->nullable();
             }
@@ -58,6 +62,7 @@ return new class extends Migration
             }
         });
 
+        // This adds the composite index if the columns exist and the index is missing.
         $canIndex = Schema::hasColumn('chat_messages', 'store_id')
             && Schema::hasColumn('chat_messages', 'sent_at');
 

@@ -1,5 +1,6 @@
 <?php
 
+// This service generates analytics reports for the admin dashboard and exports.
 namespace App\Services\Reports;
 
 use App\Enums\AiRunStatus;
@@ -19,6 +20,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
+// This class contains report builders that aggregate loyalty, revenue, and AI segmentation metrics.
 class ReportsService
 {
     public const REPORTS = [
@@ -44,11 +46,13 @@ class ReportsService
         'loyalty_growth_over_time' => 'Loyalty growth over time',
     ];
 
+    // This lists all report keys and their display labels for the UI.
     public function availableReports(): array
     {
         return self::REPORTS;
     }
 
+    // This dispatches to a specific report builder based on the requested key.
     public function generate(string $reportKey, array $filters): array
     {
         $filters['_report_key'] = $reportKey;
@@ -77,6 +81,7 @@ class ReportsService
         };
     }
 
+    // This calculates the share of customers who are loyalty members.
     private function loyaltyParticipationRate(array $filters): array
     {
         $base = $this->baseCustomerQuery($filters, false);
@@ -104,6 +109,7 @@ class ReportsService
         );
     }
 
+    // This compares total revenue from loyalty members versus non-members.
     private function loyaltyDrivenRevenue(array $filters): array
     {
         // Revenue uses customer total_spent as a proxy when orders are not stored separately.
@@ -132,6 +138,7 @@ class ReportsService
         );
     }
 
+    // This compares average order value across loyalty and non-loyalty segments.
     private function aovLoyaltyVsNon(array $filters): array
     {
         $base = $this->baseCustomerQuery($filters, false);
@@ -165,6 +172,7 @@ class ReportsService
         );
     }
 
+    // This calculates repeat purchase rates for loyalty and non-loyalty customers.
     private function repeatPurchaseRateLoyaltyVsNon(array $filters): array
     {
         $base = $this->baseCustomerQuery($filters, false);
@@ -198,6 +206,7 @@ class ReportsService
         );
     }
 
+    // This estimates retention by comparing customer activity between consecutive periods.
     private function customerRetentionRate(array $filters): array
     {
         [$start, $end] = $this->resolveDateRange($filters);
@@ -246,6 +255,7 @@ class ReportsService
         );
     }
 
+    // This totals points issued and redeemed within the selected date range.
     private function pointsIssuedRedeemedExpired(array $filters): array
     {
         [$start, $end] = $this->resolveDateRange($filters);
@@ -286,6 +296,7 @@ class ReportsService
         );
     }
 
+    // This computes outstanding points liability across all customers.
     private function pointsLiabilityOutstanding(array $filters): array
     {
         $customerIds = $this->baseCustomerQuery($filters)->select('id');
@@ -324,6 +335,7 @@ class ReportsService
         );
     }
 
+    // This calculates the redemption rate based on issued vs spent points.
     private function redemptionRate(array $filters): array
     {
         [$start, $end] = $this->resolveDateRange($filters);
@@ -363,6 +375,7 @@ class ReportsService
         );
     }
 
+    // This ranks rewards by redemption volume and points spent.
     private function rewardEffectiveness(array $filters): array
     {
         [$start, $end] = $this->resolveDateRange($filters);
@@ -405,6 +418,7 @@ class ReportsService
         );
     }
 
+    // This estimates how long it takes customers to redeem after first earning points.
     private function timeToRedeemPointsVelocity(array $filters): array
     {
         [$start, $end] = $this->resolveDateRange($filters);
@@ -431,6 +445,7 @@ class ReportsService
             ->get();
 
         $data = $rows->map(function ($row) {
+            // This calculates the time gap between first earn and first spend events.
             $firstEarn = Carbon::parse($row->first_earn_at);
             $firstSpend = Carbon::parse($row->first_spend_at);
             return [
@@ -465,6 +480,8 @@ class ReportsService
         );
     }
 
+    // This counts customers in each tier for the selected filters.
+    // This counts customers in each tier for the selected filters.
     private function customersPerTier(array $filters): array
     {
         $base = $this->baseCustomerQuery($filters);
@@ -496,6 +513,7 @@ class ReportsService
         );
     }
 
+    // This compares revenue, orders, and AOV across tiers.
     private function revenuePerTier(array $filters): array
     {
         // Revenue uses customer total_spent as a proxy when orders are not stored separately.
@@ -532,6 +550,7 @@ class ReportsService
         );
     }
 
+    // This measures how many customers have reached higher tiers beyond the base tier.
     private function tierUpgradeFrequency(array $filters): array
     {
         $base = $this->baseCustomerQuery($filters);
@@ -565,6 +584,7 @@ class ReportsService
         );
     }
 
+    // This summarizes engagement from non-purchase actions like social visits and profile completion.
     private function gamificationEngagementReport(array $filters): array
     {
         [$start, $end] = $this->resolveDateRange($filters);
@@ -609,6 +629,7 @@ class ReportsService
         );
     }
 
+    // This summarizes AI cluster sizes and key metrics.
     private function customerSegmentationClusterOverview(array $filters): array
     {
         $run = $this->latestClusterRun();
@@ -645,6 +666,7 @@ class ReportsService
         );
     }
 
+    // This compares revenue contribution by AI cluster.
     private function clusterRevenueComparison(array $filters): array
     {
         $run = $this->latestClusterRun();
@@ -687,6 +709,7 @@ class ReportsService
         );
     }
 
+    // This reports AI clustering quality metrics such as silhouette score.
     private function clusterQualityMetricsSilhouette(array $filters): array
     {
         $run = $this->latestClusterRun();
@@ -725,6 +748,7 @@ class ReportsService
         );
     }
 
+    // This identifies customers with high recency and low order counts as churn risk.
     private function highRiskChurnCustomers(array $filters): array
     {
         [$start, $end] = $this->resolveDateRange($filters);
@@ -744,6 +768,7 @@ class ReportsService
             $recency = $feature->days_since_last_order ?? 0;
             $orders = $feature->orders_count ?? 0;
             $risk = 'Low';
+            // These thresholds flag customers with long inactivity and low order counts.
             if ($recency >= 90 && $orders <= 1) {
                 $risk = 'High';
             } elseif ($recency >= 60 && $orders <= 2) {
@@ -773,6 +798,7 @@ class ReportsService
         );
     }
 
+    // This builds a cohort table showing retention in subsequent months.
     private function cohortRetentionAnalysis(array $filters): array
     {
         [$start, $end] = $this->resolveDateRange($filters);
@@ -792,6 +818,7 @@ class ReportsService
 
         $cohorts = [];
         foreach ($customers as $customer) {
+            // This groups customers into cohorts based on their signup month.
             if (!$customer->shopify_created_at) {
                 continue;
             }
@@ -806,6 +833,7 @@ class ReportsService
             ];
             $cohorts[$key]['customers']++;
 
+            // This increments retention buckets when the last order falls in month offsets.
             $lastOrder = $features->get($customer->id)?->last_order_at;
             if ($lastOrder) {
                 $lastOrder = Carbon::parse($lastOrder);
@@ -847,6 +875,7 @@ class ReportsService
         );
     }
 
+    // This tracks how many new loyalty customers joined over time.
     private function loyaltyGrowthOverTime(array $filters): array
     {
         [$start, $end] = $this->resolveDateRange($filters);
@@ -883,10 +912,12 @@ class ReportsService
         );
     }
 
+    // This builds a base customer query and applies filter constraints.
     private function baseCustomerQuery(array $filters, bool $applyCustomerType = true): Builder
     {
         $query = Customer::query();
 
+        // This applies a loyalty vs non-loyalty filter when requested.
         if ($applyCustomerType && !empty($filters['customer_type']) && $filters['customer_type'] !== 'all') {
             if ($filters['customer_type'] === 'loyalty') {
                 $this->applyLoyaltyCondition($query, true);
@@ -907,6 +938,7 @@ class ReportsService
             $query->where('orders_count', '>=', $filters['min_orders_count']);
         }
 
+        // This scopes customers to a specific AI cluster when requested.
         if (!empty($filters['cluster'])) {
             $clusterId = $filters['cluster'];
             $query->whereIn('id', function ($sub) use ($clusterId) {
@@ -919,6 +951,7 @@ class ReportsService
         return $query;
     }
 
+    // This applies the loyalty membership definition used across reports.
     private function applyLoyaltyCondition(Builder $query, bool $isLoyalty): Builder
     {
         if ($isLoyalty) {
@@ -937,6 +970,7 @@ class ReportsService
         });
     }
 
+    // This parses and normalizes the requested start and end dates.
     private function resolveDateRange(array $filters): array
     {
         $start = Carbon::parse($filters['start_date'])->startOfDay();
@@ -945,6 +979,7 @@ class ReportsService
         return [$start, $end];
     }
 
+    // This groups date-based rows into evenly spaced buckets for charting.
     private function buildTimeSeries(Collection $rows, Carbon $start, Carbon $end, string $groupBy, string $dateField): array
     {
         $labels = [];
@@ -952,6 +987,7 @@ class ReportsService
 
         $cursor = $start->copy();
         while ($cursor <= $end) {
+            // This advances the cursor based on the chosen grouping interval.
             if ($groupBy === 'week') {
                 $label = $cursor->copy()->startOfWeek()->format('Y-m-d');
                 $cursor = $cursor->copy()->addWeek();
@@ -969,6 +1005,7 @@ class ReportsService
             $labels[] = $label;
         }
 
+        // This groups the rows into the same label buckets used above.
         $grouped = $rows->groupBy(function ($row) use ($groupBy, $dateField) {
             $date = Carbon::parse($row->{$dateField});
             if ($groupBy === 'week') {
@@ -987,6 +1024,7 @@ class ReportsService
         return ['labels' => $labels, 'data' => $data];
     }
 
+    // This returns the most recent completed AI cluster run, or the latest run if none completed.
     private function latestClusterRun(): ?AiClusterRun
     {
         $run = AiClusterRun::query()
@@ -1001,6 +1039,7 @@ class ReportsService
         return $run;
     }
 
+    // This wraps report outputs with a consistent metadata structure.
     private function payload(string $title, array $kpis, array $table, array $chart, array $filters): array
     {
         $sections = $this->buildSections($title, $kpis, $table, $chart, $filters);
@@ -1018,6 +1057,7 @@ class ReportsService
         ];
     }
 
+    // This builds narrative sections used in report exports and explanations.
     private function buildSections(string $title, array $kpis, array $table, array $chart, array $filters): array
     {
         $reportKey = $filters['_report_key'] ?? null;
@@ -1053,6 +1093,7 @@ class ReportsService
         ];
     }
 
+    // This synthesizes a few human-readable insights from KPIs and table data.
     private function buildInsights(array $kpis, array $table): array
     {
         $insights = [];
@@ -1079,6 +1120,7 @@ class ReportsService
         return $insights ?: ['No insights available for the selected filters.'];
     }
 
+    // This provides default methodology notes when a report does not define its own.
     private function defaultMethodology(): array
     {
         return [
@@ -1088,6 +1130,7 @@ class ReportsService
         ];
     }
 
+    // This lists the primary tables used across most reports.
     private function defaultSources(): array
     {
         return [
@@ -1102,6 +1145,7 @@ class ReportsService
         ];
     }
 
+    // This provides report-specific summaries and methodology text for exports.
     private function reportContext(?string $reportKey): array
     {
         return match ($reportKey) {
@@ -1181,6 +1225,7 @@ class ReportsService
         };
     }
 
+    // This formats filters into a compact string for the report summary.
     private function filterSummary(array $filters): string
     {
         return collect($filters)
@@ -1196,6 +1241,7 @@ class ReportsService
             })->implode('; ');
     }
 
+    // This returns a consistent empty report payload when no data exists.
     private function emptyReport(string $title, array $filters, string $message = 'No data available.'): array
     {
         return $this->payload(

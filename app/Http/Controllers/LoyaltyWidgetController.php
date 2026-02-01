@@ -1,5 +1,6 @@
 <?php
 
+// This controller powers the customer-facing loyalty widget API and pages.
 namespace App\Http\Controllers;
 
 use App\Enums\PointsTransactionType;
@@ -25,20 +26,26 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Carbon;
 use Symfony\Component\HttpFoundation\Response;
 
+// This class issues widget tokens, serves customer data, and handles redemptions.
 class LoyaltyWidgetController extends Controller
 {
+    // This injects the rules engine so widget actions can award points.
     public function __construct(private LoyaltyRulesEngine $rulesEngine)
     {
     }
 
+    // This validates a Shopify customer and returns a signed widget token.
     public function token(Request $request, ShopifyCustomerService $shopify): Response
     {
+        // These fields identify the Shopify customer and shop domain.
+        // These validations ensure the profile fields are safe to store.
         $validated = $request->validate([
             'customer_id' => ['required', 'string'],
             'email' => ['required', 'email'],
             'shop_domain' => ['required', 'string'],
         ]);
 
+        // This ensures the request comes from the configured Shopify store.
         $configuredDomain = strtolower((string) config('services.shopify.shop_domain'));
         if ($configuredDomain !== '' && strtolower($validated['shop_domain']) !== $configuredDomain) {
             return $this->corsResponse(
@@ -47,9 +54,11 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
+        // This fetches the Shopify customer to verify identity.
         $shopifyCustomer = $shopify->getCustomer($validated['customer_id']);
         $shopifyEmail = strtolower((string) ($shopifyCustomer['email'] ?? ''));
 
+        // This verifies the email matches Shopify to prevent impersonation.
         if ($shopifyEmail === '' || $shopifyEmail !== strtolower($validated['email'])) {
             return $this->corsResponse(
                 $request,
@@ -57,6 +66,7 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
+        // This mirrors the Shopify customer into the local database.
         $customer = Customer::updateOrCreate(
             ['shopify_id' => (string) $shopifyCustomer['id']],
             [
@@ -72,8 +82,10 @@ class LoyaltyWidgetController extends Controller
             ]
         );
 
+        // This awards welcome points if the customer is new.
         $this->rulesEngine->awardWelcomePoints($customer);
 
+        // This issues a short-lived token the widget can use for API calls.
         $expiresAt = now()->addMinutes(30);
         $payload = [
             'shopify_id' => $customer->shopify_id,
@@ -93,11 +105,13 @@ class LoyaltyWidgetController extends Controller
         );
     }
 
+    // This handles CORS preflight for the token endpoint.
     public function tokenOptions(Request $request): Response
     {
         return $this->corsResponse($request, response()->noContent());
     }
 
+    // This renders the embedded loyalty dashboard for a verified customer.
     public function dashboard(Request $request)
     {
         $token = (string) $request->query('token', '');
@@ -118,6 +132,7 @@ class LoyaltyWidgetController extends Controller
         ]);
     }
 
+    // This renders the mystery box page for a verified customer.
     public function mysteryBoxPage(Request $request)
     {
         $token = (string) $request->query('token', '');
@@ -133,6 +148,7 @@ class LoyaltyWidgetController extends Controller
         ]);
     }
 
+    // This returns core loyalty data for the widget UI.
     public function data(Request $request): Response
     {
         $token = (string) $request->query('token', '');
@@ -162,11 +178,13 @@ class LoyaltyWidgetController extends Controller
         );
     }
 
+    // This handles CORS preflight for the data endpoint.
     public function dataOptions(Request $request): Response
     {
         return $this->corsResponse($request, response()->noContent());
     }
 
+    // This returns the customer's profile fields for the widget form.
     public function profile(Request $request): Response
     {
         $token = (string) $request->query('token', '');
@@ -191,6 +209,7 @@ class LoyaltyWidgetController extends Controller
         );
     }
 
+    // This updates the customer profile in Shopify and locally, awarding profile points.
     public function updateProfile(Request $request, ShopifyCustomerService $shopify): Response
     {
         $token = (string) $request->query('token', '');
@@ -211,6 +230,7 @@ class LoyaltyWidgetController extends Controller
             'phone' => ['nullable', 'string', 'max:40'],
         ]);
 
+        // This merges provided fields with existing values.
         $updates = [
             'first_name' => $validated['first_name'] ?? $customer->first_name,
             'last_name' => $validated['last_name'] ?? $customer->last_name,
@@ -219,6 +239,7 @@ class LoyaltyWidgetController extends Controller
             'phone' => $validated['phone'] ?? $customer->phone,
         ];
 
+        // This normalizes blank phone values to null.
         if (array_key_exists('phone', $validated) && $updates['phone'] !== null) {
             $updates['phone'] = trim((string) $updates['phone']);
             if ($updates['phone'] === '') {
@@ -226,6 +247,7 @@ class LoyaltyWidgetController extends Controller
             }
         }
 
+        // This payload updates the Shopify customer record.
         $shopifyPayload = [
             'first_name' => $updates['first_name'],
             'last_name' => $updates['last_name'],
@@ -237,6 +259,7 @@ class LoyaltyWidgetController extends Controller
         }
 
         try {
+            // This syncs the profile change back to Shopify.
             $shopify->updateCustomer((string) $customer->shopify_id, $shopifyPayload);
         } catch (\Throwable $exception) {
             return $this->corsResponse(
@@ -245,6 +268,7 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
+        // This updates the local customer record and applies any reward rules.
         $customer->fill($updates);
 
         $rule = $this->pointRule();
@@ -262,11 +286,13 @@ class LoyaltyWidgetController extends Controller
         );
     }
 
+    // This handles CORS preflight for the profile endpoint.
     public function profileOptions(Request $request): Response
     {
         return $this->corsResponse($request, response()->noContent());
     }
 
+    // This returns available coupons the customer can redeem.
     public function coupons(Request $request): Response
     {
         $token = (string) $request->query('token', '');
@@ -283,6 +309,7 @@ class LoyaltyWidgetController extends Controller
         $tier = $customer->tier ?? $this->rulesEngine->resolveTier($points);
         $today = now()->toDateString();
 
+        // This selects only active, non-mystery coupons available today and for the tier.
         $coupons = Coupon::query()
             ->where('status', 'active')
             ->where('is_mystery_box_coupon', false)
@@ -324,11 +351,13 @@ class LoyaltyWidgetController extends Controller
         );
     }
 
+    // This handles CORS preflight for the coupons endpoint.
     public function couponsOptions(Request $request): Response
     {
         return $this->corsResponse($request, response()->noContent());
     }
 
+    // This returns coupons already redeemed by the customer.
     public function myCoupons(Request $request): Response
     {
         $token = (string) $request->query('token', '');
@@ -359,16 +388,19 @@ class LoyaltyWidgetController extends Controller
         );
     }
 
+    // This handles CORS preflight for the my-coupons endpoint.
     public function myCouponsOptions(Request $request): Response
     {
         return $this->corsResponse($request, response()->noContent());
     }
 
+    // This handles CORS preflight for social earning endpoints.
     public function earnSocialOptions(Request $request): Response
     {
         return $this->corsResponse($request, response()->noContent());
     }
 
+    // This redeems a coupon by spending points and creating a Shopify discount code.
     public function redeemCoupon(Request $request, Coupon $coupon, ShopifyDiscountService $shopifyDiscounts): Response
     {
         $token = (string) $request->query('token', '');
@@ -386,6 +418,7 @@ class LoyaltyWidgetController extends Controller
         $tier = $customer->tier ?? $this->rulesEngine->resolveTier((int) ($customer->loyalty_points ?? 0));
         $tierId = $tier?->id;
 
+        // These checks enforce coupon availability and eligibility.
         if ($coupon->status !== 'active') {
             return $this->corsResponse(
                 $request,
@@ -421,6 +454,7 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
+        // This transaction spends points and creates the coupon redemption.
         $updated = DB::transaction(function () use ($customer, $pointsCost, $coupon, $shopifyDiscounts) {
             $lockedCustomer = Customer::query()
                 ->whereKey($customer->id)
@@ -431,11 +465,13 @@ class LoyaltyWidgetController extends Controller
                 return [null, 'Customer not found.', null];
             }
 
+            // This prevents redemptions when points are insufficient.
             $currentPoints = (int) ($lockedCustomer->loyalty_points ?? 0);
             if ($currentPoints < $pointsCost) {
                 return [null, 'Not enough points to redeem this coupon.', null];
             }
 
+            // This generates a unique code and creates it in Shopify.
             $code = $this->generateRedeemCode($coupon);
 
             try {
@@ -444,9 +480,11 @@ class LoyaltyWidgetController extends Controller
                 return [null, $exception->getMessage(), null];
             }
 
+            // This updates the customer's points balance after redemption.
             $lockedCustomer->loyalty_points = $currentPoints - $pointsCost;
             $lockedCustomer->save();
 
+            // This records the redemption locally for future use.
             $record = CustomerCoupon::create([
                 'customer_id' => $lockedCustomer->id,
                 'coupon_id' => $coupon->id,
@@ -458,6 +496,7 @@ class LoyaltyWidgetController extends Controller
                 'expires_at' => $coupon->end_date,
             ]);
 
+            // This logs the points spend in the transaction ledger.
             PointsTransaction::create([
                 'customer_id' => $lockedCustomer->id,
                 'points' => $pointsCost,
@@ -496,6 +535,7 @@ class LoyaltyWidgetController extends Controller
         );
     }
 
+    // This returns the customer's coupons for the embedded widget.
     public function widgetMyCoupons(Request $request): Response
     {
         $token = (string) $request->query('token', '');
@@ -524,6 +564,7 @@ class LoyaltyWidgetController extends Controller
         );
     }
 
+    // This returns details for a single redemption, scoped to the customer.
     public function widgetMyCouponDetail(Request $request, CustomerCoupon $redemption): Response
     {
         $token = (string) $request->query('token', '');
@@ -553,6 +594,7 @@ class LoyaltyWidgetController extends Controller
         );
     }
 
+    // This returns the active mystery box status for the customer tier.
     public function mysteryBoxActive(Request $request): Response
     {
         $token = (string) $request->query('token', '');
@@ -569,6 +611,7 @@ class LoyaltyWidgetController extends Controller
         $tier = $customer->tier ?? $this->rulesEngine->resolveTier($points);
         $tierId = $tier?->id;
 
+        // A tier is required to determine which mystery box applies.
         if (!$tierId) {
             return $this->corsResponse(
                 $request,
@@ -576,6 +619,7 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
+        // This selects the latest active mystery box for the tier.
         $box = $this->findActiveMysteryBoxForTier($tierId);
         if (!$box) {
             return $this->corsResponse(
@@ -584,6 +628,7 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
+        // This checks claim eligibility based on prior redemptions.
         $eligibility = $this->mysteryBoxEligibility($customer->id, $box);
         $items = $box->items()->with('coupon')->get();
 
@@ -608,6 +653,7 @@ class LoyaltyWidgetController extends Controller
         );
     }
 
+    // This claims a mystery box reward and issues a coupon or points award.
     public function mysteryBoxClaim(Request $request, MysteryBox $mysteryBox, ShopifyDiscountService $shopifyDiscounts): Response
     {
         $token = (string) $request->query('token', '');
@@ -624,6 +670,7 @@ class LoyaltyWidgetController extends Controller
         $tier = $customer->tier ?? $this->rulesEngine->resolveTier($points);
         $tierId = $tier?->id;
 
+        // The customer must have a tier to claim a mystery box.
         if (!$tierId) {
             return $this->corsResponse(
                 $request,
@@ -631,6 +678,7 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
+        // This enforces that the selected box is currently active and allowed.
         if (!$this->isMysteryBoxActive($mysteryBox, $tierId)) {
             return $this->corsResponse(
                 $request,
@@ -638,6 +686,7 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
+        // This enforces claim limits such as once per day or once ever.
         $eligibility = $this->mysteryBoxEligibility($customer->id, $mysteryBox);
         if (!$eligibility['can_claim']) {
             return $this->corsResponse(
@@ -651,6 +700,7 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
+        // A mystery box without rewards cannot be claimed.
         $items = $mysteryBox->items()->with('coupon')->get();
         if ($items->isEmpty()) {
             return $this->corsResponse(
@@ -659,6 +709,7 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
+        // This randomly selects a reward item using the configured weights.
         $selectedItem = $this->pickMysteryBoxItem($items);
         $coupon = $selectedItem?->coupon;
         if (!$coupon || !$coupon->shopify_price_rule_id) {
@@ -668,6 +719,7 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
+        // This creates a unique discount code in Shopify for the reward.
         $code = $this->generateRedeemCode($coupon);
 
         try {
@@ -679,6 +731,7 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
+        // This records the reward redemption locally for tracking.
         $record = CustomerCoupon::create([
             'customer_id' => $customer->id,
             'coupon_id' => $coupon->id,
@@ -710,32 +763,39 @@ class LoyaltyWidgetController extends Controller
         );
     }
 
+    // This handles CORS preflight for the mystery box claim endpoint.
     public function mysteryBoxClaimOptions(Request $request): Response
     {
         return $this->corsResponse($request, response()->noContent());
     }
 
+    // This decrypts the widget token and returns the matching customer or an error.
     private function customerFromToken(string $token): array
     {
+        // A missing token cannot be authenticated.
         if ($token === '') {
             return [null, 'Missing token.'];
         }
 
         try {
+            // This decrypts and parses the token payload.
             $payload = json_decode(Crypt::decryptString($token), true, 512, JSON_THROW_ON_ERROR);
         } catch (\Throwable $exception) {
             return [null, 'Invalid or expired token.'];
         }
 
+        // This ensures the payload has the minimum required fields.
         if (!is_array($payload) || empty($payload['shopify_id'])) {
             return [null, 'Invalid token payload.'];
         }
 
+        // This rejects expired tokens.
         $expiresAt = (int) ($payload['expires_at'] ?? 0);
         if ($expiresAt < now()->timestamp) {
             return [null, 'Token expired. Please refresh the widget.'];
         }
 
+        // This resolves the customer record for the widget session.
         $customer = Customer::where('shopify_id', (string) $payload['shopify_id'])->first();
         if (!$customer) {
             return [null, 'Customer not found.'];
@@ -744,10 +804,12 @@ class LoyaltyWidgetController extends Controller
         return [$customer, null];
     }
 
+    // This applies CORS headers when the request comes from the configured store.
     private function corsResponse(Request $request, Response $response): Response
     {
         $origin = $this->allowedOrigin($request);
 
+        // These headers allow the widget to call the API from the storefront.
         if ($origin) {
             $response->headers->set('Access-Control-Allow-Origin', $origin);
             $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -759,6 +821,7 @@ class LoyaltyWidgetController extends Controller
         return $response;
     }
 
+    // This fetches the point rule configuration, creating defaults if missing.
     private function pointRule(): PointRule
     {
         return PointRule::query()->firstOrCreate([], [
@@ -769,6 +832,7 @@ class LoyaltyWidgetController extends Controller
         ]);
     }
 
+    // This returns current earning rules and social link settings.
     public function earnRules(Request $request): Response
     {
         $rule = $this->pointRule();
@@ -812,6 +876,7 @@ class LoyaltyWidgetController extends Controller
         );
     }
 
+    // This returns the customer's current earning status and history flags.
     public function earnStatus(Request $request): Response
     {
         $token = (string) $request->query('token', '');
@@ -824,6 +889,7 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
+        // This checks which social rewards were already claimed.
         $socialPlatforms = ['linkedin', 'tiktok', 'facebook', 'x', 'instagram', 'youtube'];
         $socialAwarded = [];
         foreach ($socialPlatforms as $platform) {
@@ -834,11 +900,13 @@ class LoyaltyWidgetController extends Controller
                 ->exists();
         }
 
+        // This checks whether the welcome bonus was already awarded.
         $welcomeAwarded = PointsTransaction::query()
             ->where('customer_id', $customer->id)
             ->where('event_key', 'welcome_bonus')
             ->exists();
 
+        // This checks whether a birthday reward was given in the current year.
         $birthdayAwarded = false;
         if ($customer->birthday_rewarded_at) {
             $birthdayAwarded = $customer->birthday_rewarded_at->format('Y') === now()->format('Y');
@@ -857,6 +925,7 @@ class LoyaltyWidgetController extends Controller
         );
     }
 
+    // This awards points for a social platform visit when configured.
     public function earnSocial(Request $request): Response
     {
         $token = (string) $request->query('token', '');
@@ -895,6 +964,7 @@ class LoyaltyWidgetController extends Controller
         );
     }
 
+    // This returns paginated points history entries for the customer.
     public function pointsHistory(Request $request): Response
     {
         $token = (string) $request->query('token', '');
@@ -939,6 +1009,7 @@ class LoyaltyWidgetController extends Controller
         );
     }
 
+    // This returns eligible exclusive chat messages for the customer.
     public function chatMessages(Request $request): Response
     {
         $token = (string) $request->query('token', '');
@@ -956,6 +1027,7 @@ class LoyaltyWidgetController extends Controller
             ['enabled' => false, 'allowed_tiers' => []]
         );
 
+        // This short-circuits when the chat feature is disabled.
         if (!$settings->enabled) {
             return $this->corsResponse(
                 $request,
@@ -966,6 +1038,7 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
+        // This enforces tier eligibility for exclusive chat.
         $points = (int) ($customer->loyalty_points ?? 0);
         $tier = $customer->tier ?? $this->rulesEngine->resolveTier($points);
         $tierId = (int) ($tier?->id ?? 0);
@@ -981,6 +1054,7 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
+        // These pagination controls limit payload size for the widget.
         $limit = (int) $request->query('limit', 30);
         $limit = $limit > 0 ? min($limit, 50) : 30;
         $cursor = (int) $request->query('cursor', 0);
@@ -995,6 +1069,7 @@ class LoyaltyWidgetController extends Controller
             ->orderByDesc('sent_at')
             ->orderByDesc('id');
 
+        // This cursor paginates backwards by message ID.
         if ($cursor > 0) {
             $query->where('id', '<', $cursor);
         }
@@ -1004,6 +1079,7 @@ class LoyaltyWidgetController extends Controller
 
         $votes = [];
         if ($pollIds) {
+            // This preloads the customer's votes for the returned polls.
             $votes = ChatPollVote::query()
                 ->where('customer_id', $customer->id)
                 ->whereIn('chat_poll_id', $pollIds)
@@ -1012,6 +1088,7 @@ class LoyaltyWidgetController extends Controller
         }
 
         $data = $messages->map(function (ChatMessage $message) use ($votes) {
+            // This formats messages into the payload expected by the widget.
             $payload = [
                 'id' => $message->id,
                 'type' => $message->type,
@@ -1032,6 +1109,7 @@ class LoyaltyWidgetController extends Controller
             ];
 
             if ($message->poll) {
+                // This adds poll details and the customer's existing vote if any.
                 $vote = $votes[$message->poll->id] ?? null;
                 $payload['poll'] = [
                     'poll_id' => $message->poll->id,
@@ -1049,6 +1127,7 @@ class LoyaltyWidgetController extends Controller
             return $payload;
         })->values();
 
+        // This uses the last ID as the next cursor when the page is full.
         $nextCursor = $messages->count() === $limit ? $messages->last()?->id : null;
 
         return $this->corsResponse(
@@ -1064,6 +1143,7 @@ class LoyaltyWidgetController extends Controller
         );
     }
 
+    // This records a poll vote if the customer is eligible.
     public function chatPollVote(Request $request, ChatPoll $poll): Response
     {
         $token = (string) $request->query('token', '');
@@ -1092,6 +1172,7 @@ class LoyaltyWidgetController extends Controller
             ['store_id' => null],
             ['enabled' => false, 'allowed_tiers' => []]
         );
+        // This blocks voting when the chat feature is disabled.
         if (!$settings->enabled) {
             return $this->corsResponse(
                 $request,
@@ -1103,6 +1184,7 @@ class LoyaltyWidgetController extends Controller
         $tier = $customer->tier ?? $this->rulesEngine->resolveTier($points);
         $tierId = (int) ($tier?->id ?? 0);
         $allowedTiers = array_map('intval', $settings->allowed_tiers ?? []);
+        // This checks tier eligibility for voting.
         if (!$tierId || ($allowedTiers && !in_array($tierId, $allowedTiers, true))) {
             return $this->corsResponse(
                 $request,
@@ -1111,6 +1193,7 @@ class LoyaltyWidgetController extends Controller
         }
 
         $visibility = array_map('intval', $poll->message->tier_visibility ?? []);
+        // This enforces message-specific visibility rules.
         if ($visibility && !in_array($tierId, $visibility, true)) {
             return $this->corsResponse(
                 $request,
@@ -1118,6 +1201,7 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
+        // This prevents voting on closed polls.
         if ($poll->closes_at && $poll->closes_at->isPast()) {
             return $this->corsResponse(
                 $request,
@@ -1125,6 +1209,7 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
+        // This prevents duplicate votes for the same poll.
         $existing = ChatPollVote::query()
             ->where('chat_poll_id', $poll->id)
             ->where('customer_id', $customer->id)
@@ -1141,6 +1226,7 @@ class LoyaltyWidgetController extends Controller
         }
 
         $optionId = (int) $validated['option_id'];
+        // This confirms the selected option belongs to this poll.
         if (!$poll->options()->where('id', $optionId)->exists()) {
             return $this->corsResponse(
                 $request,
@@ -1148,6 +1234,7 @@ class LoyaltyWidgetController extends Controller
             );
         }
 
+        // This creates the vote record.
         ChatPollVote::create([
             'store_id' => null,
             'chat_poll_id' => $poll->id,
@@ -1165,11 +1252,13 @@ class LoyaltyWidgetController extends Controller
         );
     }
 
+    // This handles CORS preflight for poll voting.
     public function chatPollVoteOptions(Request $request): Response
     {
         return $this->corsResponse($request, response()->noContent());
     }
 
+    // This returns the allowed CORS origin if it matches the configured shop domain.
     private function allowedOrigin(Request $request): ?string
     {
         $origin = $request->headers->get('Origin');
@@ -1189,9 +1278,11 @@ class LoyaltyWidgetController extends Controller
         return strcasecmp($origin, $allowedOrigin) === 0 ? $origin : null;
     }
 
+    // This determines a normalized redemption status for a coupon record.
     private function resolveRedemptionStatus(CustomerCoupon $record, $expiresAt = null): string
     {
         $status = strtolower((string) $record->status);
+        // Used takes precedence when either status or timestamp indicates usage.
         if ($status === 'used' || $record->used_at) {
             return 'used';
         }
@@ -1200,6 +1291,7 @@ class LoyaltyWidgetController extends Controller
             return 'expired';
         }
 
+        // This treats past expiration as expired even if status was not updated.
         $expiry = $expiresAt ? Carbon::parse($expiresAt) : null;
         if ($expiry && $expiry->isPast()) {
             return 'expired';
@@ -1212,6 +1304,7 @@ class LoyaltyWidgetController extends Controller
         return 'unused';
     }
 
+    // This formats a coupon redemption into the widget-friendly payload.
     private function formatRedemption(CustomerCoupon $record): array
     {
         $coupon = $record->coupon;
@@ -1232,6 +1325,7 @@ class LoyaltyWidgetController extends Controller
         ];
     }
 
+    // This builds a human-readable label for the coupon's value.
     private function formatCouponValueLabel(Coupon $coupon): string
     {
         if ($coupon->type === 'free-shipping') {
@@ -1244,6 +1338,7 @@ class LoyaltyWidgetController extends Controller
             return "Buy {$buyQty} get {$getQty}";
         }
 
+        // This formats fixed and percentage values into a readable label.
         $value = (float) ($coupon->value ?? 0);
         if ($coupon->value_type === 'percentage') {
             $label = rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.').'%';
@@ -1258,11 +1353,13 @@ class LoyaltyWidgetController extends Controller
         return $label.$suffix;
     }
 
+    // This generates a unique, readable coupon code for Shopify.
     private function generateRedeemCode(Coupon $coupon): string
     {
         $prefix = strtoupper(Str::slug($coupon->title));
         $prefix = substr(preg_replace('/[^A-Z0-9]/', '', $prefix), 0, 8);
 
+        // This retries to avoid collisions with existing codes.
         for ($attempt = 0; $attempt < 5; $attempt++) {
             $code = trim($prefix.'-'.strtoupper(Str::random(8)), '-');
             $exists = Coupon::where('code', $code)->exists()
@@ -1272,13 +1369,16 @@ class LoyaltyWidgetController extends Controller
             }
         }
 
+        // This fallback uses a fully random code if all attempts collide.
         return strtoupper(Str::random(12));
     }
 
+    // This finds the most recent active mystery box for a specific tier.
     private function findActiveMysteryBoxForTier(int $tierId): ?MysteryBox
     {
         $now = now();
 
+        // This picks the newest active box within the date window and tier list.
         return MysteryBox::query()
             ->where('is_active', true)
             ->where(function ($query) use ($now) {
@@ -1294,13 +1394,16 @@ class LoyaltyWidgetController extends Controller
             ->first();
     }
 
+    // This checks if a mystery box is active and available to the given tier.
     private function isMysteryBoxActive(MysteryBox $box, int $tierId): bool
     {
+        // The box must be flagged as active to be available.
         if (!$box->is_active) {
             return false;
         }
 
         $now = now();
+        // This enforces the start and end windows if configured.
         if ($box->starts_at && $box->starts_at->gt($now)) {
             return false;
         }
@@ -1308,6 +1411,7 @@ class LoyaltyWidgetController extends Controller
             return false;
         }
 
+        // This enforces tier eligibility based on the box configuration.
         $tierIds = array_map('intval', $box->tiers ?? []);
         if ($tierIds && !in_array($tierId, $tierIds, true)) {
             return false;
@@ -1316,8 +1420,10 @@ class LoyaltyWidgetController extends Controller
         return true;
     }
 
+    // This evaluates claim limits and returns whether the customer can claim now.
     private function mysteryBoxEligibility(int $customerId, MysteryBox $box): array
     {
+        // This finds the most recent claim for this customer and box.
         $lastClaim = CustomerCoupon::query()
             ->where('customer_id', $customerId)
             ->where('source', SourceType::MYSTERY_BOX->value)
@@ -1331,6 +1437,7 @@ class LoyaltyWidgetController extends Controller
 
         $lastClaimAt = Carbon::parse($lastClaim->redeemed_at);
         $rule = strtoupper((string) $box->claim_rule);
+        // This enforces the claim rule configured on the box.
         if ($rule === 'ONCE_EVER') {
             return ['can_claim' => false, 'next_claim_at' => null];
         }
@@ -1350,8 +1457,10 @@ class LoyaltyWidgetController extends Controller
         ];
     }
 
+    // This selects a mystery box item based on weight, with safe fallbacks.
     private function pickMysteryBoxItem($items)
     {
+        // This computes total weight to drive weighted randomness.
         $totalWeight = $items->sum(function ($item) {
             return (int) ($item->weight ?? 1);
         });
@@ -1360,6 +1469,7 @@ class LoyaltyWidgetController extends Controller
             return $items->random();
         }
 
+        // This chooses a weighted random item based on cumulative weights.
         $target = random_int(1, $totalWeight);
         $running = 0;
         foreach ($items as $item) {

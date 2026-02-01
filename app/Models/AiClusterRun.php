@@ -1,12 +1,15 @@
 <?php
 
+// This model records metadata for each AI clustering run.
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+// This class stores run status, metrics, and configuration snapshots.
 class AiClusterRun extends Model
 {
+    // These fields are mass assignable from clustering jobs.
     protected $fillable = [
         'status',
         'started_at',
@@ -30,6 +33,7 @@ class AiClusterRun extends Model
         'error_message',
     ];
 
+    // These casts normalize metrics, timestamps, and JSON blobs.
     protected $casts = [
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
@@ -51,11 +55,13 @@ class AiClusterRun extends Model
         'params' => 'array',
     ];
 
+    // This links a run to its generated clusters.
     public function clusters(): HasMany
     {
         return $this->hasMany(AiCluster::class);
     }
 
+    // This links a run to its clustered customer assignments.
     public function customers(): HasMany
     {
         return $this->hasMany(AiClusterCustomer::class);

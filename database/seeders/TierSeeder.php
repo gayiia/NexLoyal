@@ -1,16 +1,21 @@
 <?php
 
+// This seeder inserts default loyalty tiers for the app.
 namespace Database\Seeders;
 
 use App\Models\Tier;
 use Illuminate\Database\Seeder;
 
+// This class seeds a baseline set of tiers with point ranges.
 class TierSeeder extends Seeder
 {
+    // This wipes existing tiers and inserts the default set.
     public function run(): void
     {
+        // This ensures a clean slate before inserting defaults.
         Tier::query()->delete();
 
+        // These rows define the initial tier thresholds and labels.
         Tier::insert([
             [
                 'title' => 'Bronze',

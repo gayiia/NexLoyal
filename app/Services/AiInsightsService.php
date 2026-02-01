@@ -1,5 +1,6 @@
 <?php
 
+// This service prepares customer features for AI clustering and calls the AI service for training and predictions.
 namespace App\Services;
 
 use App\Enums\SourceType;
@@ -10,14 +11,18 @@ use App\Models\PointsTransaction;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
+// This class centralizes AI feature engineering for customers and delegates model requests to the AI client.
 class AiInsightsService
 {
+    // This injects the AI client so feature preparation and model calls stay testable and consistent.
     public function __construct(private AiClusterClient $client)
     {
     }
 
+    // This builds feature vectors from customer activity and optionally persists them for later reuse.
     public function computeCustomerFeatures(bool $persist = true): array
     {
+        // These configuration values define which features exist and how they are scaled for clustering.
         $featureKeys = (array) config('ai.feature_keys', []);
         $logTransforms = (array) config('ai.log_transforms', []);
         $outlierQuantile = (float) config('ai.outlier_cap_quantile', 0.99);
@@ -25,8 +30,10 @@ class AiInsightsService
         $excludeRefundOnly = (bool) config('ai.exclude_refund_only_customers', true);
         $newCustomerRecency = (int) config('ai.new_customer_recency_days', 365);
 
+        // This loads all customers to compute a full feature set in one pass.
         $customers = Customer::query()->get();
 
+        // This aggregates points earned and spent per customer for feature generation.
         $pointsTotals = PointsTransaction::query()
             ->select('customer_id', DB::raw('SUM(CASE WHEN type = "EARN" AND points > 0 THEN points ELSE 0 END) as earned'))
             ->selectRaw('SUM(CASE WHEN type = "SPEND" THEN points ELSE 0 END) as spent')
@@ -34,11 +41,13 @@ class AiInsightsService
             ->get()
             ->keyBy('customer_id');
 
+        // This counts how many coupons each customer has redeemed.
         $redeemedTotals = CustomerCoupon::query()
             ->select('customer_id', DB::raw('COUNT(*) as total'))
             ->groupBy('customer_id')
             ->pluck('total', 'customer_id');
 
+        // This captures the most recent order date to compute recency features.
         $lastOrderTotals = PointsTransaction::query()
             ->select('customer_id', DB::raw('MAX(created_at) as last_order_at'))
             ->where('source_type', SourceType::ORDER->value)
@@ -50,29 +59,36 @@ class AiInsightsService
         $excluded = [];
 
         foreach ($customers as $customer) {
+            // These basic values are read from the customer record and normalized into numeric features.
             $ordersCount = (int) ($customer->orders_count ?? 0);
             $totalSpent = (float) ($customer->total_spent ?? 0);
             $avgOrderValue = $ordersCount > 0 ? ($totalSpent / $ordersCount) : 0.0;
 
+            // This pulls in the aggregated points totals if they exist.
             $points = $pointsTotals[$customer->id] ?? null;
             $pointsEarned = (int) ($points?->earned ?? 0);
             $pointsSpent = (int) ($points?->spent ?? 0);
 
+            // These values represent engagement through coupons and existing loyalty balance.
             $redeemedCoupons = (int) ($redeemedTotals[$customer->id] ?? 0);
             $loyaltyPoints = (int) ($customer->loyalty_points ?? 0);
             $pointsPending = (int) ($customer->points_pending ?? 0);
 
+            // This computes recency based on the last order timestamp or a default for new customers.
             $lastOrderRaw = $lastOrderTotals[$customer->id] ?? null;
             $lastOrderAt = $lastOrderRaw ? Carbon::parse($lastOrderRaw) : null;
             $daysSinceLastOrder = $lastOrderAt ? $lastOrderAt->diffInDays(now()) : $newCustomerRecency;
 
+            // This captures how long the customer has existed in Shopify if the data is present.
             $tenureDays = $customer->shopify_created_at
                 ? Carbon::parse($customer->shopify_created_at)->diffInDays(now())
                 : null;
 
+            // These flags are used to optionally exclude customers from clustering.
             $isNewCustomer = $ordersCount === 0 && $totalSpent <= 0 && $pointsEarned <= 0 && $redeemedCoupons <= 0;
             $isRefundOnly = $ordersCount > 0 && $totalSpent <= 0 && $pointsEarned <= 0;
 
+            // This selects the first matching exclusion reason to keep downstream logic simple.
             $excludedReason = null;
             if ($excludeZeroActivity && $isNewCustomer) {
                 $excludedReason = 'no_activity';
@@ -80,6 +96,7 @@ class AiInsightsService
                 $excludedReason = 'refund_only';
             }
 
+            // This raw feature map is used both for persistence and for vector generation.
             $raw = [
                 'orders_count' => $ordersCount,
                 'total_spent' => $totalSpent,
@@ -93,13 +110,16 @@ class AiInsightsService
             ];
 
             if (!$excludedReason) {
+                // This collects values per feature to compute outlier caps later.
                 foreach ($featureKeys as $key) {
                     $featureBuckets[$key][] = $raw[$key] ?? 0;
                 }
             } else {
+                // This tracks excluded customers so UI and logging can explain missing predictions.
                 $excluded[$customer->id] = $excludedReason;
             }
 
+            // This stores per-customer data for later transformation and optional persistence.
             $rows[$customer->id] = [
                 'customer' => $customer,
                 'raw' => $raw,
@@ -113,6 +133,7 @@ class AiInsightsService
 
         $caps = [];
         foreach ($featureKeys as $key) {
+            // This caps extreme values so clustering is less sensitive to outliers.
             $caps[$key] = $this->percentile($featureBuckets[$key] ?? [], $outlierQuantile);
         }
 
@@ -125,6 +146,7 @@ class AiInsightsService
             $raw = $payload['raw'];
             $features = [];
             foreach ($featureKeys as $key) {
+                // This applies per-feature capping and optional log transform to stabilize distributions.
                 $value = (float) ($raw[$key] ?? 0);
                 $cap = (float) ($caps[$key] ?? $value);
                 $capped = $cap > 0 ? min($value, $cap) : $value;
@@ -134,6 +156,7 @@ class AiInsightsService
             }
 
             if ($persist) {
+                // This stores the computed features for reporting and future AI runs.
                 CustomerFeature::updateOrCreate(
                     ['customer_id' => $customerId],
                     [
@@ -158,6 +181,7 @@ class AiInsightsService
             }
 
             if (!$payload['excluded_reason']) {
+                // This builds the final dataset sent to the clustering service.
                 $customerIds[] = $customerId;
                 $vectors[] = array_values(array_map(fn ($key) => (float) ($features[$key] ?? 0), $featureKeys));
                 $snapshots[$customerId] = [
@@ -182,6 +206,7 @@ class AiInsightsService
         ];
     }
 
+    // This sends the prepared vectors and metadata to the AI service to train clustering.
     public function train(array $vectors, array $featureKeys, array $caps, array $logTransforms): array
     {
         return $this->client->train([
@@ -197,8 +222,10 @@ class AiInsightsService
         ]);
     }
 
+    // This predicts a cluster for a single customer using their stored feature vector.
     public function predictForCustomer(int $customerId): array
     {
+        // This loads the stored feature record and fails fast if it is missing.
         $feature = CustomerFeature::query()
             ->where('customer_id', $customerId)
             ->first();
@@ -207,10 +234,12 @@ class AiInsightsService
             throw new \RuntimeException('Customer features not found.');
         }
         if ($feature->is_excluded) {
+            // This preserves the exclusion reason so callers can show meaningful messages.
             $reason = $feature->excluded_reason ?: 'excluded';
             throw new \RuntimeException("Customer is excluded from AI predictions ({$reason}).");
         }
 
+        // This reconstructs the raw feature values from the stored record.
         $featureKeys = (array) config('ai.feature_keys', []);
         $raw = [
             'orders_count' => (int) $feature->orders_count,
@@ -226,16 +255,20 @@ class AiInsightsService
 
         $vector = [];
         foreach ($featureKeys as $key) {
+            // This preserves feature ordering expected by the AI service.
             $vector[] = (float) ($raw[$key] ?? 0);
         }
 
+        // This calls the AI service for a single-customer prediction.
         return $this->client->predict([
             'features' => $vector,
         ]);
     }
 
+    // This computes a simple percentile to cap outliers without heavy statistics dependencies.
     private function percentile(array $values, float $percentile): float
     {
+        // This filters out nulls because missing values are not meaningful for percentile math.
         $filtered = array_values(array_filter($values, function ($value) {
             return $value !== null;
         }));
@@ -244,6 +277,7 @@ class AiInsightsService
             return 0.0;
         }
 
+        // This uses a nearest-rank approach with zero-based indexing.
         sort($filtered, SORT_NUMERIC);
         $index = (int) floor(($percentile * (count($filtered) - 1)));
         return (float) $filtered[$index];

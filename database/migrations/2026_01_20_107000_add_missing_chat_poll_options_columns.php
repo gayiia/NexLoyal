@@ -1,5 +1,6 @@
 <?php
 
+// This migration backfills missing columns on chat_poll_options.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,10 +9,12 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // This avoids running when the base table is missing.
         if (!Schema::hasTable('chat_poll_options')) {
             return;
         }
 
+        // These flags determine which columns still need to be added.
         $addPollId = !Schema::hasColumn('chat_poll_options', 'chat_poll_id');
         $addLabel = !Schema::hasColumn('chat_poll_options', 'label');
         $addSortOrder = !Schema::hasColumn('chat_poll_options', 'sort_order');
@@ -25,6 +28,7 @@ return new class extends Migration
             $addCreatedAt,
             $addUpdatedAt
         ) {
+            // Each column is added only if missing to prevent migration errors.
             if ($addPollId) {
                 $table->unsignedBigInteger('chat_poll_id')->nullable();
             }

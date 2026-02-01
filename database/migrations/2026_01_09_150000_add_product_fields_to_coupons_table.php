@@ -1,5 +1,6 @@
 <?php
 
+// This migration adds product-specific fields for coupon targeting.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,6 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // These checks add product selection fields when missing.
         if (!Schema::hasColumn('coupons', 'product_ids')) {
             Schema::table('coupons', function (Blueprint $table) {
                 $table->json('product_ids')->nullable()->after('status');
@@ -37,6 +39,7 @@ return new class extends Migration
 
     public function down(): void
     {
+        // This removes the product-related columns when present.
         $columns = [
             'product_ids',
             'buy_product_ids',

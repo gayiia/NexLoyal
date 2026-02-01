@@ -1,10 +1,13 @@
+{{-- This widget view shows a customer's loyalty summary and quick actions. --}}
 <!doctype html>
 <html lang="en">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- The title is simple because this page is embedded in the widget. --}}
         <title>Loyalty Dashboard</title>
         <style>
+            {{-- These styles are self-contained to avoid Shopify theme conflicts. --}}
             :root {
                 color-scheme: light;
             }
@@ -97,9 +100,11 @@
     <body>
         <div class="page">
             <div class="card">
+                {{-- If data cannot be loaded, show a single error message. --}}
                 @if (!empty($error))
                     <div class="error">{{ $error }}</div>
                 @else
+                    {{-- Greeting uses the customer's name when available. --}}
                     <div class="header">
                         <h1>Welcome back, {{ $customer->full_name ?: 'Customer' }}</h1>
                         <div class="muted">{{ $customer->email }}</div>
@@ -115,10 +120,12 @@
                         </div>
                         <div class="stat">
                             <h3>Total spent</h3>
+                            {{-- Currency prefix is shown when the store provides one. --}}
                             <div class="value">{{ $customer->currency ? $customer->currency.' ' : '' }}{{ number_format((float) $customer->total_spent, 2) }}</div>
                         </div>
                     </div>
                     <div class="section-title">Your Loyalty Hub</div>
+                    {{-- These cards act as navigation hints for the widget experience. --}}
                     <div class="card-grid">
                         <div class="mini-card">
                             <h4>Complete your profile</h4>

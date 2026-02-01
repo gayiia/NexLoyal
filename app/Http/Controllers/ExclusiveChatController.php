@@ -1,5 +1,6 @@
 <?php
 
+// This controller manages the exclusive chat feature for admin users.
 namespace App\Http\Controllers;
 
 use App\Models\ChatAttachment;
@@ -14,13 +15,17 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
+// This class handles chat message creation, settings, and exports.
 class ExclusiveChatController extends Controller
 {
+    // This lists chat messages and loads settings for the main chat page.
     public function index(Request $request)
     {
+        // This loads the current feature settings and available tiers.
         $settings = $this->getSettings();
         $tiers = Tier::query()->orderBy('min_points')->get();
 
+        // This fetches recent messages with related attachments and polls.
         $messages = ChatMessage::query()
             ->with(['attachments', 'poll.options'])
             ->orderByDesc('sent_at')
@@ -35,6 +40,7 @@ class ExclusiveChatController extends Controller
         ]);
     }
 
+    // This shows the exclusive chat settings page.
     public function settings()
     {
         $settings = $this->getSettings();
@@ -46,14 +52,17 @@ class ExclusiveChatController extends Controller
         ]);
     }
 
+    // This updates whether chat is enabled and which tiers are allowed.
     public function updateSettings(Request $request)
     {
+        // These validations ensure tiers exist and enabled is a boolean.
         $validated = $request->validate([
             'enabled' => ['nullable', 'boolean'],
             'allowed_tiers' => ['nullable', 'array'],
             'allowed_tiers.*' => ['integer', 'exists:tiers,id'],
         ]);
 
+        // This persists the settings for the global store scope.
         $settings = $this->getSettings();
         $settings->update([
             'enabled' => $request->boolean('enabled'),
@@ -63,8 +72,10 @@ class ExclusiveChatController extends Controller
         return redirect()->route('exclusive-chat.settings');
     }
 
+    // This stores a new chat message, including poll setup and attachments.
     public function storeMessage(Request $request)
     {
+        // These validations enforce message types and attachment limits.
         $validated = $request->validate([
             'type' => ['required', 'in:TEXT,POLL'],
             'title' => ['nullable', 'string', 'max:255'],
@@ -78,6 +89,7 @@ class ExclusiveChatController extends Controller
             'closes_at' => ['nullable', 'date'],
         ]);
 
+        // Polls require 2-6 options and at least one image attachment.
         $pollOptions = [];
         if ($validated['type'] === 'POLL') {
             $pollOptions = array_values(array_filter(array_map(function ($option) {
@@ -93,7 +105,9 @@ class ExclusiveChatController extends Controller
             }
         }
 
+        // This keeps message, attachments, and poll creation in a single transaction.
         return DB::transaction(function () use ($validated, $request, $pollOptions) {
+            // This creates the chat message record first.
             $message = ChatMessage::create([
                 'store_id' => null,
                 'type' => $validated['type'],
@@ -103,6 +117,7 @@ class ExclusiveChatController extends Controller
                 'sent_at' => now(),
             ]);
 
+            // This stores any uploaded images and links them to the message.
             $files = $request->file('attachments', []);
             $attachments = [];
             foreach ($files as $index => $file) {
@@ -123,6 +138,7 @@ class ExclusiveChatController extends Controller
                 ChatAttachment::insert($attachments);
             }
 
+            // This creates poll records only for poll messages.
             if ($message->type === 'POLL') {
                 $poll = ChatPoll::create([
                     'chat_message_id' => $message->id,
@@ -130,6 +146,7 @@ class ExclusiveChatController extends Controller
                     'closes_at' => $validated['closes_at'] ?? null,
                 ]);
 
+                // This inserts poll options in their display order.
                 $optionRows = [];
                 foreach ($pollOptions as $index => $label) {
                     $optionRows[] = [
@@ -147,6 +164,7 @@ class ExclusiveChatController extends Controller
         });
     }
 
+    // This shows a single poll message and its aggregated results.
     public function view(ChatMessage $message)
     {
         $message->load(['attachments', 'poll.options.votes']);
@@ -156,10 +174,12 @@ class ExclusiveChatController extends Controller
             return redirect()->route('exclusive-chat');
         }
 
+        // This counts total votes across all options.
         $totalVotes = $poll->options->sum(function ($option) {
             return $option->votes->count();
         });
 
+        // This prepares per-option counts and percentages for display.
         $options = $poll->options->map(function ($option) use ($totalVotes) {
             $count = $option->votes->count();
             $percent = $totalVotes ? round(($count / $totalVotes) * 100) : 0;
@@ -179,6 +199,7 @@ class ExclusiveChatController extends Controller
         ]);
     }
 
+    // This exports all chat messages to CSV, including attachments and poll data.
     public function exportMessages()
     {
         $tiers = Tier::query()->orderBy('min_points')->get()->keyBy('id');
@@ -194,6 +215,7 @@ class ExclusiveChatController extends Controller
             ->orderByDesc('sent_at')
             ->orderByDesc('id');
 
+        // This streams results in chunks to avoid loading all rows into memory.
         return response()->streamDownload(function () use ($query, $tiers) {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
@@ -210,11 +232,13 @@ class ExclusiveChatController extends Controller
 
             $query->chunk(200, function ($messages) use ($handle, $tiers) {
                 foreach ($messages as $message) {
+                    // This resolves tier IDs into display labels for export.
                     $tierIds = collect($message->tier_visibility ?? [])->map(fn ($id) => (int) $id)->all();
                     $tierLabels = $tierIds
                         ? collect($tierIds)->map(fn ($id) => $tiers->get($id)?->title)->filter()->values()->all()
                         : ['Default tiers'];
 
+                    // This includes attachment URLs in a single cell.
                     $attachments = $message->attachments
                         ? $message->attachments->map(fn ($attachment) => $attachment->resolved_url ?: $attachment->file_url)->filter()->values()->all()
                         : [];
@@ -222,6 +246,7 @@ class ExclusiveChatController extends Controller
                     $pollOptions = [];
                     $pollClosesAt = null;
                     if ($message->poll) {
+                        // This adds poll metadata when the message is a poll.
                         $pollOptions = $message->poll->options
                             ? $message->poll->options->pluck('label')->filter()->values()->all()
                             : [];
@@ -246,6 +271,7 @@ class ExclusiveChatController extends Controller
         }, $fileName, $headers);
     }
 
+    // This exports votes for a single poll message to CSV.
     public function exportPoll(ChatMessage $message)
     {
         $message->load(['poll.options']);
@@ -255,6 +281,7 @@ class ExclusiveChatController extends Controller
             return redirect()->route('exclusive-chat');
         }
 
+        // This builds a timestamped filename for the export.
         $fileName = 'exclusive_chat_poll_' . $poll->id . '_' . now()->format('Ymd_His') . '.csv';
         $headers = [
             'Content-Type' => 'text/csv',
@@ -266,6 +293,7 @@ class ExclusiveChatController extends Controller
             ->where('chat_poll_id', $poll->id)
             ->orderByDesc('voted_at');
 
+        // This streams results in chunks to avoid loading all rows into memory.
         return response()->streamDownload(function () use ($query) {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
@@ -278,6 +306,7 @@ class ExclusiveChatController extends Controller
 
             $query->chunk(500, function ($votes) use ($handle) {
                 foreach ($votes as $vote) {
+                    // This uses email as a fallback when names are missing.
                     $customer = $vote->customer;
                     $nameParts = array_filter([$customer?->first_name, $customer?->last_name]);
                     $name = $nameParts ? implode(' ', $nameParts) : ($customer?->email ?? 'Customer');
@@ -296,6 +325,7 @@ class ExclusiveChatController extends Controller
         }, $fileName, $headers);
     }
 
+    // This deletes a chat message and its related records via model cascades.
     public function destroy(ChatMessage $message)
     {
         $message->delete();
@@ -303,6 +333,7 @@ class ExclusiveChatController extends Controller
         return redirect()->route('exclusive-chat');
     }
 
+    // This returns the global chat settings, creating defaults if missing.
     private function getSettings(): ChatSetting
     {
         return ChatSetting::firstOrCreate(

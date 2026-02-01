@@ -1,5 +1,6 @@
 <?php
 
+// This migration creates the tiers table for loyalty levels.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,6 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // This table stores tier thresholds and display settings.
         Schema::create('tiers', function (Blueprint $table) {
             $table->id();
             $table->string('title');
@@ -23,6 +25,7 @@ return new class extends Migration
 
     public function down(): void
     {
+        // This removes the tiers table created in up().
         Schema::dropIfExists('tiers');
     }
 };

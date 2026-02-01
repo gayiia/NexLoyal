@@ -1,5 +1,6 @@
 <?php
 
+// This import class ingests points transaction rows from CSV exports.
 namespace App\Imports;
 
 use App\Enums\PointsTransactionType;
@@ -9,27 +10,32 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
+// This class normalizes transaction data and inserts missing points transactions.
 class PointsTransactionsCsvImport
 {
     public int $imported = 0;
     public int $skipped = 0;
     public array $skippedRows = [];
 
+    // This processes each CSV row and inserts unique points transactions.
     public function import(array $rows): void
     {
         foreach ($rows as $row) {
+            // This links the row to a customer using Shopify's ID.
             $shopifyId = trim((string) ($row['customer_shopify_id'] ?? ''));
             if ($shopifyId === '') {
                 $this->pushSkipped($row, 'missing_customer_shopify_id');
                 continue;
             }
 
+            // This ensures the customer exists locally before inserting a transaction.
             $customer = Customer::query()->where('shopify_id', $shopifyId)->first();
             if (!$customer) {
                 $this->pushSkipped($row, 'customer_not_found');
                 continue;
             }
 
+            // These fields normalize type and source to the known enum values.
             $points = $this->toInt($row['points'] ?? 0);
             $type = strtoupper(trim((string) ($row['type'] ?? PointsTransactionType::EARN->value)));
             if (!in_array($type, [PointsTransactionType::EARN->value, PointsTransactionType::SPEND->value], true)) {
@@ -41,15 +47,18 @@ class PointsTransactionsCsvImport
                 $sourceType = SourceType::RULE->value;
             }
 
+            // This captures an order ID if present in the import file.
             $orderIdRaw = trim((string) ($row['order_id'] ?? ''));
             $orderId = $orderIdRaw !== '' ? (int) $orderIdRaw : null;
 
+            // This requires a timestamp to preserve transaction history accuracy.
             $createdAt = $this->toDate($row['created_at'] ?? null);
             if (!$createdAt) {
                 $this->pushSkipped($row, 'missing_created_at');
                 continue;
             }
 
+            // This creates a deterministic event key so duplicates are skipped.
             $rawEventKey = trim((string) ($row['event_key'] ?? ''));
             $signature = implode('|', [
                 $customer->id,
@@ -62,6 +71,7 @@ class PointsTransactionsCsvImport
             ]);
             $eventKey = $rawEventKey !== '' ? $rawEventKey : 'import:' . sha1($signature);
 
+            // This avoids inserting duplicate transactions for the same event.
             $exists = DB::table('points_transactions')
                 ->where('customer_id', $customer->id)
                 ->where('event_key', $eventKey)
@@ -71,6 +81,7 @@ class PointsTransactionsCsvImport
                 continue;
             }
 
+            // This inserts the transaction in an approved state to reflect historical data.
             DB::table('points_transactions')->insert([
                 'customer_id' => $customer->id,
                 'points' => $points,
@@ -92,12 +103,14 @@ class PointsTransactionsCsvImport
         }
     }
 
+    // This safely converts a mixed input into an integer value.
     private function toInt($value): int
     {
         $clean = $this->normalizeNumber($value);
         return (int) round((float) $clean);
     }
 
+    // This strips common formatting characters before numeric casting.
     private function normalizeNumber($value): string
     {
         if ($value === null) {
@@ -110,6 +123,7 @@ class PointsTransactionsCsvImport
         return str_replace([',', ' '], '', $stringValue);
     }
 
+    // This attempts multiple date formats and falls back to Carbon parsing.
     private function toDate($value): ?Carbon
     {
         if ($value === null) {
@@ -120,6 +134,7 @@ class PointsTransactionsCsvImport
             return null;
         }
 
+        // These formats cover common CSV export patterns.
         $formats = ['Y-m-d H:i:s', 'Y-m-d', 'm/d/Y H:i:s', 'm/d/Y H:i', 'm/d/Y'];
         foreach ($formats as $format) {
             try {
@@ -129,6 +144,7 @@ class PointsTransactionsCsvImport
             }
         }
 
+        // This fallback may still fail if the value is not a recognizable date string.
         try {
             return Carbon::parse($stringValue);
         } catch (\Throwable $exception) {
@@ -136,6 +152,7 @@ class PointsTransactionsCsvImport
         }
     }
 
+    // This tracks a skipped row and stores a small sample for debugging.
     private function pushSkipped($row, string $reason): void
     {
         $this->skipped++;

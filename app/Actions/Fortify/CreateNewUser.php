@@ -1,5 +1,6 @@
 <?php
 
+// This action validates and creates a new user during registration.
 namespace App\Actions\Fortify;
 
 use App\Models\User;
@@ -7,6 +8,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Laravel\Fortify\Contracts\CreatesNewUsers;
 
+// This class encapsulates user creation logic for Fortify.
 class CreateNewUser implements CreatesNewUsers
 {
     use PasswordValidationRules;
@@ -18,6 +20,7 @@ class CreateNewUser implements CreatesNewUsers
      */
     public function create(array $input): User
     {
+        // These validations enforce required fields and unique email.
         Validator::make($input, [
             'name' => ['required', 'string', 'max:255'],
             'email' => [
@@ -30,6 +33,7 @@ class CreateNewUser implements CreatesNewUsers
             'password' => $this->passwordRules(),
         ])->validate();
 
+        // This creates and returns the new user record.
         return User::create([
             'name' => $input['name'],
             'email' => $input['email'],

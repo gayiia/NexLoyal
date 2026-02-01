@@ -1,5 +1,6 @@
 <?php
 
+// This migration creates the mystery_boxes table.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,6 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // This table stores mystery box configuration and scheduling.
         Schema::create('mystery_boxes', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('store_id')->nullable();
@@ -25,6 +27,7 @@ return new class extends Migration
 
     public function down(): void
     {
+        // This removes the mystery_boxes table created in up().
         Schema::dropIfExists('mystery_boxes');
     }
 };

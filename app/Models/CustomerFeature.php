@@ -1,12 +1,15 @@
 <?php
 
+// This model stores computed AI feature vectors for customers.
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+// This class holds normalized features and metadata for clustering.
 class CustomerFeature extends Model
 {
+    // These fields are mass assignable from the feature computation service.
     protected $fillable = [
         'customer_id',
         'orders_count',
@@ -27,6 +30,7 @@ class CustomerFeature extends Model
         'excluded_reason',
     ];
 
+    // These casts normalize numeric, date, and JSON feature data.
     protected $casts = [
         'orders_count' => 'integer',
         'total_spent' => 'decimal:2',
@@ -46,6 +50,7 @@ class CustomerFeature extends Model
         'excluded_reason' => 'string',
     ];
 
+    // This links the feature record to its customer.
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);

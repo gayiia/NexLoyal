@@ -1,5 +1,6 @@
 <?php
 
+// This controller manages AI cluster-based awards and issuance flows.
 namespace App\Http\Controllers;
 
 use App\Jobs\IssueAiAwardChunkJob;
@@ -14,8 +15,10 @@ use App\Models\CouponCode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
+// This class creates, edits, activates, and exports AI awards.
 class AiClusterAwardController extends Controller
 {
+    // This shows the create award form with eligible clusters and coupons.
     public function create()
     {
         $latestRun = AiClusterRun::query()->orderByDesc('id')->first();
@@ -37,8 +40,10 @@ class AiClusterAwardController extends Controller
         ]);
     }
 
+    // This validates and stores a new AI award definition.
     public function store(Request $request)
     {
+        // These validations enforce required fields by award type.
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:160'],
             'ai_cluster_id' => ['required', 'exists:ai_clusters,id'],
@@ -47,11 +52,13 @@ class AiClusterAwardController extends Controller
             'coupon_id' => ['nullable', 'exists:coupons,id'],
         ]);
 
+        // Points awards require a points amount.
         if ($validated['type'] === 'points' && empty($validated['points_amount'])) {
             return back()->withErrors(['points_amount' => 'Points amount is required for points awards.'])->withInput();
         }
 
         if ($validated['type'] === 'coupon') {
+            // Coupon awards must reference a coupon flagged for AI use.
             if (empty($validated['coupon_id'])) {
                 return back()->withErrors(['coupon_id' => 'Coupon is required for coupon awards.'])->withInput();
             }
@@ -64,6 +71,7 @@ class AiClusterAwardController extends Controller
             }
         }
 
+        // This creates the award in draft status until activation.
         $award = AiClusterAward::create([
             'ai_cluster_id' => $validated['ai_cluster_id'],
             'title' => $validated['title'],
@@ -73,11 +81,13 @@ class AiClusterAwardController extends Controller
             'status' => 'draft',
         ]);
 
+        // This creates pending award customer records for the selected cluster.
         $this->syncAwardCustomers($award);
 
         return redirect()->route('ai-insights');
     }
 
+    // This shows the edit form for a draft award.
     public function edit(AiClusterAward $award)
     {
         if ($award->status !== 'draft') {
@@ -104,12 +114,14 @@ class AiClusterAwardController extends Controller
         ]);
     }
 
+    // This updates a draft award and refreshes its customer list if the cluster changed.
     public function update(Request $request, AiClusterAward $award)
     {
         if ($award->status !== 'draft') {
             return redirect()->route('ai-insights')->withErrors(['award' => 'Only draft awards can be edited.']);
         }
 
+        // These validations enforce required fields by award type.
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:160'],
             'ai_cluster_id' => ['required', 'exists:ai_clusters,id'],
@@ -118,11 +130,13 @@ class AiClusterAwardController extends Controller
             'coupon_id' => ['nullable', 'exists:coupons,id'],
         ]);
 
+        // Points awards require a points amount.
         if ($validated['type'] === 'points' && empty($validated['points_amount'])) {
             return back()->withErrors(['points_amount' => 'Points amount is required for points awards.'])->withInput();
         }
 
         if ($validated['type'] === 'coupon') {
+            // Coupon awards must reference a coupon flagged for AI use.
             if (empty($validated['coupon_id'])) {
                 return back()->withErrors(['coupon_id' => 'Coupon is required for coupon awards.'])->withInput();
             }
@@ -135,6 +149,7 @@ class AiClusterAwardController extends Controller
             }
         }
 
+        // This determines if customers need to be re-synced for a new cluster.
         $clusterChanged = (int) $award->ai_cluster_id !== (int) $validated['ai_cluster_id'];
 
         $award->update([
@@ -146,6 +161,7 @@ class AiClusterAwardController extends Controller
         ]);
 
         if ($clusterChanged) {
+            // This clears old customer mappings before syncing the new cluster.
             $award->customers()->delete();
             $this->syncAwardCustomers($award);
         }
@@ -153,18 +169,21 @@ class AiClusterAwardController extends Controller
         return redirect()->route('ai-insights');
     }
 
+    // This activates an award and dispatches issuance jobs in chunks.
     public function activate(AiClusterAward $award)
     {
         if ($award->status === 'active') {
             return redirect()->route('ai-insights');
         }
 
+        // This lock prevents concurrent activations from issuing duplicates.
         $lock = Cache::lock("ai_award_issue:{$award->id}", 600);
         if (!$lock->get()) {
             return redirect()->route('ai-insights')->withErrors(['award' => 'Award is already being issued.']);
         }
 
         try {
+            // This ensures pending customers exist before issuing.
             if ($award->customers()->count() === 0) {
                 $this->syncAwardCustomers($award);
             }
@@ -174,12 +193,14 @@ class AiClusterAwardController extends Controller
                 ->where('status', 'pending')
                 ->count();
 
+            // This flips the award to active so jobs can proceed.
             $award->update([
                 'status' => 'active',
                 'activated_at' => now(),
                 'deactivated_at' => null,
             ]);
 
+            // This dispatches jobs in chunks to limit memory use.
             AiClusterAwardCustomer::query()
                 ->where('ai_cluster_award_id', $award->id)
                 ->where('status', 'pending')
@@ -189,12 +210,14 @@ class AiClusterAwardController extends Controller
                     IssueAiAwardChunkJob::dispatch($award->id, $customerIds);
                 });
         } finally {
+            // This releases the lock even if dispatch fails.
             optional($lock)->release();
         }
 
         return redirect()->route('ai-insights');
     }
 
+    // This deactivates an award so no further issuance occurs.
     public function deactivate(AiClusterAward $award)
     {
         if ($award->status !== 'active') {
@@ -209,6 +232,7 @@ class AiClusterAwardController extends Controller
         return redirect()->route('ai-insights');
     }
 
+    // This deletes a draft award that has not been issued.
     public function destroy(AiClusterAward $award)
     {
         if ($award->status !== 'draft') {
@@ -220,6 +244,7 @@ class AiClusterAwardController extends Controller
         return redirect()->route('ai-insights');
     }
 
+    // This streams a CSV export of all customers tied to an award.
     public function export(AiClusterAward $award)
     {
         $customers = AiClusterAwardCustomer::query()
@@ -238,6 +263,7 @@ class AiClusterAwardController extends Controller
             'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
         ];
 
+        // This streams results to avoid loading large datasets in memory.
         return response()->streamDownload(function () use ($customers, $issuances) {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
@@ -249,6 +275,7 @@ class AiClusterAwardController extends Controller
             ]);
 
             foreach ($customers as $row) {
+                // This uses email as a fallback when names are missing.
                 $customer = $row->customer;
                 $nameParts = array_filter([$customer?->first_name, $customer?->last_name]);
                 $name = $nameParts ? implode(' ', $nameParts) : ($customer?->email ?? 'Customer');
@@ -266,6 +293,7 @@ class AiClusterAwardController extends Controller
         }, $fileName, $headers);
     }
 
+    // This creates pending award-customer rows for the selected cluster.
     private function syncAwardCustomers(AiClusterAward $award): void
     {
         $customerIds = AiClusterCustomer::query()
@@ -277,6 +305,7 @@ class AiClusterAwardController extends Controller
             return;
         }
 
+        // This prepares bulk insert rows for the award recipients.
         $rows = array_map(function ($customerId) use ($award) {
             return [
                 'ai_cluster_award_id' => $award->id,
@@ -287,6 +316,7 @@ class AiClusterAwardController extends Controller
             ];
         }, $customerIds);
 
+        // This inserts in chunks to reduce query size.
         foreach (array_chunk($rows, 500) as $chunk) {
             AiClusterAwardCustomer::insert($chunk);
         }

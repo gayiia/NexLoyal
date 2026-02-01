@@ -1,13 +1,18 @@
+{{-- This view shows a single mystery box with claim statistics and coupon usage. --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        {{-- The title uses the app name configuration with a fallback for local/dev environments. --}}
         <title>{{ config('app.name', 'NexLoyal') }} - Mystery Box View</title>
+        {{-- Preconnect and load the UI font used across the admin experience. --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        {{-- Vite builds and injects the compiled CSS for this page. --}}
         @vite(['resources/css/app.css'])
         <style>
+            {{-- These styles define light-mode overrides and table badges. --}}
             :root { color-scheme: dark; }
             .nl-theme-light {
                 color-scheme: light;
@@ -36,9 +41,11 @@
         <div class="min-h-screen bg-[radial-gradient(900px_circle_at_top,rgba(56,189,248,0.18),transparent_60%)]">
             <div class="min-h-screen bg-[linear-gradient(120deg,rgba(15,23,42,0.9),rgba(2,6,23,0.95))] nl-shell">
                 <div class="flex min-h-screen flex-col lg:flex-row">
+                    {{-- The admin sidebar is shared across the dashboard and provides navigation. --}}
                     @include('partials.admin-sidebar')
 
                     <main class="flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+                        {{-- The header displays the mystery box name and a return link. --}}
                         <x-page-header eyebrow="" title="{{ $mysteryBox->name }}" breadcrumb="Coupons / Mystery Box">
                             <x-slot name="actions">
                                 <a href="{{ route('mystery-boxes') }}" class="rounded-xl border border-slate-800 px-4 py-2 text-xs text-slate-200">
@@ -47,6 +54,7 @@
                             </x-slot>
                         </x-page-header>
 
+                        {{-- Summary cards provide quick status and tier visibility context. --}}
                         <section class="mt-6 grid gap-4 lg:grid-cols-4">
                             <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 nl-panel">
                                 <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Status</p>
@@ -75,6 +83,7 @@
                             </div>
                         </section>
 
+                        {{-- Claimed rewards list shows which customers received which coupons. --}}
                         <section class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-6 nl-panel">
                             <div class="flex flex-wrap items-center justify-between gap-3">
                                 <div>
@@ -82,6 +91,7 @@
                                     <p class="mt-1 text-xs text-slate-400">Track customer wins and redemptions.</p>
                                 </div>
                                 <div class="flex flex-wrap gap-2">
+                                    {{-- Export preserves current filters in the query string. --}}
                                     <a href="{{ route('mystery-boxes.export', $mysteryBox) . '?' . http_build_query(request()->only(['status', 'search'])) }}"
                                        class="rounded-xl border border-slate-700 px-4 py-2 text-xs text-slate-200">
                                         Export CSV
@@ -89,6 +99,7 @@
                                 </div>
                             </div>
 
+                            {{-- Filters are submitted via GET to constrain the claims list. --}}
                             <form method="GET" class="mt-4 flex flex-wrap gap-3 text-xs">
                                 <input type="text" name="search" placeholder="Search customer or coupon" value="{{ request('search') }}"
                                        class="rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-slate-200">
@@ -114,6 +125,7 @@
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-slate-800/70 text-slate-200">
+                                        {{-- Each row represents a single claim for a reward coupon. --}}
                                         @forelse ($claims as $index => $claim)
                                             @php
                                                 $customer = $claim->customer;
@@ -139,6 +151,7 @@
                                                             $statusLabel = 'EXPIRED';
                                                         }
                                                     @endphp
+                                                    {{-- Badge styling clarifies claim usage state. --}}
                                                     @if ($statusLabel === 'USED')
                                                         <span class="nl-badge border border-rose-500/40 bg-rose-500/10 text-rose-200">Used</span>
                                                     @elseif ($statusLabel === 'EXPIRED')
@@ -148,11 +161,13 @@
                                                     @endif
                                                 </td>
                                                 <td class="px-4 py-4 text-xs text-slate-400">
+                                                    {{-- Show when the claim happened and when it expires. --}}
                                                     <div>Claimed: {{ optional($claim->redeemed_at)->format('Y-m-d') }}</div>
                                                     <div>Expires: {{ optional($expiresAt)->format('Y-m-d') ?? '—' }}</div>
                                                 </td>
                                             </tr>
                                         @empty
+                                            {{-- Empty state when no claims exist. --}}
                                             <tr>
                                                 <td colspan="6" class="px-4 py-6 text-center text-slate-400">No claims yet.</td>
                                             </tr>
@@ -162,6 +177,7 @@
                             </div>
 
                             <div class="mt-4">
+                                {{-- Pagination links preserve the current filter state. --}}
                                 {{ $claims->links() }}
                             </div>
                         </section>

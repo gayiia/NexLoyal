@@ -1,5 +1,6 @@
 <?php
 
+// This model represents authenticated admin users of the system.
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -8,6 +9,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
+// This class defines user fields, notifications, and 2FA behavior.
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
@@ -18,6 +20,7 @@ class User extends Authenticatable
      *
      * @var list<string>
      */
+    // These fields can be set via registration and profile updates.
     protected $fillable = [
         'name',
         'email',
@@ -29,6 +32,7 @@ class User extends Authenticatable
      *
      * @var list<string>
      */
+    // These fields are hidden to avoid leaking secrets in API responses.
     protected $hidden = [
         'password',
         'two_factor_secret',
@@ -43,6 +47,7 @@ class User extends Authenticatable
      */
     protected function casts(): array
     {
+        // These casts normalize timestamps and hash passwords automatically.
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',

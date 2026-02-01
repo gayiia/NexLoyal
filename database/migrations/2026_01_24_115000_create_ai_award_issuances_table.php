@@ -1,5 +1,6 @@
 <?php
 
+// This migration creates the ai_award_issuances table.
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,6 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // This table records awards issued to customers.
         Schema::create('ai_award_issuances', function (Blueprint $table) {
             $table->id();
             $table->foreignId('ai_cluster_award_id')->constrained()->cascadeOnDelete();
@@ -23,6 +25,7 @@ return new class extends Migration
 
     public function down(): void
     {
+        // This removes the ai_award_issuances table created in up().
         Schema::dropIfExists('ai_award_issuances');
     }
 };
