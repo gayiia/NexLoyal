@@ -184,6 +184,12 @@
                                         <p class="text-sm font-semibold text-slate-100">Customer List</p>
                                     </div>
                                     <div class="flex flex-wrap items-center gap-2">
+                                        <form id="bulk-delete-form" method="POST" action="{{ route('customers.bulk-delete') }}" onsubmit="return confirm('Delete selected customers? This action cannot be undone.');">
+                                            @csrf
+                                            <button id="bulk-delete-button" class="rounded-xl border border-rose-500/50 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-200 disabled:cursor-not-allowed disabled:opacity-50" type="submit" disabled>
+                                                Delete selected
+                                            </button>
+                                        </form>
                                         {{-- Opening the modal allows manual customer entry when needed. --}}
                                         <button id="open-create-customer" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900" type="button">
                                             Create customer
@@ -194,6 +200,18 @@
                                 </div>
 
                                 <div class="px-6 py-5">
+                                    @if (session('status'))
+                                        <div class="mb-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+                                            {{ session('status') }}
+                                        </div>
+                                    @endif
+
+                                    @if ($errors->has('bulk_delete'))
+                                        <div class="mb-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                                            {{ $errors->first('bulk_delete') }}
+                                        </div>
+                                    @endif
+
                                     {{-- Filters and search are sent as query parameters on GET. --}}
                                     <form method="GET" class="space-y-5">
                                         <div class="flex items-center gap-2 text-xs font-semibold text-slate-300">
@@ -264,6 +282,9 @@
                                         <table class="w-full text-left text-xs">
                                             <thead class="nl-table-head text-slate-300">
                                                 <tr>
+                                                    <th class="px-4 py-3 font-semibold">
+                                                        <input id="select-all-customers" class="rounded border-slate-600 bg-slate-900 text-sky-400" type="checkbox">
+                                                    </th>
                                                     <th class="px-4 py-3 font-semibold">No</th>
                                                     <th class="px-4 py-3 font-semibold">Name</th>
                                                     <th class="px-4 py-3 font-semibold">Email</th>
@@ -276,6 +297,9 @@
                                                 {{-- Each row maps to a paginated customer record. --}}
                                                 @forelse ($customers as $customer)
                                                     <tr class="nl-table-row">
+                                                        <td class="px-4 py-4">
+                                                            <input class="bulk-customer-checkbox rounded border-slate-600 bg-slate-900 text-sky-400" type="checkbox" name="selected_customer_ids[]" value="{{ $customer->id }}" form="bulk-delete-form">
+                                                        </td>
                                                         <td class="px-4 py-4">{{ ($customers->currentPage() - 1) * $customers->perPage() + $loop->iteration }}</td>
                                                         <td class="px-4 py-4">{{ $customer->full_name ?: 'Unnamed' }}</td>
                                                         <td class="px-4 py-4 text-slate-300">{{ $customer->email ?: '—' }}</td>
@@ -289,7 +313,7 @@
                                                 @empty
                                                     {{-- When Shopify sync has not run yet, show a descriptive empty state. --}}
                                                     <tr>
-                                                        <td colspan="6" class="px-4 py-10 text-center text-slate-400">No customers yet. Shopify webhook sync will populate this list.</td>
+                                                        <td colspan="7" class="px-4 py-10 text-center text-slate-400">No customers yet. Shopify webhook sync will populate this list.</td>
                                                     </tr>
                                                 @endforelse
                                             </tbody>
@@ -338,7 +362,7 @@
                 <form id="create-customer-form" class="px-6 py-6" method="POST" action="{{ route('customers.store') }}">
                     @csrf
                     {{-- Validation errors from the POST are surfaced inside the modal. --}}
-                    @if ($errors->any())
+                    @if ($errors->hasAny(['shopify', 'first_name', 'last_name', 'gender', 'email', 'phone_country', 'phone']))
                         <div class="mb-5 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-xs text-rose-200" data-error-banner>
                             <p class="font-semibold text-rose-100">Fix the highlighted fields to continue.</p>
                             @if ($errors->has('shopify'))
@@ -428,6 +452,9 @@
                 const modal = document.getElementById('create-customer-modal');
                 const openModalButton = document.getElementById('open-create-customer');
                 const closeButtons = modal ? modal.querySelectorAll('[data-modal-close]') : [];
+                const selectAllCustomers = document.getElementById('select-all-customers');
+                const bulkDeleteButton = document.getElementById('bulk-delete-button');
+                const customerCheckboxes = Array.from(document.querySelectorAll('.bulk-customer-checkbox'));
 
                 // Apply light or dark styles and update the button label.
                 const applyTheme = (theme) => {
@@ -452,6 +479,43 @@
                         applyTheme(next);
                     });
                 }
+
+                // Keep bulk delete button state synced with selected rows.
+                const updateBulkDeleteState = () => {
+                    if (!bulkDeleteButton) {
+                        return;
+                    }
+                    const checkedCount = customerCheckboxes.filter((node) => node.checked).length;
+                    bulkDeleteButton.disabled = checkedCount === 0;
+
+                    if (selectAllCustomers) {
+                        if (checkedCount === 0) {
+                            selectAllCustomers.checked = false;
+                            selectAllCustomers.indeterminate = false;
+                        } else if (checkedCount === customerCheckboxes.length) {
+                            selectAllCustomers.checked = true;
+                            selectAllCustomers.indeterminate = false;
+                        } else {
+                            selectAllCustomers.checked = false;
+                            selectAllCustomers.indeterminate = true;
+                        }
+                    }
+                };
+
+                if (selectAllCustomers) {
+                    selectAllCustomers.addEventListener('change', () => {
+                        customerCheckboxes.forEach((node) => {
+                            node.checked = selectAllCustomers.checked;
+                        });
+                        updateBulkDeleteState();
+                    });
+                }
+
+                customerCheckboxes.forEach((node) => {
+                    node.addEventListener('change', updateBulkDeleteState);
+                });
+
+                updateBulkDeleteState();
 
                 // Keep the settings menu open when navigating within settings pages.
                 const settingsToggle = document.getElementById('settings-toggle');
@@ -533,7 +597,7 @@
                 });
 
                 // If the server returned validation errors, keep the modal open.
-                const shouldOpen = {{ $errors->any() ? 'true' : 'false' }};
+                const shouldOpen = {{ $errors->hasAny(['shopify', 'first_name', 'last_name', 'gender', 'email', 'phone_country', 'phone']) ? 'true' : 'false' }};
                 if (shouldOpen) {
                     setModalOpen(true);
                 }

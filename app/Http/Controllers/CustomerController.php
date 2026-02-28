@@ -8,6 +8,7 @@ use App\Models\PointsTransaction;
 use App\Support\PointsHistoryFormatter;
 use App\Services\ShopifyCustomerService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 // This class provides CRUD-like endpoints for customer management and reporting.
 class CustomerController extends Controller
@@ -264,6 +265,67 @@ class CustomerController extends Controller
         ]);
 
         return redirect()->route('customers');
+    }
+
+    // This deletes selected customers in Shopify and then removes local records.
+    public function bulkDestroy(Request $request, ShopifyCustomerService $shopify)
+    {
+        $validator = Validator::make($request->all(), [
+            'selected_customer_ids' => ['required', 'array', 'min:1'],
+            'selected_customer_ids.*' => ['integer', 'exists:customers,id'],
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors([
+                'bulk_delete' => 'Select at least one customer to delete.',
+            ]);
+        }
+
+        $ids = collect($request->input('selected_customer_ids', []))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        $customers = Customer::query()
+            ->whereIn('id', $ids)
+            ->get();
+
+        if ($customers->isEmpty()) {
+            return back()->withErrors([
+                'bulk_delete' => 'No valid customers were selected.',
+            ]);
+        }
+
+        $deletedCount = 0;
+        $failed = [];
+
+        foreach ($customers as $customer) {
+            try {
+                $shopify->deleteCustomer((string) $customer->shopify_id);
+                $customer->delete();
+                $deletedCount++;
+            } catch (\Throwable $exception) {
+                $failed[] = $customer->email ?: ('ID '.$customer->id);
+            }
+        }
+
+        if (!$deletedCount) {
+            return back()->withErrors([
+                'bulk_delete' => 'Unable to delete selected customers right now.',
+            ]);
+        }
+
+        if ($failed) {
+            return redirect()
+                ->route('customers', $request->query())
+                ->with('status', "{$deletedCount} customer(s) deleted. Some failed: ".implode(', ', array_slice($failed, 0, 5)));
+        }
+
+        return redirect()
+            ->route('customers', $request->query())
+            ->with('status', "{$deletedCount} customer(s) deleted successfully.");
     }
 
 }

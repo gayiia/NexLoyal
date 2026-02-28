@@ -166,4 +166,32 @@ class ShopifyCustomerService
 
         return $customer;
     }
+
+    // This deletes an existing Shopify customer by ID.
+    public function deleteCustomer(string $shopifyId): void
+    {
+        // These credentials are required for Shopify Admin API access.
+        $domain = config('services.shopify.shop_domain');
+        $token = config('services.shopify.admin_token');
+        $version = config('services.shopify.api_version', '2024-01');
+
+        if (!$domain || !$token) {
+            throw new \RuntimeException('Shopify credentials are not configured.');
+        }
+
+        // This issues a delete call to Shopify's customer endpoint.
+        $response = Http::withHeaders([
+            'X-Shopify-Access-Token' => $token,
+            'Accept' => 'application/json',
+        ])->delete("https://{$domain}/admin/api/{$version}/customers/{$shopifyId}.json");
+
+        // Shopify can return 404 when the customer was already removed.
+        if ($response->status() === 404) {
+            return;
+        }
+
+        if (!$response->successful()) {
+            throw new \RuntimeException('Shopify customer delete failed.');
+        }
+    }
 }
