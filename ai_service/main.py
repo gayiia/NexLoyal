@@ -1,4 +1,5 @@
 # Typing helpers used throughout request/response shapes.
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # FastAPI primitives for routing and error handling.
@@ -19,6 +20,33 @@ from sklearn.preprocessing import StandardScaler
 
 # FastAPI application instance.
 app = FastAPI(title="NexLoyal AI Service")
+
+
+def _load_env_file(path: Path) -> None:
+    # Load simple KEY=VALUE pairs into the process environment if missing.
+    if not path.exists():
+        return
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key or key in os.environ:
+            continue
+
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+
+        os.environ[key] = value
+
+
+_SERVICE_DIR = Path(__file__).resolve().parent
+_load_env_file(_SERVICE_DIR / ".env")
+_load_env_file(_SERVICE_DIR.parent / ".env")
 
 # Configuration and feature flags.
 # These values can be overridden via environment variables at deploy time.
