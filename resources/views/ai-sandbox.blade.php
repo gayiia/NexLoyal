@@ -71,6 +71,12 @@
                         </div>
                     @endif
 
+                    @if(session('error'))
+                        <div class="mt-6 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
+                            {{ session('error') }}
+                        </div>
+                    @endif
+
                     <div class="mt-8 grid gap-6 lg:grid-cols-[2fr,1fr]">
                         <section class="rounded-2xl border border-slate-800 bg-slate-950/70 p-6 nl-panel">
                             <div class="flex items-start justify-between">

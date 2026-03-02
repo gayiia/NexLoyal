@@ -1,11 +1,12 @@
 # Typing helpers used throughout request/response shapes.
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import gzip
 
 # FastAPI primitives for routing and error handling.
 from fastapi import FastAPI, HTTPException, Request
 # Pydantic models define and validate incoming request payloads.
-from pydantic import BaseModel, Field, root_validator
+from pydantic import BaseModel, Field, ValidationError, root_validator
 import hashlib
 import json
 import os
@@ -14,12 +15,27 @@ from datetime import datetime, timezone
 # Numerical processing and ML utilities.
 import numpy as np
 # K-Means clustering and quality metrics.
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, MiniBatchKMeans
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 
 # FastAPI application instance.
 app = FastAPI(title="NexLoyal AI Service")
+
+
+@app.middleware("http")
+async def _gunzip_requests(request: Request, call_next):
+    # Accept gzipped JSON bodies so Laravel can send large training payloads more efficiently.
+    if request.headers.get("content-encoding", "").lower() == "gzip":
+        compressed_body = await request.body()
+        decompressed_body = gzip.decompress(compressed_body)
+
+        async def receive() -> Dict[str, Any]:
+            return {"type": "http.request", "body": decompressed_body, "more_body": False}
+
+        request = Request(request.scope, receive)
+
+    return await call_next(request)
 
 
 def _load_env_file(path: Path) -> None:
@@ -52,12 +68,27 @@ _load_env_file(_SERVICE_DIR.parent / ".env")
 # These values can be overridden via environment variables at deploy time.
 MODEL_STATE_PATH = os.getenv("AI_MODEL_STATE_PATH", "model_state.json")
 MAX_K_LIMIT = int(os.getenv("AI_MAX_K", "20"))
+SILHOUETTE_SAMPLE_SIZE = int(os.getenv("AI_SILHOUETTE_SAMPLE_SIZE", "5000"))
+MINIBATCH_THRESHOLD = int(os.getenv("AI_MINIBATCH_THRESHOLD", "10000"))
+MINIBATCH_SIZE = int(os.getenv("AI_MINIBATCH_BATCH_SIZE", "2048"))
+KMEANS_MAX_ITER = int(os.getenv("AI_KMEANS_MAX_ITER", "100"))
 REQUIRE_API_KEY = True
 API_KEY = os.getenv("AI_API_KEY", "").strip()
 CODE_VERSION = os.getenv("AI_CODE_VERSION", "").strip() or "unknown"
 
 # In-memory cache of the most recently trained model state.
 _model_state: Optional[Dict[str, Any]] = None
+
+
+@app.get("/health")
+def health() -> Dict[str, Any]:
+    # Expose a lightweight health payload so Laravel can preflight the AI service.
+    state = _ensure_model_state()
+    return {
+        "status": "ok",
+        "model_loaded": state is not None,
+        "code_version": CODE_VERSION,
+    }
 
 
 # Request payload for training the clustering model.
@@ -117,6 +148,33 @@ def _raise_validation(error_code: str, message: str, details: Any = None, hint: 
         status_code=status,
         detail=_error_response(error_code, message, details=details, hint=hint),
     )
+
+
+async def _parse_json_body(request: Request, model_cls: type[BaseModel]) -> BaseModel:
+    # Parse JSON manually so malformed or oversized payloads return a specific error.
+    raw_body = await request.body()
+    if not raw_body:
+        _raise_validation("body_empty", "Request body is empty.", status=400)
+
+    try:
+        decoded = json.loads(raw_body)
+    except json.JSONDecodeError as exc:
+        _raise_validation(
+            "invalid_json",
+            "Request body is not valid JSON.",
+            details={
+                "line": exc.lineno,
+                "column": exc.colno,
+                "message": exc.msg,
+                "body_prefix": raw_body[:160].decode("utf-8", errors="replace"),
+            },
+            status=400,
+        )
+
+    try:
+        return model_cls.model_validate(decoded)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
 
 
 def _validate_api_key(request: Request) -> None:
@@ -210,10 +268,48 @@ def _apply_preprocessing(
     return processed
 
 
+def _build_cluster_model(k: int, n_samples: int) -> KMeans | MiniBatchKMeans:
+    # MiniBatchKMeans scales much better on large datasets with minimal quality tradeoff.
+    if n_samples >= MINIBATCH_THRESHOLD:
+        return MiniBatchKMeans(
+            n_clusters=k,
+            n_init=5,
+            random_state=42,
+            batch_size=MINIBATCH_SIZE,
+            max_iter=KMEANS_MAX_ITER,
+        )
+
+    return KMeans(
+        n_clusters=k,
+        n_init=10,
+        random_state=42,
+        max_iter=KMEANS_MAX_ITER,
+    )
+
+
+def _score_silhouette(scaled: np.ndarray, labels: np.ndarray) -> Optional[float]:
+    # Sampled silhouette scoring avoids the O(n^2) cost of evaluating every pair on large datasets.
+    if len(set(labels.tolist())) <= 1:
+        return None
+
+    n_samples = int(scaled.shape[0])
+    sample_size = min(SILHOUETTE_SAMPLE_SIZE, n_samples)
+
+    return float(
+        silhouette_score(
+            scaled,
+            labels,
+            sample_size=sample_size if sample_size < n_samples else None,
+            random_state=42,
+        )
+    )
+
+
 @app.post("/ai/cluster/train")
-def train_clusters(payload: TrainRequest, request: Request):
+async def train_clusters(request: Request):
     # Train a K-Means model, select best k, and persist model state.
     _validate_api_key(request)
+    payload = await _parse_json_body(request, TrainRequest)
 
     # ---------------------------
     # Step 1: Validate input data
@@ -291,18 +387,18 @@ def train_clusters(payload: TrainRequest, request: Request):
     inertia_scores: List[Dict[str, Any]] = []
 
     # Evaluate each k and keep the best scoring result.
+    used_minibatch = n_samples >= MINIBATCH_THRESHOLD
+
     for k in range(min_k, max_k + 1):
-        # Fit K-Means for the current number of clusters.
-        model = KMeans(n_clusters=k, n_init=10, random_state=42)
+        # Fit a clustering model for the current number of clusters.
+        model = _build_cluster_model(k, n_samples)
         labels = model.fit_predict(scaled)
         # Inertia is how tight the clusters are (lower is better).
         inertia = float(model.inertia_)
         inertia_scores.append({"k": k, "inertia": inertia})
 
         # Silhouette score only works when there is more than one cluster label.
-        score = None
-        if len(set(labels)) > 1:
-            score = float(silhouette_score(scaled, labels))
+        score = _score_silhouette(scaled, labels)
         silhouette_scores.append({"k": k, "score": score})
 
         # Track the best scoring model so far.
@@ -381,6 +477,11 @@ def train_clusters(payload: TrainRequest, request: Request):
             "finished_at": finished.isoformat(),
             "duration_ms": duration_ms,
         },
+        "training_strategy": {
+            "estimator": "minibatch_kmeans" if used_minibatch else "kmeans",
+            "silhouette_sample_size": min(SILHOUETTE_SAMPLE_SIZE, n_samples),
+            "minibatch_threshold": MINIBATCH_THRESHOLD,
+        },
         # Scaler parameters included for transparency and reproducibility.
         "scaler": {
             "mean": scaler.mean_.tolist(),
@@ -395,9 +496,10 @@ def train_clusters(payload: TrainRequest, request: Request):
 
 
 @app.post("/ai/cluster/predict")
-def predict_cluster(payload: PredictRequest, request: Request):
+async def predict_cluster(request: Request):
     # Predict the closest cluster for a single feature vector.
     _validate_api_key(request)
+    payload = await _parse_json_body(request, PredictRequest)
 
     # ---------------------------
     # Step 1: Load model + validate input

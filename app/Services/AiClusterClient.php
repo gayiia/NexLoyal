@@ -8,6 +8,32 @@ use Illuminate\Support\Facades\Http;
 // This class encapsulates AI training and prediction requests with consistent error handling.
 class AiClusterClient
 {
+    // This checks whether the AI service is reachable before queueing or training.
+    public function health(): array
+    {
+        $baseUrl = trim((string) config('services.ai_service_url'));
+        if ($baseUrl === '') {
+            throw new \RuntimeException('AI service URL is not configured.');
+        }
+
+        $endpoint = rtrim($baseUrl, '/').'/health';
+        $response = Http::timeout(5)
+            ->get($endpoint);
+
+        if (!$response->successful()) {
+            $status = $response->status();
+            $body = $response->body();
+            throw new \RuntimeException("AI service health check failed ({$status}): {$body}");
+        }
+
+        $data = $response->json();
+        if (!is_array($data) || ($data['status'] ?? null) !== 'ok') {
+            throw new \RuntimeException('AI service health endpoint returned an invalid response.');
+        }
+
+        return $data;
+    }
+
     // This sends a training request to the AI service and returns the parsed response.
     public function train(array $payload): array
     {
@@ -19,10 +45,15 @@ class AiClusterClient
 
         // This builds the training endpoint path for the clustering API.
         $endpoint = rtrim($baseUrl, '/').'/ai/cluster/train';
+        $body = json_encode($payload, JSON_THROW_ON_ERROR);
         // This sends the request with timeouts and optional authentication.
         $response = Http::timeout((int) config('ai.ai_timeout_seconds', 30))
             ->withHeaders($this->authHeaders())
-            ->post($endpoint, $payload);
+            ->withHeaders([
+                'Content-Type' => 'application/json',
+            ])
+            ->withBody($body, 'application/json')
+            ->post($endpoint);
 
         if (!$response->successful()) {
             // This includes status and body to help debug remote errors.
@@ -32,6 +63,48 @@ class AiClusterClient
         }
 
         // This validates the expected shape before returning data to callers.
+        $data = $response->json();
+        if (!is_array($data) || empty($data['labels'])) {
+            throw new \RuntimeException('AI service returned invalid response.');
+        }
+
+        return $data;
+    }
+
+    // This streams a prebuilt JSON training payload from disk to avoid large in-memory request bodies.
+    public function trainFromJsonFile(string $path): array
+    {
+        $baseUrl = trim((string) config('services.ai_service_url'));
+        if ($baseUrl === '') {
+            throw new \RuntimeException('AI service URL is not configured.');
+        }
+        if (!is_file($path)) {
+            throw new \RuntimeException('AI training payload file was not found.');
+        }
+
+        $endpoint = rtrim($baseUrl, '/').'/ai/cluster/train';
+        $handle = fopen($path, 'rb');
+        if ($handle === false) {
+            throw new \RuntimeException('AI training payload file could not be opened.');
+        }
+
+        try {
+            $response = Http::timeout((int) config('ai.ai_timeout_seconds', 30))
+                ->withHeaders(array_merge($this->authHeaders(), [
+                    'Content-Type' => 'application/json',
+                ]))
+                ->withOptions(['body' => $handle])
+                ->send('POST', $endpoint);
+        } finally {
+            fclose($handle);
+        }
+
+        if (!$response->successful()) {
+            $status = $response->status();
+            $body = $response->body();
+            throw new \RuntimeException("AI service training failed ({$status}): {$body}");
+        }
+
         $data = $response->json();
         if (!is_array($data) || empty($data['labels'])) {
             throw new \RuntimeException('AI service returned invalid response.');

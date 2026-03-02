@@ -9,6 +9,7 @@ use App\Models\AiClusterRun;
 use App\Models\AiCluster;
 use App\Models\CustomerFeature;
 use App\Services\AiInsightsService;
+use App\Support\AiClusterProgress;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
@@ -40,6 +41,15 @@ class AiSandboxController extends Controller
     // This runs a full training chain in the background.
     public function train(): RedirectResponse
     {
+        $health = app(\App\Services\AiInsightsService::class)->getAiServiceHealth();
+        if (!($health['ok'] ?? false)) {
+            return redirect()
+                ->route('ai-sandbox')
+                ->with('error', 'AI service is offline. Start the FastAPI service before training.');
+        }
+
+        AiClusterProgress::startPending('AI training queued from the sandbox.');
+
         Bus::chain([
             new ComputeCustomerFeaturesJob(),
             new RunAIClusteringJob(),

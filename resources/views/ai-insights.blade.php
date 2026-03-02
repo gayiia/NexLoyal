@@ -162,6 +162,12 @@
                                 </div>
                             @endif
 
+                            @if (session('error'))
+                                <div class="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                                    {{ session('error') }}
+                                </div>
+                            @endif
+
                             {{-- Award-specific errors are displayed near the top of the page. --}}
                             @if ($errors->has('award'))
                                 <div class="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
@@ -179,12 +185,37 @@
             Refresh
         </button>
     </div>
+    <p id="ai-status-phase" class="mt-3 text-[11px] uppercase tracking-[0.2em] text-sky-300 hidden"></p>
+    <p id="ai-status-message" class="mt-2 text-xs text-slate-300 hidden"></p>
     <div id="ai-progress" class="mt-3 hidden">
         <div class="nl-progress"></div>
         <p class="mt-2 text-[11px] text-slate-400">Working through customer features and clustering.</p>
     </div>
     <p id="ai-status-error" class="mt-3 hidden text-rose-300"></p>
+    <div class="mt-4 rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
+        <div class="flex items-center justify-between gap-2">
+            <p class="text-[11px] uppercase tracking-[0.2em] text-slate-400">Activity log</p>
+            <span id="ai-status-updated" class="text-[11px] text-slate-500">Waiting for updates</span>
+        </div>
+        <ul id="ai-status-log" class="mt-3 space-y-2 text-xs text-slate-300">
+            <li class="text-slate-500">No activity yet.</li>
+        </ul>
+    </div>
 </div>
+
+                            <section class="mt-4 grid gap-4 lg:grid-cols-2">
+                                <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-4 text-xs text-slate-300">
+                                    <p class="uppercase tracking-[0.2em] text-slate-400">AI Service</p>
+                                    <p class="mt-2 text-sm text-slate-100">{{ ($serviceHealth['ok'] ?? false) ? 'Online' : 'Offline' }}</p>
+                                    <p class="mt-1 text-slate-400">{{ $serviceHealth['message'] ?? 'No status available.' }}</p>
+                                </div>
+                                <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-4 text-xs text-slate-300">
+                                    <p class="uppercase tracking-[0.2em] text-slate-400">Feature Dataset</p>
+                                    <p class="mt-2 text-sm text-slate-100">Eligible: {{ number_format($featureStats['eligible_customer_features'] ?? 0) }} / {{ number_format($featureStats['customer_features'] ?? 0) }}</p>
+                                    <p class="mt-1 text-slate-400">Customers: {{ number_format($featureStats['customers'] ?? 0) }}</p>
+                                    <p class="text-slate-400">Minimum for training: {{ number_format($featureStats['min_customers_for_training'] ?? 0) }}</p>
+                                </div>
+                            </section>
 
                             <section class="mt-6 grid gap-4 lg:grid-cols-4">
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5">
@@ -394,10 +425,9 @@
             </div>
         </div>
 
-        {{-- Modals render per cluster to show customer details on demand. --}}
+        {{-- Modals render per cluster and load customer details on demand. --}}
         @foreach ($clusters as $cluster)
-            @php $customers = $clusterCustomers[$cluster->id] ?? collect(); @endphp
-            <div class="nl-modal-backdrop" id="cluster-{{ $cluster->id }}" aria-hidden="true">
+            <div class="nl-modal-backdrop" id="cluster-{{ $cluster->id }}" aria-hidden="true" data-cluster-id="{{ $cluster->id }}" data-customers-url="{{ route('ai-insights.clusters.customers', $cluster) }}">
                 <div class="nl-modal-panel">
                     <div class="flex items-center justify-between border-b border-slate-800 px-6 py-4 nl-modal-divider">
                         <div>
@@ -419,24 +449,13 @@
                                     <th class="px-3 py-2">Points</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-slate-800/60">
-                                {{-- Each row shows a customer snapshot captured during clustering. --}}
-                                @forelse ($customers as $row)
-                                    <tr>
-                                        <td class="px-3 py-3 text-slate-200">{{ $row->customer?->full_name ?: $row->customer?->email ?: 'Customer' }}</td>
-                                        <td class="px-3 py-3 text-slate-300">{{ $row->customer?->email }}</td>
-                                        <td class="px-3 py-3 text-slate-300">{{ $row->orders_count_snapshot }}</td>
-                                        <td class="px-3 py-3 text-slate-300">{{ number_format($row->total_spent_snapshot, 2) }}</td>
-                                        <td class="px-3 py-3 text-slate-300">{{ number_format($row->loyalty_points_snapshot) }}</td>
-                                    </tr>
-                                @empty
-                                    {{-- Empty state if the cluster has no attached customers. --}}
-                                    <tr>
-                                        <td colspan="5" class="px-3 py-6 text-center text-slate-400">No customers in this cluster.</td>
-                                    </tr>
-                                @endforelse
+                            <tbody class="divide-y divide-slate-800/60" data-modal-rows>
+                                <tr>
+                                    <td colspan="5" class="px-3 py-6 text-center text-slate-400">Loading customers...</td>
+                                </tr>
                             </tbody>
                         </table>
+                        <p class="mt-3 text-[11px] text-slate-500" data-modal-footnote hidden></p>
                     </div>
                     <div class="flex items-center justify-end border-t border-slate-800 px-6 py-4 nl-modal-divider">
                         <a class="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200" href="{{ route('ai-insights.clusters.export', $cluster) }}">
@@ -605,6 +624,65 @@
                 // Modal open/close handlers provide an inline customer drill-down.
                 const openButtons = document.querySelectorAll('[data-modal-open]');
                 const closeButtons = document.querySelectorAll('[data-modal-close]');
+                const loadModalRows = (modal) => {
+                    if (!modal || modal.dataset.loaded === 'true' || modal.dataset.loading === 'true') {
+                        return;
+                    }
+
+                    const rowsBody = modal.querySelector('[data-modal-rows]');
+                    const footnote = modal.querySelector('[data-modal-footnote]');
+                    const url = modal.dataset.customersUrl;
+                    if (!rowsBody || !url) {
+                        return;
+                    }
+
+                    modal.dataset.loading = 'true';
+                    rowsBody.innerHTML = '<tr><td colspan="5" class="px-3 py-6 text-center text-slate-400">Loading customers...</td></tr>';
+
+                    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                        .then((response) => response.json())
+                        .then((payload) => {
+                            const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+                            rowsBody.innerHTML = '';
+
+                            if (rows.length === 0) {
+                                rowsBody.innerHTML = '<tr><td colspan="5" class="px-3 py-6 text-center text-slate-400">No customers in this cluster.</td></tr>';
+                            } else {
+                                rows.forEach((row) => {
+                                    const tr = document.createElement('tr');
+                                    tr.innerHTML = `
+                                        <td class="px-3 py-3 text-slate-200">${row.name || 'Customer'}</td>
+                                        <td class="px-3 py-3 text-slate-300">${row.email || ''}</td>
+                                        <td class="px-3 py-3 text-slate-300">${row.orders_count_snapshot ?? 0}</td>
+                                        <td class="px-3 py-3 text-slate-300">${Number(row.total_spent_snapshot ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td class="px-3 py-3 text-slate-300">${Number(row.loyalty_points_snapshot ?? 0).toLocaleString()}</td>
+                                    `;
+                                    rowsBody.appendChild(tr);
+                                });
+                            }
+
+                            if (footnote) {
+                                const sampleLimit = Number(payload?.sample_limit || 0);
+                                const customerCount = Number(payload?.customer_count || rows.length);
+                                if (sampleLimit && customerCount > sampleLimit) {
+                                    footnote.textContent = `Showing the top ${sampleLimit.toLocaleString()} customers by spend. Export CSV for the full cluster.`;
+                                    footnote.hidden = false;
+                                } else {
+                                    footnote.hidden = true;
+                                    footnote.textContent = '';
+                                }
+                            }
+
+                            modal.dataset.loaded = 'true';
+                        })
+                        .catch(() => {
+                            rowsBody.innerHTML = '<tr><td colspan="5" class="px-3 py-6 text-center text-rose-300">Unable to load cluster customers right now.</td></tr>';
+                        })
+                        .finally(() => {
+                            delete modal.dataset.loading;
+                        });
+                };
+
                 openButtons.forEach((button) => {
                     button.addEventListener('click', () => {
                         const id = button.getAttribute('data-modal-open');
@@ -612,6 +690,7 @@
                         if (modal) {
                             modal.classList.add('is-open');
                             modal.setAttribute('aria-hidden', 'false');
+                            loadModalRows(modal);
                         }
                     });
                 });
@@ -642,14 +721,68 @@
     // This block polls the backend for clustering status and updates the status panel.
     const statusText = document.getElementById('ai-status-text');
     const statusError = document.getElementById('ai-status-error');
+    const statusPhase = document.getElementById('ai-status-phase');
+    const statusMessage = document.getElementById('ai-status-message');
+    const statusUpdated = document.getElementById('ai-status-updated');
+    const statusLog = document.getElementById('ai-status-log');
     const progress = document.getElementById('ai-progress');
     const refresh = document.getElementById('ai-status-refresh');
     let pollTimer = null;
+    let lastStatus = null;
+
+    const titleCase = (value) => {
+        if (!value) {
+            return '';
+        }
+
+        return value
+            .split('_')
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(' ');
+    };
+
+    const renderLogs = (logs) => {
+        if (!statusLog) {
+            return;
+        }
+
+        statusLog.innerHTML = '';
+
+        if (!Array.isArray(logs) || logs.length === 0) {
+            const item = document.createElement('li');
+            item.className = 'text-slate-500';
+            item.textContent = 'No activity yet.';
+            statusLog.appendChild(item);
+            return;
+        }
+
+        logs.slice().reverse().forEach((entry) => {
+            const item = document.createElement('li');
+            const levelClass = entry?.level === 'error' ? 'text-rose-300' : 'text-slate-300';
+            item.className = `flex items-start justify-between gap-3 ${levelClass}`;
+            item.innerHTML = `<span>${entry?.message || 'Update received.'}</span><span class="shrink-0 text-[11px] text-slate-500">${entry?.time || ''}</span>`;
+            statusLog.appendChild(item);
+        });
+    };
 
     const updateUi = (payload) => {
         const status = payload?.status || 'none';
         const label = status === 'none' ? 'No runs' : status.charAt(0).toUpperCase() + status.slice(1);
         if (statusText) statusText.textContent = label;
+        if (statusPhase) {
+            statusPhase.textContent = payload?.phase ? `Phase: ${titleCase(payload.phase)}` : '';
+            statusPhase.classList.toggle('hidden', !payload?.phase);
+        }
+        if (statusMessage) {
+            statusMessage.textContent = payload?.message || '';
+            statusMessage.classList.toggle('hidden', !payload?.message);
+        }
+        if (statusUpdated) {
+            statusUpdated.textContent = payload?.updated_at
+                ? `Updated ${new Date(payload.updated_at).toLocaleTimeString()}`
+                : 'Waiting for updates';
+        }
+        renderLogs(payload?.logs || []);
         const hasError = status === 'failed' && payload?.error_message;
         if (statusError) {
             statusError.textContent = hasError ? payload.error_message : '';
@@ -657,7 +790,15 @@
         }
         const isRunning = status === 'running' || status === 'pending';
         if (progress) progress.classList.toggle('hidden', !isRunning);
-        if (isRunning) startPolling(); else stopPolling();
+        if (isRunning) {
+            startPolling();
+        } else {
+            stopPolling();
+            if (lastStatus === 'running' || lastStatus === 'pending') {
+                window.setTimeout(() => window.location.reload(), 1200);
+            }
+        }
+        lastStatus = status;
     };
 
     const fetchStatus = () => {

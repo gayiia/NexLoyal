@@ -8,6 +8,7 @@ use App\Imports\CustomersCsvImport;
 use App\Imports\PointsTransactionsCsvImport;
 use App\Jobs\ComputeCustomerFeaturesJob;
 use App\Jobs\RunAIClusteringJob;
+use App\Support\AiClusterProgress;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
@@ -190,6 +191,15 @@ class AiDataImportController extends Controller
         }
 
         if ($runClustering) {
+            $health = app(\App\Services\AiInsightsService::class)->getAiServiceHealth();
+            if (!($health['ok'] ?? false)) {
+                $summary['warnings'][] = 'AI service is offline. Import completed, but clustering was not queued.';
+                $runClustering = false;
+            }
+        }
+
+        if ($runClustering) {
+            AiClusterProgress::startPending('Import completed. AI clustering queued.');
             // This chains feature computation and clustering after the import.
             Bus::chain([
                 new ComputeCustomerFeaturesJob(),

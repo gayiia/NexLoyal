@@ -15,7 +15,7 @@ return [
     'algorithm_version' => env('AI_ALGORITHM_VERSION', 'kmeans_v1'),
     'code_version' => env('AI_CODE_VERSION', 'local'),
     'api_key' => env('AI_API_KEY'),
-    'ai_timeout_seconds' => (int) env('AI_TIMEOUT_SECONDS', 30),
+    'ai_timeout_seconds' => (int) env('AI_TIMEOUT_SECONDS', 120),
     'exclude_zero_activity_customers' => (bool) env('AI_EXCLUDE_ZERO_ACTIVITY', true),
     'exclude_refund_only_customers' => (bool) env('AI_EXCLUDE_REFUND_ONLY', true),
     'new_customer_recency_days' => (int) env('AI_NEW_CUSTOMER_RECENCY_DAYS', 365),

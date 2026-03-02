@@ -7,8 +7,8 @@ use App\Models\AiCluster;
 use App\Models\AiClusterCustomer;
 use App\Models\AiClusterRun;
 use App\Enums\AiRunStatus;
-use App\Models\CustomerFeature;
 use App\Services\AiInsightsService;
+use App\Support\AiClusterProgress;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -31,6 +31,7 @@ class RunAIClusteringJob implements ShouldQueue
     {
         $lock = Cache::lock('ai_cluster_run', 1200);
         if (!$lock->get()) {
+            AiClusterProgress::markFailed(null, 'Clustering skipped because another run is already active.');
             return;
         }
 
@@ -56,74 +57,90 @@ class RunAIClusteringJob implements ShouldQueue
                 'exclude_refund_only_customers' => config('ai.exclude_refund_only_customers'),
             ],
         ]);
+        AiClusterProgress::attachRun($run->id, "Cluster run #{$run->id} started.");
+        $payloadPath = null;
 
         try {
-            // This computes features and prepares the training dataset.
-            $dataset = $insights->computeCustomerFeatures(true);
-            $customerIds = $dataset['customer_ids'] ?? [];
-            $vectors = $dataset['vectors'] ?? [];
-            $snapshots = $dataset['snapshots'] ?? [];
-
-            // This enforces a minimum sample size so clustering has meaningful data.
-            if (count($customerIds) < $minCustomers) {
+            $health = $insights->getAiServiceHealth();
+            if (!($health['ok'] ?? false)) {
+                $message = 'AI service is offline: ' . ($health['message'] ?? 'unknown error');
                 $run->update([
                     'status' => AiRunStatus::FAILED->value,
-                    'error_message' => "At least {$minCustomers} customers are required for clustering.",
+                    'error_message' => $message,
                     'completed_at' => now(),
                 ]);
+                AiClusterProgress::markFailed($run->id, $message);
+                return;
+            }
+
+            // This streams stored features to a JSON file so Laravel does not keep the full matrix in memory.
+            AiClusterProgress::log('Preparing stored customer features for training.', 'dataset');
+            $dataset = $insights->exportStoredTrainingPayload();
+            $payloadPath = $dataset['path'] ?? null;
+            $trainingCount = (int) ($dataset['count'] ?? 0);
+            AiClusterProgress::log('Eligible customers ready for training: ' . number_format($trainingCount) . '.', 'dataset');
+
+            // This enforces a minimum sample size so clustering has meaningful data.
+            if ($trainingCount < $minCustomers) {
+                $message = "At least {$minCustomers} customers are required for clustering.";
+                $run->update([
+                    'status' => AiRunStatus::FAILED->value,
+                    'error_message' => $message,
+                    'completed_at' => now(),
+                ]);
+                AiClusterProgress::markFailed($run->id, $message);
                 return;
             }
 
             // This calls the AI service to train and assign cluster labels.
-            $response = $insights->train(
-                $vectors,
-                $featureKeys,
-                $dataset['outlier_caps'] ?? [],
-                $dataset['log_transforms'] ?? []
-            );
+            AiClusterProgress::log('Sending feature matrix to the AI service.', 'training');
+            $response = $insights->trainFromJsonFile($payloadPath);
+            AiClusterProgress::log('AI service returned cluster labels. Persisting results.', 'persisting');
 
             $labels = $response['labels'] ?? [];
-            if (count($labels) !== count($customerIds)) {
+            if (count($labels) !== $trainingCount) {
                 throw new \RuntimeException('AI service returned mismatched labels.');
             }
 
-            // This groups customer IDs by their assigned cluster label.
-            $clusterGroups = [];
-            foreach ($labels as $index => $label) {
-                $labelKey = (string) $label;
-                $clusterGroups[$labelKey] ??= [];
-                $clusterGroups[$labelKey][] = $customerIds[$index];
-            }
-
+            // This aggregates cluster stats in a streaming pass so large runs do not build customer snapshots in memory.
             $clusterRecords = [];
-            foreach ($clusterGroups as $labelKey => $ids) {
-                // This aggregates summary stats used in cluster reporting.
-                $totals = [
-                    'total_spent' => 0,
-                    'orders_count' => 0,
-                    'loyalty_points' => 0,
-                    'points_spent' => 0,
-                ];
-                foreach ($ids as $customerId) {
-                    $snapshot = $snapshots[$customerId] ?? [];
-                    $totals['total_spent'] += (float) ($snapshot['total_spent_snapshot'] ?? 0);
-                    $totals['orders_count'] += (int) ($snapshot['orders_count_snapshot'] ?? 0);
-                    $totals['loyalty_points'] += (int) ($snapshot['loyalty_points_snapshot'] ?? 0);
-                    $totals['points_spent'] += (int) ($snapshot['points_spent_snapshot'] ?? 0);
+            $clusterStats = [];
+            $labelIndex = 0;
+            $insights->chunkStoredTrainingRows(500, function ($rows) use (&$clusterStats, &$labelIndex, $labels): void {
+                foreach ($rows as $row) {
+                    $labelKey = (string) ($labels[$labelIndex] ?? '');
+                    $labelIndex++;
+                    if ($labelKey === '') {
+                        continue;
+                    }
+
+                    $clusterStats[$labelKey] ??= [
+                        'customer_count' => 0,
+                        'total_spent' => 0.0,
+                        'orders_count' => 0,
+                        'loyalty_points' => 0,
+                        'points_spent' => 0,
+                    ];
+
+                    $clusterStats[$labelKey]['customer_count']++;
+                    $clusterStats[$labelKey]['total_spent'] += (float) ($row->total_spent ?? 0);
+                    $clusterStats[$labelKey]['orders_count'] += (int) ($row->orders_count ?? 0);
+                    $clusterStats[$labelKey]['loyalty_points'] += (int) ($row->loyalty_points ?? 0);
+                    $clusterStats[$labelKey]['points_spent'] += (int) ($row->points_spent ?? 0);
                 }
+            });
 
-                // This calculates averages for cluster-level metrics.
-                $count = max(1, count($ids));
-
+            foreach ($clusterStats as $labelKey => $totals) {
+                $count = max(1, (int) ($totals['customer_count'] ?? 0));
                 $clusterRecords[$labelKey] = [
                     'ai_cluster_run_id' => $run->id,
                     'label' => (string) $labelKey,
                     'cluster_index' => (int) $labelKey,
-                    'customer_count' => count($ids),
-                    'avg_total_spent' => $totals['total_spent'] / $count,
-                    'avg_orders_count' => $totals['orders_count'] / $count,
-                    'avg_loyalty_points' => $totals['loyalty_points'] / $count,
-                    'avg_points_spent' => $totals['points_spent'] / $count,
+                    'customer_count' => $count,
+                    'avg_total_spent' => ((float) ($totals['total_spent'] ?? 0)) / $count,
+                    'avg_orders_count' => ((int) ($totals['orders_count'] ?? 0)) / $count,
+                    'avg_loyalty_points' => ((int) ($totals['loyalty_points'] ?? 0)) / $count,
+                    'avg_points_spent' => ((int) ($totals['points_spent'] ?? 0)) / $count,
                     'centroid' => $response['centroids'][(int) $labelKey] ?? null,
                     'created_at' => now(),
                     'updated_at' => now(),
@@ -133,43 +150,55 @@ class RunAIClusteringJob implements ShouldQueue
             // This applies friendly labels based on spending rank.
             $clusterRecords = $this->applyClusterLabels($clusterRecords);
 
-            // This persists clusters and their customer assignments in a single transaction.
-            DB::transaction(function () use ($run, $clusterRecords, $clusterGroups, $snapshots, $response): void {
+            // This persists clusters and their customer assignments in streaming chunks.
+            DB::transaction(function () use ($insights, $run, $clusterRecords, $labels, $response, $trainingCount): void {
                 $clusterIdMap = [];
                 foreach ($clusterRecords as $labelKey => $data) {
                     $cluster = AiCluster::create($data);
                     $clusterIdMap[$labelKey] = $cluster->id;
                 }
 
+                $labelIndex = 0;
                 $customerRows = [];
-                foreach ($clusterGroups as $labelKey => $ids) {
-                    $clusterId = $clusterIdMap[$labelKey] ?? null;
-                    if (!$clusterId) {
-                        continue;
-                    }
-                    foreach ($ids as $customerId) {
-                        // This stores a snapshot of customer features at clustering time.
-                        $snapshot = $snapshots[$customerId] ?? [];
-                        $customerRows[] = array_merge($snapshot, [
+                $insights->chunkStoredTrainingRows(500, function ($rows) use (&$customerRows, &$labelIndex, $labels, $clusterIdMap, $run): void {
+                    foreach ($rows as $row) {
+                        $labelKey = (string) ($labels[$labelIndex] ?? '');
+                        $labelIndex++;
+                        $clusterId = $clusterIdMap[$labelKey] ?? null;
+                        if (!$clusterId) {
+                            continue;
+                        }
+
+                        $customerRows[] = [
                             'ai_cluster_run_id' => $run->id,
                             'ai_cluster_id' => $clusterId,
-                            'customer_id' => $customerId,
+                            'customer_id' => (int) ($row->customer_id ?? 0),
+                            'orders_count_snapshot' => (int) ($row->orders_count ?? 0),
+                            'total_spent_snapshot' => (float) ($row->total_spent ?? 0),
+                            'loyalty_points_snapshot' => (int) ($row->loyalty_points ?? 0),
+                            'points_earned_snapshot' => (int) ($row->points_earned ?? 0),
+                            'points_spent_snapshot' => (int) ($row->points_spent ?? 0),
+                            'redeemed_coupons_snapshot' => (int) ($row->redeemed_coupons ?? 0),
                             'created_at' => now(),
                             'updated_at' => now(),
-                        ]);
-                    }
-                }
+                        ];
 
-                // This inserts in chunks to avoid large single insert statements.
-                foreach (array_chunk($customerRows, 500) as $chunk) {
-                    AiClusterCustomer::insert($chunk);
+                        if (count($customerRows) >= 500) {
+                            AiClusterCustomer::insert($customerRows);
+                            $customerRows = [];
+                        }
+                    }
+                });
+
+                if ($customerRows !== []) {
+                    AiClusterCustomer::insert($customerRows);
                 }
 
                 // This finalizes the run with metrics returned by the AI service.
                 $run->update([
                     'status' => AiRunStatus::COMPLETED->value,
                     'completed_at' => now(),
-                    'total_customers' => count($snapshots),
+                    'total_customers' => $trainingCount,
                     'total_clusters' => count($clusterRecords),
                     'silhouette_score' => $response['final_silhouette'] ?? null,
                     'selected_k' => $response['selected_k'] ?? null,
@@ -186,6 +215,7 @@ class RunAIClusteringJob implements ShouldQueue
                     'model_metadata' => $response['model_metadata'] ?? null,
                 ]);
             });
+            AiClusterProgress::markCompleted($run->id, "Cluster run #{$run->id} completed.");
         } catch (\Throwable $exception) {
             // This logs failures and marks the run as failed for visibility.
             Log::error('AI clustering failed', [
@@ -197,7 +227,11 @@ class RunAIClusteringJob implements ShouldQueue
                 'error_message' => $exception->getMessage(),
                 'completed_at' => now(),
             ]);
+            AiClusterProgress::markFailed($run->id, $exception->getMessage());
         } finally {
+            if ($payloadPath && is_file($payloadPath)) {
+                @unlink($payloadPath);
+            }
             // This ensures the lock is released even when errors occur.
             optional($lock)->release();
         }

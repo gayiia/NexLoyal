@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schedule;
 use App\Models\PointRule;
 use App\Models\AiClusterRun;
+use App\Services\AiInsightsService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 
 // Demo command provided by Laravel.
@@ -454,3 +456,52 @@ Artisan::command('ai:cleanup-runs {--days=}', function () {
     $this->info("Deleted {$deleted} AI cluster runs older than {$days} days (kept latest run #{$latestRun->id}).");
     return 0;
 })->purpose('Delete AI clustering runs older than N days while preserving the latest run');
+
+// Inspect AI readiness before queueing clustering.
+Artisan::command('ai:preflight', function (AiInsightsService $insights) {
+    $health = $insights->getAiServiceHealth();
+    $stats = $insights->getFeatureDatasetStats();
+
+    $this->info('AI service: ' . (($health['ok'] ?? false) ? 'online' : 'offline'));
+    $this->line('AI message: ' . ($health['message'] ?? 'n/a'));
+    $this->line('Customers: ' . number_format((int) ($stats['customers'] ?? 0)));
+    $this->line('Customer features: ' . number_format((int) ($stats['customer_features'] ?? 0)));
+    $this->line('Eligible customer features: ' . number_format((int) ($stats['eligible_customer_features'] ?? 0)));
+    $this->line('Excluded customer features: ' . number_format((int) ($stats['excluded_customer_features'] ?? 0)));
+
+    foreach (($stats['excluded_breakdown'] ?? []) as $reason => $total) {
+        $this->line("Excluded ({$reason}): " . number_format((int) $total));
+    }
+
+    if (!($health['ok'] ?? false)) {
+        return 1;
+    }
+
+    if (!($stats['is_ready_for_training'] ?? false)) {
+        $this->warn('Dataset is not ready for clustering.');
+        return 1;
+    }
+
+    $this->info('Dataset is ready for clustering.');
+    return 0;
+})->purpose('Check AI service health and feature readiness before clustering');
+
+// Rebuild customer_features from the current customer dataset.
+Artisan::command('ai:rebuild-features {--truncate}', function (AiInsightsService $insights) {
+    if ($this->option('truncate')) {
+        DB::table('customer_features')->delete();
+        $this->info('Existing customer_features cleared.');
+    }
+
+    $this->info('Recomputing customer features...');
+    $insights->computeCustomerFeatures(true, false);
+    $stats = $insights->getFeatureDatasetStats();
+
+    $this->info('Customer feature rebuild complete.');
+    $this->line('Customers: ' . number_format((int) ($stats['customers'] ?? 0)));
+    $this->line('Customer features: ' . number_format((int) ($stats['customer_features'] ?? 0)));
+    $this->line('Eligible customer features: ' . number_format((int) ($stats['eligible_customer_features'] ?? 0)));
+    $this->line('Excluded customer features: ' . number_format((int) ($stats['excluded_customer_features'] ?? 0)));
+
+    return 0;
+})->purpose('Rebuild AI customer_features from the current customer dataset');

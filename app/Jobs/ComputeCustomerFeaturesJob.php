@@ -4,6 +4,7 @@
 namespace App\Jobs;
 
 use App\Services\AiInsightsService;
+use App\Support\AiClusterProgress;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -24,12 +25,19 @@ class ComputeCustomerFeaturesJob implements ShouldQueue
     {
         $lock = Cache::lock('ai_features_compute', 600);
         if (!$lock->get()) {
+            AiClusterProgress::log('Feature computation skipped because another run already holds the lock.', 'features');
             return;
         }
 
         try {
             // This generates and persists the latest customer features for AI.
-            $insights->computeCustomerFeatures(true);
+            AiClusterProgress::log('Computing customer features.', 'features');
+            $insights->computeCustomerFeatures(true, false);
+            $stats = $insights->getFeatureDatasetStats();
+            AiClusterProgress::log(
+                'Customer features computed. Eligible customers: ' . number_format((int) ($stats['eligible_customer_features'] ?? 0)) . '.',
+                'features'
+            );
         } finally {
             // This ensures the lock is released even if computation fails.
             optional($lock)->release();
