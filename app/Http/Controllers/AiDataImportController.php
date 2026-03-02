@@ -13,6 +13,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 // This class validates imports, runs them in a transaction, and triggers clustering when requested.
 class AiDataImportController extends Controller
@@ -26,6 +27,10 @@ class AiDataImportController extends Controller
     // This validates uploaded CSV files and performs the import.
     public function store(Request $request)
     {
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(0);
+        }
+
         // These validations ensure files are CSV-like and within size limits.
         $request->validate([
             'customers_file' => ['required', 'file', 'mimes:csv,txt', 'max:10240'],
@@ -94,85 +99,82 @@ class AiDataImportController extends Controller
         // This tracks synthetic order events when points transactions are missing.
         $syntheticOrders = 0;
 
-        // This keeps the import atomic across related tables.
-        DB::transaction(function () use (
-            $customersFile,
-            $pointsFile,
-            $couponsFile,
-            &$summary,
-            &$syntheticOrders
-        ) {
-            // This upserts customers and collects last-order timestamps.
-            $customersImport = new CustomersCsvImport();
-            $customersImport->import($this->readRows($customersFile));
+        try {
+            // This keeps the import atomic across related tables.
+            DB::transaction(function () use (
+                $customersFile,
+                $pointsFile,
+                $couponsFile,
+                &$summary,
+                &$syntheticOrders
+            ) {
+                // This upserts customers and optionally creates synthetic order history in chunks.
+                $customersImport = new CustomersCsvImport();
+                $this->processRows($customersFile, function (array $rows) use ($customersImport, $pointsFile, &$syntheticOrders): void {
+                    $customersImport->import($rows);
 
-            $summary['customers'] = [
-                'imported' => $customersImport->imported,
-                'updated' => $customersImport->updated,
-                'skipped' => $customersImport->skipped,
-            ];
-            if ($customersImport->skippedRows) {
-                $summary['skipped_rows']['customers'] = $customersImport->skippedRows;
-            }
-
-            if ($pointsFile) {
-                // This imports points transactions when provided.
-                $pointsImport = new PointsTransactionsCsvImport();
-                $pointsImport->import($this->readRows($pointsFile));
-
-                $summary['points_transactions'] = [
-                    'imported' => $pointsImport->imported,
-                    'skipped' => $pointsImport->skipped,
-                ];
-                if ($pointsImport->skippedRows) {
-                    $summary['skipped_rows']['points_transactions'] = $pointsImport->skippedRows;
-                }
-            } else {
-                // This creates zero-point transactions so recency calculations can still work.
-                foreach ($customersImport->lastOrderAtRows as $row) {
-                    $eventKey = 'import:last_order:' . $row['customer_id'];
-                    $exists = DB::table('points_transactions')
-                        ->where('customer_id', $row['customer_id'])
-                        ->where('event_key', $eventKey)
-                        ->exists();
-                    if ($exists) {
-                        continue;
+                    if ($pointsFile) {
+                        $customersImport->releaseLastOrderAtRows();
+                        return;
                     }
-                    DB::table('points_transactions')->insert([
-                        'customer_id' => $row['customer_id'],
-                        'points' => 0,
-                        'status' => 'APPROVED',
-                        'source' => \App\Enums\SourceType::ORDER->value,
-                        'source_type' => \App\Enums\SourceType::ORDER->value,
-                        'type' => \App\Enums\PointsTransactionType::EARN->value,
-                        'order_id' => null,
-                        'event_key' => $eventKey,
-                        'reason' => 'CSV import last_order_at',
-                        'title' => 'CSV import last_order_at',
-                        'reference_type' => 'IMPORT',
-                        'reference_id' => $eventKey,
-                        'created_at' => $row['last_order_at'],
-                        'updated_at' => $row['last_order_at'],
-                    ]);
-                    $syntheticOrders++;
-                }
-            }
 
-            if ($couponsFile) {
-                // This imports coupon redemption history if provided.
-                $couponsImport = new CustomerCouponsCsvImport();
-                $couponsImport->import($this->readRows($couponsFile));
+                    $syntheticOrders += $this->insertSyntheticOrders($customersImport->releaseLastOrderAtRows());
+                });
 
-                $summary['customer_coupons'] = [
-                    'imported' => $couponsImport->imported,
-                    'updated' => $couponsImport->updated,
-                    'skipped' => $couponsImport->skipped,
+                $summary['customers'] = [
+                    'imported' => $customersImport->imported,
+                    'updated' => $customersImport->updated,
+                    'skipped' => $customersImport->skipped,
                 ];
-                if ($couponsImport->skippedRows) {
-                    $summary['skipped_rows']['customer_coupons'] = $couponsImport->skippedRows;
+                if ($customersImport->skippedRows) {
+                    $summary['skipped_rows']['customers'] = $customersImport->skippedRows;
                 }
+
+                if ($pointsFile) {
+                    // This imports points transactions when provided.
+                    $pointsImport = new PointsTransactionsCsvImport();
+                    $this->processRows($pointsFile, fn (array $rows) => $pointsImport->import($rows));
+
+                    $summary['points_transactions'] = [
+                        'imported' => $pointsImport->imported,
+                        'skipped' => $pointsImport->skipped,
+                    ];
+                    if ($pointsImport->skippedRows) {
+                        $summary['skipped_rows']['points_transactions'] = $pointsImport->skippedRows;
+                    }
+                }
+
+                if ($couponsFile) {
+                    // This imports coupon redemption history if provided.
+                    $couponsImport = new CustomerCouponsCsvImport();
+                    $this->processRows($couponsFile, fn (array $rows) => $couponsImport->import($rows));
+
+                    $summary['customer_coupons'] = [
+                        'imported' => $couponsImport->imported,
+                        'updated' => $couponsImport->updated,
+                        'skipped' => $couponsImport->skipped,
+                    ];
+                    if ($couponsImport->skippedRows) {
+                        $summary['skipped_rows']['customer_coupons'] = $couponsImport->skippedRows;
+                    }
+                }
+            });
+        } catch (Throwable $exception) {
+            report($exception);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'The import failed before completion.',
+                    'errors' => [
+                        'import' => [$exception->getMessage()],
+                    ],
+                ], 500);
             }
-        });
+
+            throw ValidationException::withMessages([
+                'customers_file' => 'The import failed before completion: ' . $exception->getMessage(),
+            ]);
+        }
 
         // This adds synthetic order count to the summary for transparency.
         if ($syntheticOrders > 0) {
@@ -199,6 +201,14 @@ class AiDataImportController extends Controller
         }
 
         // This returns to the import page with a summary of what happened.
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $summary['status'],
+                'summary' => $summary,
+                'redirect' => route('ai-data-import'),
+            ]);
+        }
+
         return redirect()
             ->route('ai-data-import')
             ->with('import_summary', $summary);
@@ -236,18 +246,18 @@ class AiDataImportController extends Controller
         return array_values(array_filter($headers, fn ($value) => $value !== ''));
     }
 
-    // This reads all rows into associative arrays keyed by the CSV headers.
-    private function readRows(UploadedFile $file): array
+    // This streams rows in chunks so large imports do not exhaust memory or time.
+    private function processRows(UploadedFile $file, callable $callback, int $chunkSize = 500): void
     {
         $handle = fopen($file->getRealPath(), 'r');
         if (!$handle) {
-            return [];
+            return;
         }
 
         $headers = fgetcsv($handle) ?: [];
         $headers = array_map(function ($header) {
             $value = trim((string) $header);
-            $value = preg_replace('/^\\xEF\\xBB\\xBF/', '', $value);
+            $value = preg_replace('/^\xEF\xBB\xBF/', '', $value);
             return strtolower($value);
         }, $headers);
 
@@ -266,10 +276,47 @@ class AiDataImportController extends Controller
             }
             if ($row) {
                 $rows[] = $row;
+                if (count($rows) >= $chunkSize) {
+                    $callback($rows);
+                    $rows = [];
+                }
             }
         }
         fclose($handle);
 
-        return $rows;
+        if ($rows) {
+            $callback($rows);
+        }
+    }
+
+    // This bulk-inserts synthetic order events without per-row existence queries.
+    private function insertSyntheticOrders(array $rows): int
+    {
+        if ($rows === []) {
+            return 0;
+        }
+
+        $records = [];
+        foreach ($rows as $row) {
+            $eventKey = 'import:last_order:' . $row['customer_id'];
+            $records[] = [
+                'customer_id' => $row['customer_id'],
+                'points' => 0,
+                'status' => 'APPROVED',
+                'source' => \App\Enums\SourceType::ORDER->value,
+                'source_type' => \App\Enums\SourceType::ORDER->value,
+                'type' => \App\Enums\PointsTransactionType::EARN->value,
+                'order_id' => null,
+                'event_key' => $eventKey,
+                'reason' => 'CSV import last_order_at',
+                'title' => 'CSV import last_order_at',
+                'reference_type' => 'IMPORT',
+                'reference_id' => $eventKey,
+                'created_at' => $row['last_order_at'],
+                'updated_at' => $row['last_order_at'],
+            ];
+        }
+
+        return DB::table('points_transactions')->insertOrIgnore($records);
     }
 }

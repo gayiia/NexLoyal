@@ -5,6 +5,7 @@ namespace App\Imports;
 
 use App\Models\Customer;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 // This class tracks import stats while normalizing customer data from CSV exports.
 class CustomersCsvImport
@@ -18,6 +19,10 @@ class CustomersCsvImport
     // This processes each CSV row, upserting customers and collecting any last-order timestamps.
     public function import(array $rows): void
     {
+        $payloads = [];
+        $shopifyIds = [];
+        $newlyImported = [];
+
         foreach ($rows as $row) {
             // A Shopify ID is required to uniquely map the customer.
             $shopifyId = trim((string) ($row['shopify_id'] ?? ''));
@@ -34,33 +39,81 @@ class CustomersCsvImport
             $pointsPending = $this->toInt($row['points_pending'] ?? 0);
             $lastOrderAt = $this->toDate($row['last_order_at'] ?? null);
 
-            // This updates or creates the customer record using Shopify ID as the key.
-            $customer = Customer::query()->updateOrCreate(
-                ['shopify_id' => $shopifyId],
-                [
-                    'email' => $email !== '' ? $email : null,
-                    'orders_count' => $ordersCount,
-                    'total_spent' => $totalSpent,
-                    'loyalty_points' => $loyaltyPoints,
-                    'points_pending' => $pointsPending,
-                ]
-            );
+            $payloads[] = [
+                'shopify_id' => $shopifyId,
+                'email' => $email !== '' ? $email : null,
+                'orders_count' => $ordersCount,
+                'total_spent' => $totalSpent,
+                'loyalty_points' => $loyaltyPoints,
+                'points_pending' => $pointsPending,
+                'last_order_at' => $lastOrderAt,
+            ];
+            $shopifyIds[] = $shopifyId;
+        }
 
-            // These counters help the UI summarize what the import changed.
-            if ($customer->wasRecentlyCreated) {
-                $this->imported++;
-            } else {
+        if ($payloads === []) {
+            return;
+        }
+
+        $existingIds = Customer::query()
+            ->whereIn('shopify_id', array_values(array_unique($shopifyIds)))
+            ->pluck('id', 'shopify_id')
+            ->all();
+
+        $timestamp = now();
+        $upsertRows = [];
+
+        foreach ($payloads as $payload) {
+            $shopifyId = $payload['shopify_id'];
+
+            // These counters reflect first-seen inserts and subsequent updates within the same file.
+            if (isset($existingIds[$shopifyId]) || isset($newlyImported[$shopifyId])) {
                 $this->updated++;
+            } else {
+                $this->imported++;
+                $newlyImported[$shopifyId] = true;
             }
 
-            // This defers last-order updates to a later batch update step.
-            if ($lastOrderAt) {
+            $upsertRows[] = [
+                'shopify_id' => $shopifyId,
+                'email' => $payload['email'],
+                'orders_count' => $payload['orders_count'],
+                'total_spent' => $payload['total_spent'],
+                'loyalty_points' => $payload['loyalty_points'],
+                'points_pending' => $payload['points_pending'],
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
+            ];
+        }
+
+        DB::table('customers')->upsert(
+            $upsertRows,
+            ['shopify_id'],
+            ['email', 'orders_count', 'total_spent', 'loyalty_points', 'points_pending', 'updated_at']
+        );
+
+        $customerIds = Customer::query()
+            ->whereIn('shopify_id', array_values(array_unique($shopifyIds)))
+            ->pluck('id', 'shopify_id')
+            ->all();
+
+        foreach ($payloads as $payload) {
+            if ($payload['last_order_at'] && isset($customerIds[$payload['shopify_id']])) {
                 $this->lastOrderAtRows[] = [
-                    'customer_id' => $customer->id,
-                    'last_order_at' => $lastOrderAt,
+                    'customer_id' => $customerIds[$payload['shopify_id']],
+                    'last_order_at' => $payload['last_order_at'],
                 ];
             }
         }
+    }
+
+    // This releases collected last-order timestamps so the controller can process them chunk by chunk.
+    public function releaseLastOrderAtRows(): array
+    {
+        $rows = $this->lastOrderAtRows;
+        $this->lastOrderAtRows = [];
+
+        return $rows;
     }
 
     // This safely converts a mixed input into an integer value.

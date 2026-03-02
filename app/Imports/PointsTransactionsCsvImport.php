@@ -20,6 +20,21 @@ class PointsTransactionsCsvImport
     // This processes each CSV row and inserts unique points transactions.
     public function import(array $rows): void
     {
+        $shopifyIds = [];
+        foreach ($rows as $row) {
+            $shopifyId = trim((string) ($row['customer_shopify_id'] ?? ''));
+            if ($shopifyId !== '') {
+                $shopifyIds[] = $shopifyId;
+            }
+        }
+
+        $customers = Customer::query()
+            ->whereIn('shopify_id', array_values(array_unique($shopifyIds)))
+            ->get(['id', 'shopify_id'])
+            ->keyBy('shopify_id');
+
+        $records = [];
+
         foreach ($rows as $row) {
             // This links the row to a customer using Shopify's ID.
             $shopifyId = trim((string) ($row['customer_shopify_id'] ?? ''));
@@ -29,7 +44,7 @@ class PointsTransactionsCsvImport
             }
 
             // This ensures the customer exists locally before inserting a transaction.
-            $customer = Customer::query()->where('shopify_id', $shopifyId)->first();
+            $customer = $customers->get($shopifyId);
             if (!$customer) {
                 $this->pushSkipped($row, 'customer_not_found');
                 continue;
@@ -71,18 +86,8 @@ class PointsTransactionsCsvImport
             ]);
             $eventKey = $rawEventKey !== '' ? $rawEventKey : 'import:' . sha1($signature);
 
-            // This avoids inserting duplicate transactions for the same event.
-            $exists = DB::table('points_transactions')
-                ->where('customer_id', $customer->id)
-                ->where('event_key', $eventKey)
-                ->exists();
-
-            if ($exists) {
-                continue;
-            }
-
-            // This inserts the transaction in an approved state to reflect historical data.
-            DB::table('points_transactions')->insert([
+            // This inserts the transaction in an approved state and lets the unique key ignore duplicates.
+            $records[] = [
                 'customer_id' => $customer->id,
                 'points' => $points,
                 'status' => 'APPROVED',
@@ -97,9 +102,11 @@ class PointsTransactionsCsvImport
                 'reference_id' => Str::limit($eventKey, 64, ''),
                 'created_at' => $createdAt,
                 'updated_at' => $createdAt,
-            ]);
+            ];
+        }
 
-            $this->imported++;
+        if ($records !== []) {
+            $this->imported += DB::table('points_transactions')->insertOrIgnore($records);
         }
     }
 

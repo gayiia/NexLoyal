@@ -11,6 +11,7 @@
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
         {{-- Vite builds and injects the compiled CSS for this page. --}}
         @vite(['resources/css/app.css'])
+        <meta name="csrf-token" content="{{ csrf_token() }}">
         <style>
             {{-- These styles toggle light-mode colors for admin previews within the dark theme. --}}
             :root {
@@ -64,6 +65,24 @@
             .nl-theme-light .text-slate-500 {
                 color: #475569;
             }
+            .import-progress-bar {
+                width: var(--progress-width, 0%);
+            }
+            .import-progress-bar.processing {
+                width: 55%;
+                animation: import-progress 1.3s ease-in-out infinite;
+            }
+            @keyframes import-progress {
+                0% {
+                    transform: translateX(-65%);
+                }
+                50% {
+                    transform: translateX(35%);
+                }
+                100% {
+                    transform: translateX(160%);
+                }
+            }
         </style>
     </head>
     <body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
@@ -86,6 +105,11 @@
                             </x-page-header>
 
                             {{-- Validation errors from the upload/import process are listed here. --}}
+                            <div id="import-errors" class="mt-4 hidden rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                                <p class="font-semibold text-rose-100">Import failed.</p>
+                                <ul id="import-errors-list" class="mt-2 list-disc space-y-1 pl-5"></ul>
+                            </div>
+
                             @if ($errors->any())
                                 <div class="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
                                     <p class="font-semibold text-rose-100">Import failed.</p>
@@ -96,6 +120,20 @@
                                     </ul>
                                 </div>
                             @endif
+
+                            <section id="import-progress-panel" class="mt-4 hidden rounded-2xl border border-sky-500/30 bg-sky-500/10 p-6 text-sm text-sky-100">
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <p class="font-semibold text-sky-50">Import in progress</p>
+                                        <p id="import-progress-label" class="text-xs text-sky-200">Uploading CSV files...</p>
+                                    </div>
+                                    <p id="import-progress-value" class="text-xs font-semibold text-sky-100">0%</p>
+                                </div>
+                                <div class="mt-4 h-3 overflow-hidden rounded-full bg-slate-950/60">
+                                    <div id="import-progress-bar" class="import-progress-bar h-full rounded-full bg-gradient-to-r from-sky-300 via-cyan-300 to-emerald-300 transition-[width] duration-300 ease-out"></div>
+                                </div>
+                                <p class="mt-3 text-xs text-sky-200">Keep this tab open until the import summary appears.</p>
+                            </section>
 
                             {{-- The import summary is only shown after a successful or partial import. --}}
                             @if (session('import_summary'))
@@ -179,7 +217,7 @@
                                     <p class="text-sm font-semibold text-slate-100">Upload CSV files</p>
                                     <p class="mt-1 text-xs text-slate-400">Customers file is required. Others are optional.</p>
 
-                                    <form class="mt-4 space-y-4" method="POST" action="{{ route('ai-data-import.store') }}" enctype="multipart/form-data">
+                                    <form id="ai-import-form" class="mt-4 space-y-4" method="POST" action="{{ route('ai-data-import.store') }}" enctype="multipart/form-data">
                                         @csrf
                                         <div class="grid gap-4 md:grid-cols-2">
                                             <div>
@@ -210,7 +248,7 @@
                                         </div>
 
                                         <div class="flex flex-wrap items-center gap-3">
-                                            <button type="submit" class="rounded-xl bg-sky-400 px-5 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-sky-500/30">
+                                            <button id="import-submit-button" type="submit" class="rounded-xl bg-sky-400 px-5 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-sky-500/30">
                                                 Import CSV
                                             </button>
                                             {{-- The import message reflects that database writes are wrapped in a transaction. --}}
@@ -231,6 +269,14 @@
                 const storageKey = 'nl-theme';
                 const body = document.body;
                 const button = document.getElementById('theme-toggle');
+                const form = document.getElementById('ai-import-form');
+                const submitButton = document.getElementById('import-submit-button');
+                const progressPanel = document.getElementById('import-progress-panel');
+                const progressLabel = document.getElementById('import-progress-label');
+                const progressValue = document.getElementById('import-progress-value');
+                const progressBar = document.getElementById('import-progress-bar');
+                const errorsPanel = document.getElementById('import-errors');
+                const errorsList = document.getElementById('import-errors-list');
 
                 // Apply light or dark styles and update the button label.
                 const applyTheme = (theme) => {
@@ -267,6 +313,128 @@
                 if (settingsToggle && settingsMenu) {
                     settingsToggle.addEventListener('click', () => {
                         settingsMenu.classList.toggle('hidden');
+                    });
+                }
+
+                const clearErrors = () => {
+                    if (!errorsPanel || !errorsList) {
+                        return;
+                    }
+                    errorsList.innerHTML = '';
+                    errorsPanel.classList.add('hidden');
+                };
+
+                const showErrors = (messages) => {
+                    if (!errorsPanel || !errorsList) {
+                        return;
+                    }
+                    errorsList.innerHTML = '';
+                    messages.forEach((message) => {
+                        const item = document.createElement('li');
+                        item.textContent = message;
+                        errorsList.appendChild(item);
+                    });
+                    errorsPanel.classList.remove('hidden');
+                    errorsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                };
+
+                const setProgress = (value, label, processing = false) => {
+                    if (!progressPanel || !progressLabel || !progressValue || !progressBar) {
+                        return;
+                    }
+
+                    progressPanel.classList.remove('hidden');
+                    progressLabel.textContent = label;
+
+                    if (processing) {
+                        progressValue.textContent = 'Processing';
+                        progressBar.classList.add('processing');
+                        progressBar.style.setProperty('--progress-width', '55%');
+                        return;
+                    }
+
+                    const boundedValue = Math.max(0, Math.min(100, value));
+                    progressValue.textContent = `${Math.round(boundedValue)}%`;
+                    progressBar.classList.remove('processing');
+                    progressBar.style.setProperty('--progress-width', `${boundedValue}%`);
+                };
+
+                if (form && submitButton) {
+                    form.addEventListener('submit', (event) => {
+                        event.preventDefault();
+                        clearErrors();
+
+                        const data = new FormData(form);
+                        const xhr = new XMLHttpRequest();
+
+                        submitButton.disabled = true;
+                        submitButton.classList.add('cursor-not-allowed', 'opacity-70');
+                        setProgress(0, 'Uploading CSV files...');
+
+                        xhr.open('POST', form.action, true);
+                        xhr.setRequestHeader('Accept', 'application/json');
+                        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+                        xhr.upload.addEventListener('progress', (uploadEvent) => {
+                            if (!uploadEvent.lengthComputable) {
+                                setProgress(15, 'Uploading CSV files...');
+                                return;
+                            }
+
+                            const uploadPercent = (uploadEvent.loaded / uploadEvent.total) * 100;
+                            const displayPercent = Math.min(90, uploadPercent);
+                            setProgress(displayPercent, 'Uploading CSV files...');
+                        });
+
+                        xhr.addEventListener('load', () => {
+                            submitButton.disabled = false;
+                            submitButton.classList.remove('cursor-not-allowed', 'opacity-70');
+
+                            let payload = {};
+                            try {
+                                payload = JSON.parse(xhr.responseText || '{}');
+                            } catch (error) {
+                                payload = {};
+                            }
+
+                            if (xhr.status >= 200 && xhr.status < 300 && payload.redirect) {
+                                setProgress(100, 'Import completed. Redirecting...');
+                                window.location.assign(payload.redirect);
+                                return;
+                            }
+
+                            const messages = [];
+                            if (payload.errors && typeof payload.errors === 'object') {
+                                Object.values(payload.errors).forEach((group) => {
+                                    if (Array.isArray(group)) {
+                                        group.forEach((message) => messages.push(message));
+                                    }
+                                });
+                            }
+                            if (messages.length === 0) {
+                                messages.push(payload.message || 'The import failed before completion.');
+                            }
+
+                            progressPanel?.classList.add('hidden');
+                            showErrors(messages);
+                        });
+
+                        xhr.addEventListener('error', () => {
+                            submitButton.disabled = false;
+                            submitButton.classList.remove('cursor-not-allowed', 'opacity-70');
+                            progressPanel?.classList.add('hidden');
+                            showErrors(['The import request could not be completed.']);
+                        });
+
+                        xhr.addEventListener('loadstart', () => {
+                            setProgress(5, 'Uploading CSV files...');
+                        });
+
+                        xhr.upload.addEventListener('loadend', () => {
+                            setProgress(95, 'Files uploaded. Importing records...', true);
+                        });
+
+                        xhr.send(data);
                     });
                 }
             })();
