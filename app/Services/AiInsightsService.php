@@ -19,7 +19,7 @@ class AiInsightsService
     }
 
     // This builds feature vectors from customer activity and optionally persists them for later reuse.
-    public function computeCustomerFeatures(bool $persist = true, bool $buildDataset = true): array
+    public function computeCustomerFeatures(bool $persist = true, bool $buildDataset = true, bool $incremental = false): array
     {
         // These configuration values define which features exist and how they are scaled for clustering.
         $featureKeys = (array) config('ai.feature_keys', []);
@@ -29,6 +29,27 @@ class AiInsightsService
         $excludeRefundOnly = (bool) config('ai.exclude_refund_only_customers', true);
         $newCustomerRecency = (int) config('ai.new_customer_recency_days', 365);
         $chunkSize = 500;
+        $hadStoredFeatures = DB::table('customer_features')->exists();
+        $targetCustomerIds = $this->resolveTargetCustomerIds($incremental, $hadStoredFeatures);
+        $usedFallbackToFull = $incremental && !$hadStoredFeatures;
+        if ($targetCustomerIds === []) {
+            return [
+                'feature_keys' => $featureKeys,
+                'log_transforms' => $logTransforms,
+                'outlier_caps' => [],
+                'customer_ids' => [],
+                'vectors' => [],
+                'snapshots' => [],
+                'excluded' => [],
+                'computation' => [
+                    'mode' => $incremental ? 'incremental' : 'full',
+                    'target_customers' => 0,
+                    'upserted_customers' => 0,
+                    'fallback_to_full' => $usedFallbackToFull,
+                    'reason' => $incremental ? 'no_changed_customers_with_new_points' : 'no_customers',
+                ],
+            ];
+        }
 
         $pointsTotals = DB::table('points_transactions')
             ->select('customer_id')
@@ -50,7 +71,7 @@ class AiInsightsService
         $featureBuckets = array_fill_keys($featureKeys, []);
         $excluded = [];
 
-        $this->customerFeatureBaseQuery($pointsTotals, $redeemedTotals, $lastOrderTotals)
+        $this->customerFeatureBaseQuery($pointsTotals, $redeemedTotals, $lastOrderTotals, $targetCustomerIds)
             ->chunkById($chunkSize, function ($customers) use (
                 &$featureBuckets,
                 &$excluded,
@@ -88,7 +109,8 @@ class AiInsightsService
         $customerIds = [];
         $snapshots = [];
 
-        $this->customerFeatureBaseQuery($pointsTotals, $redeemedTotals, $lastOrderTotals)
+        $upsertedCustomers = 0;
+        $this->customerFeatureBaseQuery($pointsTotals, $redeemedTotals, $lastOrderTotals, $targetCustomerIds)
             ->chunkById($chunkSize, function ($customers) use (
                 $persist,
                 $buildDataset,
@@ -99,6 +121,7 @@ class AiInsightsService
                 &$vectors,
                 &$customerIds,
                 &$snapshots,
+                &$upsertedCustomers,
                 $excludeZeroActivity,
                 $excludeRefundOnly,
                 $newCustomerRecency
@@ -161,6 +184,7 @@ class AiInsightsService
                 }
 
                 if ($persist && $featureRows !== []) {
+                    $upsertedCustomers += count($featureRows);
                     DB::table('customer_features')->upsert(
                         $featureRows,
                         ['customer_id'],
@@ -194,6 +218,15 @@ class AiInsightsService
             'vectors' => $buildDataset ? $vectors : [],
             'snapshots' => $buildDataset ? $snapshots : [],
             'excluded' => $excluded,
+            'computation' => [
+                'mode' => $incremental ? 'incremental' : 'full',
+                'target_customers' => is_array($targetCustomerIds) ? count($targetCustomerIds) : (int) Customer::query()->count(),
+                'upserted_customers' => $persist ? $upsertedCustomers : 0,
+                'fallback_to_full' => $usedFallbackToFull,
+                'reason' => $incremental
+                    ? ($usedFallbackToFull ? 'first_run_full_recompute' : 'changed_customers_with_new_points')
+                    : 'explicit_full_recompute',
+            ],
         ];
     }
 
@@ -244,10 +277,42 @@ class AiInsightsService
         }
     }
 
-    // This base query joins customer aggregates so feature computation can stream in chunks.
-    private function customerFeatureBaseQuery($pointsTotals, $redeemedTotals, $lastOrderTotals)
+    // This resolves which customers should be recomputed for feature updates.
+    private function resolveTargetCustomerIds(bool $incremental, bool $hasStoredFeatures): ?array
     {
+        if (!$incremental || !$hasStoredFeatures) {
+            return null;
+        }
+
+        $relevantTypes = ['EARN', 'SPEND'];
+
+        $changedRows = DB::table('points_transactions as pt')
+            ->selectRaw('pt.customer_id, MAX(pt.created_at) as latest_transaction_at')
+            ->whereNotNull('pt.customer_id')
+            ->whereIn('pt.type', $relevantTypes)
+            ->groupBy('pt.customer_id');
+
         return Customer::query()
+            ->leftJoinSub($changedRows, 'changed_points', function ($join): void {
+                $join->on('changed_points.customer_id', '=', 'customers.id');
+            })
+            ->leftJoin('customer_features as cf', 'cf.customer_id', '=', 'customers.id')
+            ->whereNotNull('changed_points.latest_transaction_at')
+            ->where(function ($query): void {
+                $query->whereNull('cf.customer_id')
+                    ->orWhereNull('cf.computed_at')
+                    ->orWhereRaw('changed_points.latest_transaction_at > cf.computed_at');
+            })
+            ->orderBy('customers.id')
+            ->pluck('customers.id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
+    // This base query joins customer aggregates so feature computation can stream in chunks.
+    private function customerFeatureBaseQuery($pointsTotals, $redeemedTotals, $lastOrderTotals, ?array $targetCustomerIds = null)
+    {
+        $query = Customer::query()
             ->leftJoinSub($pointsTotals, 'points_totals', function ($join): void {
                 $join->on('points_totals.customer_id', '=', 'customers.id');
             })
@@ -270,6 +335,12 @@ class AiInsightsService
             ->selectRaw('COALESCE(redeemed_totals.total, 0) as redeemed_coupons_total')
             ->selectRaw('last_order_totals.last_order_at as last_order_total_at')
             ->orderBy('customers.id');
+
+        if (is_array($targetCustomerIds) && $targetCustomerIds !== []) {
+            $query->whereIn('customers.id', $targetCustomerIds);
+        }
+
+        return $query;
     }
 
     // This normalizes a joined customer row into reusable raw-feature and exclusion data.
@@ -329,11 +400,14 @@ class AiInsightsService
     // This sends the prepared vectors and metadata to the AI service to train clustering.
     public function train(array $vectors, array $featureKeys, array|object $caps, array $logTransforms): array
     {
+        $fixedK = config('ai.fixed_k');
+
         return $this->client->train([
             'features' => $vectors,
             'feature_names' => $featureKeys,
             'min_k' => (int) data_get(config('ai.k_range'), 'min', 2),
             'max_k' => (int) data_get(config('ai.k_range'), 'max', 6),
+            'fixed_k' => is_numeric($fixedK) ? (int) $fixedK : null,
             'outlier_caps' => $caps,
             'log_transforms' => $logTransforms,
             'feature_schema_version' => config('ai.feature_schema_version'),
@@ -343,10 +417,11 @@ class AiInsightsService
     }
 
     // This exports the stored feature dataset to a JSON file so training can stream from disk.
-    public function exportStoredTrainingPayload(): array
+    public function exportStoredTrainingPayload(array $trainingMetadata = []): array
     {
         $featureKeys = (array) config('ai.feature_keys', []);
         $logTransforms = (array) config('ai.log_transforms', []);
+        $fixedK = config('ai.fixed_k');
         $path = tempnam(sys_get_temp_dir(), 'ai-train-');
         if ($path === false) {
             throw new \RuntimeException('Unable to create AI training payload file.');
@@ -365,6 +440,8 @@ class AiInsightsService
             fwrite($handle, json_encode($featureKeys, JSON_THROW_ON_ERROR));
             fwrite($handle, ',"min_k":'.(int) data_get(config('ai.k_range'), 'min', 2));
             fwrite($handle, ',"max_k":'.(int) data_get(config('ai.k_range'), 'max', 6));
+            fwrite($handle, ',"fixed_k":');
+            fwrite($handle, json_encode(is_numeric($fixedK) ? (int) $fixedK : null, JSON_THROW_ON_ERROR));
             fwrite($handle, ',"outlier_caps":{}');
             fwrite($handle, ',"log_transforms":');
             fwrite($handle, json_encode($logTransforms, JSON_THROW_ON_ERROR));
@@ -374,6 +451,8 @@ class AiInsightsService
             fwrite($handle, json_encode(config('ai.algorithm_version'), JSON_THROW_ON_ERROR));
             fwrite($handle, ',"code_version":');
             fwrite($handle, json_encode(config('ai.code_version'), JSON_THROW_ON_ERROR));
+            fwrite($handle, ',"training_metadata":');
+            fwrite($handle, json_encode($trainingMetadata, JSON_THROW_ON_ERROR));
             fwrite($handle, ',"features":[');
 
             $isFirst = true;
@@ -428,6 +507,12 @@ class AiInsightsService
     public function trainFromJsonFile(string $path): array
     {
         return $this->client->trainFromJsonFile($path);
+    }
+
+    // This predicts cluster labels for the full dataset from a JSON payload using the existing saved model.
+    public function predictFromJsonFile(string $path): array
+    {
+        return $this->client->predictBatchFromJsonFile($path);
     }
 
     // This streams the stored feature rows in training order so callers can align them with returned labels.

@@ -113,6 +113,75 @@ class AiClusterClient
         return $data;
     }
 
+    // This requests model metadata so Laravel can decide whether retraining is needed.
+    public function modelMetadata(): array
+    {
+        $baseUrl = trim((string) config('services.ai_service_url'));
+        if ($baseUrl === '') {
+            throw new \RuntimeException('AI service URL is not configured.');
+        }
+
+        $endpoint = rtrim($baseUrl, '/').'/ai/model/metadata';
+        $response = Http::timeout((int) config('ai.ai_timeout_seconds', 30))
+            ->withHeaders($this->authHeaders())
+            ->get($endpoint);
+
+        if (!$response->successful()) {
+            $status = $response->status();
+            $body = $response->body();
+            throw new \RuntimeException("AI model metadata request failed ({$status}): {$body}");
+        }
+
+        $data = $response->json();
+        if (!is_array($data)) {
+            throw new \RuntimeException('AI service returned invalid metadata response.');
+        }
+
+        return $data;
+    }
+
+    // This sends a batch prediction payload from disk to reuse a trained model without retraining.
+    public function predictBatchFromJsonFile(string $path): array
+    {
+        $baseUrl = trim((string) config('services.ai_service_url'));
+        if ($baseUrl === '') {
+            throw new \RuntimeException('AI service URL is not configured.');
+        }
+        if (!is_file($path)) {
+            throw new \RuntimeException('AI prediction payload file was not found.');
+        }
+
+        $endpoint = rtrim($baseUrl, '/').'/ai/cluster/predict-batch';
+        $handle = fopen($path, 'rb');
+        if ($handle === false) {
+            throw new \RuntimeException('AI prediction payload file could not be opened.');
+        }
+
+        try {
+            $response = Http::timeout((int) config('ai.ai_timeout_seconds', 30))
+                ->withHeaders(array_merge($this->authHeaders(), [
+                    'Content-Type' => 'application/json',
+                ]))
+                ->withOptions(['body' => $handle])
+                ->send('POST', $endpoint);
+        } finally {
+            fclose($handle);
+        }
+
+        if (!$response->successful()) {
+            $status = $response->status();
+            $body = $response->body();
+            throw new \RuntimeException("AI batch prediction failed ({$status}): {$body}");
+        }
+
+        $data = $response->json();
+        if (!is_array($data) || !is_array($data['labels'] ?? null)) {
+            throw new \RuntimeException('AI service returned invalid batch prediction response.');
+        }
+
+        return $data;
+    }
+
     // This sends a prediction request for a single feature vector.
     public function predict(array $payload): array
     {

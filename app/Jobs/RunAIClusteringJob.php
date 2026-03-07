@@ -8,6 +8,7 @@ use App\Models\AiClusterCustomer;
 use App\Models\AiClusterRun;
 use App\Enums\AiRunStatus;
 use App\Services\AiInsightsService;
+use App\Services\AiSmartRetrainingService;
 use App\Support\AiClusterProgress;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -27,7 +28,7 @@ class RunAIClusteringJob implements ShouldQueue
     use SerializesModels;
 
     // This acquires a lock so clustering runs are not overlapping.
-    public function handle(AiInsightsService $insights): void
+    public function handle(AiInsightsService $insights, AiSmartRetrainingService $smartRetraining): void
     {
         $lock = Cache::lock('ai_cluster_run', 1200);
         if (!$lock->get()) {
@@ -39,7 +40,11 @@ class RunAIClusteringJob implements ShouldQueue
         $featureKeys = (array) config('ai.feature_keys', []);
         $minK = (int) data_get(config('ai.k_range'), 'min', 2);
         $maxK = (int) data_get(config('ai.k_range'), 'max', 6);
+        $fixedK = config('ai.fixed_k');
+        $fixedK = is_numeric($fixedK) ? (int) $fixedK : null;
         $minCustomers = (int) config('ai.min_customers_for_training', 20);
+        $smartRetrainingEnabled = (bool) config('ai.smart_retraining_enabled', true);
+        $retrainIntervalDays = (int) config('ai.retrain_interval_days', 7);
 
         // This records the start of a clustering run for audit and status tracking.
         $run = AiClusterRun::create([
@@ -49,12 +54,15 @@ class RunAIClusteringJob implements ShouldQueue
                 'feature_keys' => $featureKeys,
                 'min_k' => $minK,
                 'max_k' => $maxK,
+                'fixed_k' => $fixedK,
                 'outlier_cap_quantile' => config('ai.outlier_cap_quantile'),
                 'log_transforms' => config('ai.log_transforms'),
                 'feature_schema_version' => config('ai.feature_schema_version'),
                 'algorithm_version' => config('ai.algorithm_version'),
                 'exclude_zero_activity_customers' => config('ai.exclude_zero_activity_customers'),
                 'exclude_refund_only_customers' => config('ai.exclude_refund_only_customers'),
+                'smart_retraining_enabled' => $smartRetrainingEnabled,
+                'retrain_interval_days' => $retrainIntervalDays,
             ],
         ]);
         AiClusterProgress::attachRun($run->id, "Cluster run #{$run->id} started.");
@@ -73,9 +81,35 @@ class RunAIClusteringJob implements ShouldQueue
                 return;
             }
 
+            $retrainDecision = $smartRetraining->evaluate();
+            $shouldRetrain = (bool) ($retrainDecision['should_retrain'] ?? true);
+            $decisionReason = (string) ($retrainDecision['reason'] ?? 'unknown');
+            $decisionMessage = (string) ($retrainDecision['message'] ?? 'No decision message provided.');
+            $decisionDetails = is_array($retrainDecision['details'] ?? null) ? $retrainDecision['details'] : [];
+
+            Log::info('AI smart retraining decision computed', [
+                'should_retrain' => $shouldRetrain,
+                'reason' => $decisionReason,
+                'message' => $decisionMessage,
+                'fixed_k' => $fixedK,
+                'details' => $decisionDetails,
+            ]);
+            AiClusterProgress::log(
+                ($shouldRetrain ? 'Retraining triggered: ' : 'Retraining skipped: ') . $decisionMessage,
+                'decision'
+            );
+
+            $trainingMetadata = [
+                'last_trained_at' => now()->toIso8601String(),
+                'last_seen_points_transaction_at' => data_get($retrainDecision, 'snapshot.last_seen_points_transaction_at'),
+                'last_seen_points_transaction_id' => data_get($retrainDecision, 'snapshot.last_seen_points_transaction_id'),
+                'customer_count_at_training' => data_get($retrainDecision, 'snapshot.customer_count_at_training'),
+                'transaction_count_at_training' => data_get($retrainDecision, 'snapshot.transaction_count_at_training'),
+            ];
+
             // This streams stored features to a JSON file so Laravel does not keep the full matrix in memory.
             AiClusterProgress::log('Preparing stored customer features for training.', 'dataset');
-            $dataset = $insights->exportStoredTrainingPayload();
+            $dataset = $insights->exportStoredTrainingPayload($trainingMetadata);
             $payloadPath = $dataset['path'] ?? null;
             $trainingCount = (int) ($dataset['count'] ?? 0);
             AiClusterProgress::log('Eligible customers ready for training: ' . number_format($trainingCount) . '.', 'dataset');
@@ -92,9 +126,27 @@ class RunAIClusteringJob implements ShouldQueue
                 return;
             }
 
-            // This calls the AI service to train and assign cluster labels.
-            AiClusterProgress::log('Sending feature matrix to the AI service.', 'training');
-            $response = $insights->trainFromJsonFile($payloadPath);
+            if ($shouldRetrain) {
+                // This calls the AI service to train and assign cluster labels.
+                Log::info('AI clustering retraining triggered', [
+                    'run_id' => $run->id,
+                    'training_count' => $trainingCount,
+                    'fixed_k' => $fixedK,
+                    'decision_reason' => $decisionReason,
+                ]);
+                AiClusterProgress::log('Sending feature matrix to the AI service for retraining.', 'training');
+                $response = $insights->trainFromJsonFile($payloadPath);
+            } else {
+                // This reuses the existing model to assign labels without retraining.
+                Log::info('AI clustering retraining skipped; reusing saved model for prediction', [
+                    'run_id' => $run->id,
+                    'training_count' => $trainingCount,
+                    'fixed_k' => $fixedK,
+                    'decision_reason' => $decisionReason,
+                ]);
+                AiClusterProgress::log('Reusing existing model to predict labels for current features.', 'predicting');
+                $response = $insights->predictFromJsonFile($payloadPath);
+            }
             AiClusterProgress::log('AI service returned cluster labels. Persisting results.', 'persisting');
 
             $labels = $response['labels'] ?? [];
@@ -151,7 +203,19 @@ class RunAIClusteringJob implements ShouldQueue
             $clusterRecords = $this->applyClusterLabels($clusterRecords);
 
             // This persists clusters and their customer assignments in streaming chunks.
-            DB::transaction(function () use ($insights, $run, $clusterRecords, $labels, $response, $trainingCount): void {
+            DB::transaction(function () use (
+                $insights,
+                $run,
+                $clusterRecords,
+                $labels,
+                $response,
+                $trainingCount,
+                $retrainDecision,
+                $shouldRetrain,
+                $decisionReason,
+                $decisionMessage,
+                $decisionDetails
+            ): void {
                 $clusterIdMap = [];
                 foreach ($clusterRecords as $labelKey => $data) {
                     $cluster = AiCluster::create($data);
@@ -212,7 +276,15 @@ class RunAIClusteringJob implements ShouldQueue
                     'feature_names' => data_get($response, 'scaler.feature_names'),
                     'outlier_caps' => data_get($response, 'scaler.outlier_caps'),
                     'log_transforms' => data_get($response, 'scaler.log_transforms'),
-                    'model_metadata' => $response['model_metadata'] ?? null,
+                    'model_metadata' => $response['model_metadata'] ?? data_get($retrainDecision, 'model_metadata'),
+                    'params' => array_merge((array) ($run->params ?? []), [
+                        'retraining' => [
+                            'should_retrain' => $shouldRetrain,
+                            'reason' => $decisionReason,
+                            'message' => $decisionMessage,
+                            'details' => $decisionDetails,
+                        ],
+                    ]),
                 ]);
             });
             AiClusterProgress::markCompleted($run->id, "Cluster run #{$run->id} completed.");

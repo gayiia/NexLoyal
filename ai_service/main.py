@@ -72,6 +72,7 @@ SILHOUETTE_SAMPLE_SIZE = int(os.getenv("AI_SILHOUETTE_SAMPLE_SIZE", "5000"))
 MINIBATCH_THRESHOLD = int(os.getenv("AI_MINIBATCH_THRESHOLD", "10000"))
 MINIBATCH_SIZE = int(os.getenv("AI_MINIBATCH_BATCH_SIZE", "2048"))
 KMEANS_MAX_ITER = int(os.getenv("AI_KMEANS_MAX_ITER", "100"))
+AI_FIXED_K_RAW = os.getenv("AI_FIXED_K", "").strip()
 REQUIRE_API_KEY = True
 API_KEY = os.getenv("AI_API_KEY", "").strip()
 CODE_VERSION = os.getenv("AI_CODE_VERSION", "").strip() or "unknown"
@@ -113,6 +114,10 @@ class TrainRequest(BaseModel):
     algorithm_version: Optional[str] = None
     # Optional code version tag.
     code_version: Optional[str] = None
+    # Optional training metadata from Laravel to support smart retraining decisions.
+    training_metadata: Optional[Dict[str, Any]] = None
+    # Optional fixed k override from Laravel; when set, skip k-range search.
+    fixed_k: Optional[int] = None
 
     @root_validator(pre=True)
     def normalize_feature_names(cls, values: Dict[str, Any]) -> Dict[str, Any]:
@@ -129,6 +134,24 @@ class PredictRequest(BaseModel):
     features: Optional[List[float]] = None
     # Reserved for future lookup support (not used in this service).
     customer_id: Optional[str] = None
+
+
+class PredictBatchRequest(BaseModel):
+    # Matrix of feature vectors, one row per customer.
+    features: List[List[float]] = Field(default_factory=list)
+
+
+@app.get("/ai/model/metadata")
+def model_metadata(request: Request) -> Dict[str, Any]:
+    # Expose persisted model metadata so Laravel can make retraining decisions.
+    _validate_api_key(request)
+    state = _ensure_model_state()
+    return {
+        "status": "ok",
+        "model_loaded": state is not None,
+        "model_metadata": (state or {}).get("model_metadata"),
+        "selected_k": (state or {}).get("selected_k"),
+    }
 
 
 def _error_response(error_code: str, message: str, details: Any = None, hint: Optional[str] = None) -> Dict[str, Any]:
@@ -247,6 +270,18 @@ def _compute_dataset_hash(features: List[List[float]], feature_names: List[str])
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _resolve_fixed_k(payload_fixed_k: Optional[int]) -> Optional[int]:
+    # Resolve fixed k from request first, then from environment.
+    if payload_fixed_k is not None:
+        return int(payload_fixed_k)
+    if AI_FIXED_K_RAW == "":
+        return None
+    try:
+        return int(AI_FIXED_K_RAW)
+    except ValueError:
+        return None
+
+
 def _apply_preprocessing(
     raw: np.ndarray,
     feature_names: List[str],
@@ -347,19 +382,31 @@ async def train_clusters(request: Request):
     n_samples = int(data.shape[0])
     min_k = int(payload.min_k)
     max_k = int(payload.max_k)
-    if min_k < 2:
-        _raise_validation("invalid_k_range", "min_k must be at least 2.", details={"min_k": min_k})
-    if max_k <= min_k:
-        _raise_validation("invalid_k_range", "max_k must be greater than min_k.", details={"min_k": min_k, "max_k": max_k})
+    fixed_k = _resolve_fixed_k(payload.fixed_k)
+
+    if fixed_k is None:
+        if min_k < 2:
+            _raise_validation("invalid_k_range", "min_k must be at least 2.", details={"min_k": min_k})
+        if max_k <= min_k:
+            _raise_validation("invalid_k_range", "max_k must be greater than min_k.", details={"min_k": min_k, "max_k": max_k})
+    elif fixed_k < 2:
+        _raise_validation("invalid_fixed_k", "fixed_k must be at least 2.", details={"fixed_k": fixed_k})
 
     # Enforce hard upper bound so we don't request more clusters than samples.
     max_allowed = min(MAX_K_LIMIT, n_samples - 1)
-    if max_k > max_allowed:
+    if fixed_k is None and max_k > max_allowed:
         _raise_validation(
             "k_too_large",
             "max_k is too large for the dataset.",
             details={"max_k": max_k, "max_allowed": max_allowed},
             hint="Lower max_k or provide more samples.",
+        )
+    if fixed_k is not None and fixed_k > max_allowed:
+        _raise_validation(
+            "fixed_k_too_large",
+            "fixed_k is too large for the dataset.",
+            details={"fixed_k": fixed_k, "max_allowed": max_allowed},
+            hint="Lower fixed_k or provide more samples.",
         )
 
     # ---------------------------
@@ -375,9 +422,9 @@ async def train_clusters(request: Request):
     scaled = scaler.fit_transform(processed)
 
     # ---------------------------
-    # Step 3: Train multiple K values
+    # Step 3: Train model
     # ---------------------------
-    # Search for the best k using silhouette score.
+    # Search for the best k using silhouette score unless fixed k is provided.
     best_k = None
     best_score = None
     best_inertia = None
@@ -389,25 +436,37 @@ async def train_clusters(request: Request):
     # Evaluate each k and keep the best scoring result.
     used_minibatch = n_samples >= MINIBATCH_THRESHOLD
 
-    for k in range(min_k, max_k + 1):
-        # Fit a clustering model for the current number of clusters.
-        model = _build_cluster_model(k, n_samples)
+    if fixed_k is not None:
+        # Fixed-k mode: train only once and skip k-search for predictable runtime.
+        model = _build_cluster_model(fixed_k, n_samples)
         labels = model.fit_predict(scaled)
-        # Inertia is how tight the clusters are (lower is better).
-        inertia = float(model.inertia_)
-        inertia_scores.append({"k": k, "inertia": inertia})
+        best_k = fixed_k
+        best_labels = labels
+        best_centroids = model.cluster_centers_
+        best_inertia = float(model.inertia_)
+        best_score = _score_silhouette(scaled, labels)
+        silhouette_scores.append({"k": fixed_k, "score": best_score})
+        inertia_scores.append({"k": fixed_k, "inertia": best_inertia})
+    else:
+        for k in range(min_k, max_k + 1):
+            # Fit a clustering model for the current number of clusters.
+            model = _build_cluster_model(k, n_samples)
+            labels = model.fit_predict(scaled)
+            # Inertia is how tight the clusters are (lower is better).
+            inertia = float(model.inertia_)
+            inertia_scores.append({"k": k, "inertia": inertia})
 
-        # Silhouette score only works when there is more than one cluster label.
-        score = _score_silhouette(scaled, labels)
-        silhouette_scores.append({"k": k, "score": score})
+            # Silhouette score only works when there is more than one cluster label.
+            score = _score_silhouette(scaled, labels)
+            silhouette_scores.append({"k": k, "score": score})
 
-        # Track the best scoring model so far.
-        if score is not None and (best_score is None or score > best_score):
-            best_score = score
-            best_k = k
-            best_labels = labels
-            best_centroids = model.cluster_centers_
-            best_inertia = inertia
+            # Track the best scoring model so far.
+            if score is not None and (best_score is None or score > best_score):
+                best_score = score
+                best_k = k
+                best_labels = labels
+                best_centroids = model.cluster_centers_
+                best_inertia = inertia
 
     # ---------------------------
     # Step 4: Save model snapshot
@@ -434,6 +493,9 @@ async def train_clusters(request: Request):
         "code_version": payload.code_version or CODE_VERSION,
         "trained_at": finished.isoformat(),
     }
+    if payload.training_metadata and isinstance(payload.training_metadata, dict):
+        # Keep Laravel-provided watermarks in the model metadata for smart retraining checks.
+        model_metadata.update(payload.training_metadata)
 
     # Store all parameters needed to reproduce scaling and predictions.
     model_state = {
@@ -479,6 +541,8 @@ async def train_clusters(request: Request):
         },
         "training_strategy": {
             "estimator": "minibatch_kmeans" if used_minibatch else "kmeans",
+            "mode": "fixed_k" if fixed_k is not None else "k_search",
+            "fixed_k": fixed_k,
             "silhouette_sample_size": min(SILHOUETTE_SAMPLE_SIZE, n_samples),
             "minibatch_threshold": MINIBATCH_THRESHOLD,
         },
@@ -581,6 +645,75 @@ async def predict_cluster(request: Request):
     return {
         "cluster_id": cluster_index,
         "distance": float(distances[cluster_index]),
+        "selected_k": state.get("selected_k"),
+        "model_metadata": state.get("model_metadata"),
+    }
+
+
+@app.post("/ai/cluster/predict-batch")
+async def predict_batch(request: Request):
+    # Predict labels for a full feature matrix using the currently saved model state.
+    _validate_api_key(request)
+    payload = await _parse_json_body(request, PredictBatchRequest)
+
+    state = _ensure_model_state()
+    if not state:
+        raise HTTPException(
+            status_code=409,
+            detail=_error_response(
+                "model_not_trained",
+                "No trained model is available.",
+                hint="Train the model before calling /ai/cluster/predict-batch.",
+            ),
+        )
+
+    if not payload.features:
+        _raise_validation("features_empty", "No features provided.", hint="Send a non-empty features matrix.")
+
+    data = np.array(payload.features, dtype=float)
+    if data.ndim != 2:
+        _raise_validation("invalid_features_shape", "Features must be a 2D matrix.")
+    if not np.isfinite(data).all():
+        _raise_validation("non_finite_values", "Features contain NaN or infinite values.")
+
+    feature_names = state.get("feature_names") or []
+    if feature_names and data.shape[1] != len(feature_names):
+        _raise_validation(
+            "feature_length_mismatch",
+            "Feature vector length does not match trained schema.",
+            details={"expected": len(feature_names), "received": int(data.shape[1])},
+        )
+    if not feature_names:
+        feature_names = [f"f{i}" for i in range(int(data.shape[1]))]
+
+    processed = _apply_preprocessing(
+        data,
+        feature_names,
+        state.get("outlier_caps"),
+        state.get("log_transforms"),
+    )
+
+    mean = np.array(state.get("scaler_mean", []), dtype=float)
+    scale = np.array(state.get("scaler_scale", []), dtype=float)
+    if mean.size and scale.size:
+        scale = np.where(scale == 0, 1, scale)
+        scaled = (processed - mean) / scale
+    else:
+        scaled = processed
+
+    centroids = np.array(state.get("centroids", []), dtype=float)
+    if centroids.size == 0:
+        raise HTTPException(
+            status_code=500,
+            detail=_error_response("model_state_invalid", "Centroids are missing from model state."),
+        )
+
+    distances = np.linalg.norm(centroids[None, :, :] - scaled[:, None, :], axis=2)
+    labels = np.argmin(distances, axis=1)
+
+    return {
+        "labels": labels.tolist(),
+        "centroids": centroids.tolist(),
         "selected_k": state.get("selected_k"),
         "model_metadata": state.get("model_metadata"),
     }
