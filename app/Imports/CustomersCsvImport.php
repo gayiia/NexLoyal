@@ -10,6 +10,10 @@ use Illuminate\Support\Facades\DB;
 // This class tracks import stats while normalizing customer data from CSV exports.
 class CustomersCsvImport
 {
+    public function __construct(private ?int $batchId = null)
+    {
+    }
+
     public int $imported = 0;
     public int $updated = 0;
     public int $skipped = 0;
@@ -57,8 +61,44 @@ class CustomersCsvImport
 
         $existingIds = Customer::query()
             ->whereIn('shopify_id', array_values(array_unique($shopifyIds)))
-            ->pluck('id', 'shopify_id')
-            ->all();
+            ->get()
+            ->keyBy('shopify_id');
+
+        if ($this->batchId) {
+            $snapshotRows = [];
+            foreach ($existingIds as $shopifyId => $customer) {
+                $snapshot = $customer->getAttributes();
+                $snapshotRows[] = [
+                    'ai_import_batch_id' => $this->batchId,
+                    'customer_id' => $customer->id,
+                    'shopify_id' => (string) $shopifyId,
+                    'existed_before' => true,
+                    'snapshot' => json_encode($snapshot),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+
+            foreach (array_values(array_diff(array_unique($shopifyIds), array_keys($existingIds->all()))) as $shopifyId) {
+                $snapshotRows[] = [
+                    'ai_import_batch_id' => $this->batchId,
+                    'customer_id' => null,
+                    'shopify_id' => (string) $shopifyId,
+                    'existed_before' => false,
+                    'snapshot' => null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+
+            if ($snapshotRows !== []) {
+                DB::table('ai_import_batch_customer_snapshots')->upsert(
+                    $snapshotRows,
+                    ['ai_import_batch_id', 'shopify_id'],
+                    ['customer_id', 'existed_before', 'snapshot', 'updated_at']
+                );
+            }
+        }
 
         $timestamp = now();
         $upsertRows = [];
@@ -67,7 +107,7 @@ class CustomersCsvImport
             $shopifyId = $payload['shopify_id'];
 
             // These counters reflect first-seen inserts and subsequent updates within the same file.
-            if (isset($existingIds[$shopifyId]) || isset($newlyImported[$shopifyId])) {
+            if ($existingIds->has($shopifyId) || isset($newlyImported[$shopifyId])) {
                 $this->updated++;
             } else {
                 $this->imported++;
@@ -81,6 +121,7 @@ class CustomersCsvImport
                 'total_spent' => $payload['total_spent'],
                 'loyalty_points' => $payload['loyalty_points'],
                 'points_pending' => $payload['points_pending'],
+                'ai_import_batch_id' => $this->batchId,
                 'created_at' => $timestamp,
                 'updated_at' => $timestamp,
             ];
@@ -89,7 +130,7 @@ class CustomersCsvImport
         DB::table('customers')->upsert(
             $upsertRows,
             ['shopify_id'],
-            ['email', 'orders_count', 'total_spent', 'loyalty_points', 'points_pending', 'updated_at']
+            ['email', 'orders_count', 'total_spent', 'loyalty_points', 'points_pending', 'ai_import_batch_id', 'updated_at']
         );
 
         $customerIds = Customer::query()

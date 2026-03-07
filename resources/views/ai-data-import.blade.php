@@ -121,6 +121,12 @@
                                 </div>
                             @endif
 
+                            @if (session('status'))
+                                <div class="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+                                    {{ session('status') }}
+                                </div>
+                            @endif
+
                             <section id="import-progress-panel" class="mt-4 hidden rounded-2xl border border-sky-500/30 bg-sky-500/10 p-6 text-sm text-sky-100">
                                 <div class="flex flex-wrap items-center justify-between gap-3">
                                     <div>
@@ -255,6 +261,58 @@
                                             <p class="text-xs text-slate-400">The import runs inside a database transaction.</p>
                                         </div>
                                     </form>
+                                </div>
+                            </section>
+
+                            <section class="mt-6 grid gap-6 lg:grid-cols-2">
+                                <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
+                                    <p class="text-sm font-semibold text-slate-100">Latest AI import batch</p>
+                                    @if ($latestBatch)
+                                        <p class="mt-2 text-xs text-slate-300">Batch #{{ $latestBatch->id }} · {{ ucfirst($latestBatch->status) }}</p>
+                                        <p class="mt-1 text-xs text-slate-400">Started: {{ optional($latestBatch->started_at)->format('M d, Y H:i:s') ?: 'N/A' }}</p>
+                                        <p class="mt-1 text-xs text-slate-400">Completed: {{ optional($latestBatch->completed_at)->format('M d, Y H:i:s') ?: 'N/A' }}</p>
+                                        @if ($latestBatch->error_message)
+                                            <p class="mt-3 text-xs text-rose-300">{{ $latestBatch->error_message }}</p>
+                                        @endif
+                                    @else
+                                        <p class="mt-2 text-xs text-slate-400">No tracked AI import batches yet.</p>
+                                    @endif
+
+                                    <form class="mt-4 space-y-3" method="POST" action="{{ route('ai-data-import.reset') }}" onsubmit="return confirm('Reset the latest AI import and clear derived AI data?');">
+                                        @csrf
+                                        <label class="flex items-start gap-2 text-xs text-slate-300">
+                                            <input type="checkbox" name="delete_customers_if_safe" value="1" @checked($customerAssessment['can_delete_all_customers_safely'] ?? false)>
+                                            <span>Also remove customers if the strict safety check says the table is legacy AI-import-only.</span>
+                                        </label>
+                                        <button type="submit" class="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-200">
+                                            Reset AI Import Data
+                                        </button>
+                                    </form>
+                                </div>
+
+                                <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
+                                    <p class="text-sm font-semibold text-slate-100">Customer table safety check</p>
+                                    <p class="mt-2 text-xs {{ ($customerAssessment['can_delete_all_customers_safely'] ?? false) ? 'text-emerald-300' : 'text-amber-300' }}">
+                                        {{ $customerAssessment['message'] ?? 'No assessment available.' }}
+                                    </p>
+                                    <div class="mt-4 grid gap-3 sm:grid-cols-2 text-xs text-slate-300">
+                                        <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
+                                            <p class="text-slate-400">Customers</p>
+                                            <p class="mt-1 text-slate-100">{{ number_format($customerAssessment['total_customers'] ?? 0) }}</p>
+                                        </div>
+                                        <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
+                                            <p class="text-slate-400">Rows with native signals</p>
+                                            <p class="mt-1 text-slate-100">{{ number_format($customerAssessment['rows_with_native_signals'] ?? 0) }}</p>
+                                        </div>
+                                        <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
+                                            <p class="text-slate-400">Remaining points</p>
+                                            <p class="mt-1 text-slate-100">{{ number_format($customerAssessment['remaining_points_transactions'] ?? 0) }}</p>
+                                        </div>
+                                        <div class="rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
+                                            <p class="text-slate-400">Remaining coupons</p>
+                                            <p class="mt-1 text-slate-100">{{ number_format($customerAssessment['remaining_customer_coupons'] ?? 0) }}</p>
+                                        </div>
+                                    </div>
                                 </div>
                             </section>
                         </main>

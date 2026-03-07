@@ -13,6 +13,10 @@ use Illuminate\Support\Str;
 // This class normalizes transaction data and inserts missing points transactions.
 class PointsTransactionsCsvImport
 {
+    public function __construct(private ?int $batchId = null)
+    {
+    }
+
     public int $imported = 0;
     public int $skipped = 0;
     public array $skippedRows = [];
@@ -100,6 +104,7 @@ class PointsTransactionsCsvImport
                 'title' => 'CSV import',
                 'reference_type' => 'IMPORT',
                 'reference_id' => Str::limit($eventKey, 64, ''),
+                'ai_import_batch_id' => $this->batchId,
                 'created_at' => $createdAt,
                 'updated_at' => $createdAt,
             ];

@@ -12,6 +12,10 @@ use Illuminate\Support\Facades\DB;
 // This class upserts customer coupon records and tracks import stats.
 class CustomerCouponsCsvImport
 {
+    public function __construct(private ?int $batchId = null)
+    {
+    }
+
     public int $imported = 0;
     public int $updated = 0;
     public int $skipped = 0;
@@ -88,6 +92,7 @@ class CustomerCouponsCsvImport
                 'code' => $couponCode,
                 'status' => 'active',
                 'source' => 'IMPORT',
+                'ai_import_batch_id' => $this->batchId,
                 'redeemed_at' => $redeemedAt,
                 'updated_at' => $timestamp,
             ];
@@ -121,7 +126,7 @@ class CustomerCouponsCsvImport
             DB::table('customer_coupons')->upsert(
                 $updates,
                 ['id'],
-                ['coupon_id', 'points_spent', 'status', 'source', 'redeemed_at', 'updated_at']
+                ['coupon_id', 'points_spent', 'status', 'source', 'ai_import_batch_id', 'redeemed_at', 'updated_at']
             );
         }
     }
