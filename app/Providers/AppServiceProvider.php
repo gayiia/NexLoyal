@@ -21,8 +21,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // This skips runtime env validation during automated tests.
-        if ($this->app->environment('testing')) {
+        // This skips runtime env validation during automated tests and build-time codegen.
+        if (! $this->shouldValidateRequiredConfiguration()) {
             return;
         }
 
@@ -50,5 +50,22 @@ class AppServiceProvider extends ServiceProvider
                 'Missing required environment variables: '.implode(', ', $missing)
             );
         }
+    }
+
+    protected function shouldValidateRequiredConfiguration(): bool
+    {
+        if ($this->app->environment('testing')) {
+            return false;
+        }
+
+        if (! $this->app->runningInConsole()) {
+            return true;
+        }
+
+        $command = $_SERVER['argv'][1] ?? null;
+
+        return ! in_array($command, [
+            'wayfinder:generate',
+        ], true);
     }
 }
