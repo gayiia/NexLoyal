@@ -64,8 +64,25 @@ class AppServiceProvider extends ServiceProvider
 
         $command = $_SERVER['argv'][1] ?? null;
 
-        return ! in_array($command, [
+        return ! in_array($command, $this->configurationValidationExemptCommands(), true);
+    }
+
+    protected function configurationValidationExemptCommands(): array
+    {
+        return [
+            'about',
+            'config:cache',
+            'config:clear',
+            'event:cache',
+            'event:clear',
+            'optimize',
+            'optimize:clear',
+            'package:discover',
+            'route:cache',
+            'route:clear',
+            'view:cache',
+            'view:clear',
             'wayfinder:generate',
-        ], true);
+        ];
     }
 }
