@@ -162,6 +162,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('admin/ai/data/import', [AiDataImportController::class, 'index'])->name('ai-data-import');
     Route::post('admin/ai/data/import', [AiDataImportController::class, 'store'])->name('ai-data-import.store');
     Route::post('admin/ai/data/import/reset', [AiDataImportController::class, 'reset'])->name('ai-data-import.reset');
+    Route::get('admin/ai/data/import/reset-status', [AiDataImportController::class, 'resetStatus'])->name('ai-data-import.reset-status');
     Route::get('admin/ai-insights/clusters/{cluster}/export', [AiInsightsController::class, 'exportCluster'])
         ->name('ai-insights.clusters.export');
     Route::get('admin/ai-insights/awards/create', [AiClusterAwardController::class, 'create'])
