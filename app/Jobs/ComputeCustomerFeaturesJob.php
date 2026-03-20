@@ -21,6 +21,11 @@ class ComputeCustomerFeaturesJob implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
+    public function __construct()
+    {
+        $this->onQueue((string) config('ai.queue', 'default'));
+    }
+
     // This acquires a lock to prevent concurrent feature computations.
     public function handle(AiInsightsService $insights): void
     {
@@ -35,6 +40,15 @@ class ComputeCustomerFeaturesJob implements ShouldQueue
             AiClusterProgress::log('Computing customer features in incremental mode.', 'features');
             $result = $insights->computeCustomerFeatures(true, false, true);
             $computation = is_array($result['computation'] ?? null) ? $result['computation'] : [];
+            Cache::put('ai_cluster_last_feature_compute_context', [
+                'mode' => $computation['mode'] ?? 'unknown',
+                'upserted_customers' => (int) ($computation['upserted_customers'] ?? 0),
+                'computed_at' => $computation['computed_at'] ?? null,
+                'fallback_to_full' => (bool) ($computation['fallback_to_full'] ?? false),
+                'reason' => $computation['reason'] ?? 'unknown',
+                'updated_at' => now()->toIso8601String(),
+            ], now()->addMinutes(30));
+            $insights->flushFeatureDatasetStatsCache();
             $stats = $insights->getFeatureDatasetStats();
             Log::info('AI customer feature computation finished', [
                 'mode' => $computation['mode'] ?? 'unknown',

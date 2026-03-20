@@ -7,9 +7,12 @@ use App\Imports\CustomerCouponsCsvImport;
 use App\Imports\CustomersCsvImport;
 use App\Imports\PointsTransactionsCsvImport;
 use App\Jobs\ComputeCustomerFeaturesJob;
+use App\Jobs\ResetAiImportDataJob;
 use App\Jobs\RunAIClusteringJob;
 use App\Models\AiImportBatch;
+use App\Services\AiImportResetService;
 use App\Support\AiClusterProgress;
+use App\Support\AiImportResetProgress;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
@@ -23,9 +26,12 @@ class AiDataImportController extends Controller
     // This shows the AI data import form.
     public function index()
     {
+        $resetService = app(AiImportResetService::class);
+
         return view('ai-data-import', [
             'latestBatch' => AiImportBatch::query()->latest('id')->first(),
-            'customerAssessment' => $this->assessCustomerTableForImportReset(),
+            'customerAssessment' => $resetService->assessCustomerTableForImportReset(),
+            'resetProgress' => AiImportResetProgress::snapshot(),
         ]);
     }
 
@@ -257,48 +263,66 @@ class AiDataImportController extends Controller
 
         $deleteCustomersIfSafe = (bool) ($validated['delete_customers_if_safe'] ?? false);
         $batch = AiImportBatch::query()->latest('id')->first();
-        $assessment = $this->assessCustomerTableForImportReset();
+        $assessment = app(AiImportResetService::class)->assessCustomerTableForImportReset();
+        $progress = AiImportResetProgress::snapshot();
 
-        if (!$batch && !$assessment['can_delete_all_customers_safely']) {
-            return redirect()
-                ->route('ai-data-import')
-                ->withErrors(['reset' => 'No tracked AI import batch was found, and the current customers table is not safe to remove automatically.']);
-        }
-
-        DB::transaction(function () use ($batch, $assessment, $deleteCustomersIfSafe): void {
-            $this->clearAiDerivedData();
-
-            if ($batch) {
-                DB::table('customer_coupons')
-                    ->where('ai_import_batch_id', $batch->id)
-                    ->delete();
-
-                DB::table('points_transactions')
-                    ->where('ai_import_batch_id', $batch->id)
-                    ->delete();
-
-                $this->restoreCustomersFromBatch($batch->id);
-
-                $batch->update([
-                    'status' => 'rolled_back',
-                    'rolled_back_at' => now(),
-                    'completed_at' => now(),
+        if (in_array($progress['status'] ?? null, ['pending', 'running'], true)) {
+            $message = 'AI import reset is already running.';
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => $message,
+                    'queued' => true,
+                    'redirect' => route('ai-data-import'),
                 ]);
             }
 
-            if ($deleteCustomersIfSafe && $assessment['can_delete_all_customers_safely']) {
-                DB::table('customers')->delete();
-            }
-        });
+            return redirect()->route('ai-data-import')->with('status', $message);
+        }
 
-        $message = 'AI import data reset completed.';
-        if ($deleteCustomersIfSafe && $assessment['can_delete_all_customers_safely']) {
-            $message .= ' Imported customers were removed using the strict safety check.';
+        if (!$batch && !$deleteCustomersIfSafe && !$assessment['can_delete_all_customers_safely']) {
+            $message = 'No tracked AI import batch was found. Enable strict customer cleanup to remove legacy AI-import-only data when safe.';
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => $message,
+                    'queued' => false,
+                ], 422);
+            }
+
+            return redirect()
+                ->route('ai-data-import')
+                ->withErrors(['reset' => $message]);
+        }
+
+        AiImportResetProgress::startPending('AI import reset queued. Waiting for queue worker.');
+        ResetAiImportDataJob::dispatch($deleteCustomersIfSafe);
+
+        $message = 'AI import reset queued.';
+        if ($deleteCustomersIfSafe) {
+            $message .= ' Strict customer cleanup will run if the safety check passes after cleanup.';
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $message,
+                'queued' => true,
+                'redirect' => route('ai-data-import'),
+                'status_url' => route('ai-data-import.reset-status'),
+            ]);
         }
 
         return redirect()
             ->route('ai-data-import')
             ->with('status', $message);
+    }
+
+    // This returns queued reset progress and related import state for frontend polling.
+    public function resetStatus(AiImportResetService $resetService)
+    {
+        return response()->json([
+            'progress' => AiImportResetProgress::snapshot(),
+            'latest_batch' => AiImportBatch::query()->latest('id')->first(),
+            'customer_assessment' => $resetService->assessCustomerTableForImportReset(),
+        ]);
     }
 
     // This ensures each CSV file includes required column headers.
@@ -408,90 +432,4 @@ class AiDataImportController extends Controller
         return DB::table('points_transactions')->insertOrIgnore($records);
     }
 
-    // This removes all derived AI outputs so the next import starts from a clean AI state.
-    private function clearAiDerivedData(): void
-    {
-        DB::table('ai_award_issuances')->delete();
-        DB::table('ai_cluster_award_customers')->delete();
-        DB::table('ai_cluster_awards')->delete();
-        DB::table('ai_cluster_customers')->delete();
-        DB::table('ai_clusters')->delete();
-        DB::table('ai_cluster_runs')->delete();
-        DB::table('customer_features')->delete();
-    }
-
-    // This restores customers touched by a tracked batch back to their pre-import state.
-    private function restoreCustomersFromBatch(int $batchId): void
-    {
-        DB::table('ai_import_batch_customer_snapshots')
-            ->where('ai_import_batch_id', $batchId)
-            ->orderBy('id')
-            ->chunk(500, function ($rows) use ($batchId): void {
-                foreach ($rows as $row) {
-                    if (!($row->existed_before ?? false)) {
-                        DB::table('customers')
-                            ->where('shopify_id', $row->shopify_id)
-                            ->where('ai_import_batch_id', $batchId)
-                            ->delete();
-                        continue;
-                    }
-
-                    $snapshot = json_decode((string) ($row->snapshot ?? 'null'), true);
-                    if (!is_array($snapshot)) {
-                        continue;
-                    }
-
-                    unset($snapshot['id']);
-
-                    DB::table('customers')
-                        ->where('shopify_id', $row->shopify_id)
-                        ->update($snapshot);
-                }
-            });
-    }
-
-    // This evaluates whether the current customer table is likely a legacy AI-only import and safe to delete wholesale.
-    private function assessCustomerTableForImportReset(): array
-    {
-        $totalCustomers = (int) DB::table('customers')->count();
-        $rowsWithNativeSignals = (int) DB::table('customers')
-            ->where(function ($query): void {
-                $query->whereNotNull('first_name')
-                    ->orWhereNotNull('last_name')
-                    ->orWhereNotNull('phone')
-                    ->orWhereNotNull('status')
-                    ->orWhereNotNull('currency')
-                    ->orWhereNotNull('shopify_created_at')
-                    ->orWhereNotNull('tier_id')
-                    ->orWhereNotNull('birthday')
-                    ->orWhereNotNull('profile_completed_at')
-                    ->orWhereNotNull('birthday_rewarded_at');
-            })
-            ->count();
-
-        $remainingPoints = (int) DB::table('points_transactions')->count();
-        $remainingCoupons = (int) DB::table('customer_coupons')->count();
-        $remainingFeatures = (int) DB::table('customer_features')->count();
-        $batchLinkedCustomers = (int) DB::table('customers')->whereNotNull('ai_import_batch_id')->count();
-
-        $canDeleteAllCustomersSafely = $totalCustomers > 0
-            && $batchLinkedCustomers === 0
-            && $rowsWithNativeSignals <= 5
-            && $remainingPoints === 0
-            && $remainingCoupons === 0
-            && $remainingFeatures === 0;
-
-        return [
-            'total_customers' => $totalCustomers,
-            'rows_with_native_signals' => $rowsWithNativeSignals,
-            'remaining_points_transactions' => $remainingPoints,
-            'remaining_customer_coupons' => $remainingCoupons,
-            'remaining_customer_features' => $remainingFeatures,
-            'batch_linked_customers' => $batchLinkedCustomers,
-            'can_delete_all_customers_safely' => $canDeleteAllCustomersSafely,
-            'message' => $canDeleteAllCustomersSafely
-                ? 'The current customers table looks like legacy AI-import-only data and can be removed safely.'
-                : 'The current customers table is not fully attributable to a legacy AI import.',
-        ];
-    }
 }

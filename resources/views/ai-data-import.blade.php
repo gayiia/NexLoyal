@@ -72,6 +72,13 @@
                 width: 55%;
                 animation: import-progress 1.3s ease-in-out infinite;
             }
+            .reset-progress-bar {
+                width: var(--reset-progress-width, 0%);
+            }
+            .reset-progress-bar.processing {
+                width: 55%;
+                animation: import-progress 1.3s ease-in-out infinite;
+            }
             @keyframes import-progress {
                 0% {
                     transform: translateX(-65%);
@@ -268,26 +275,47 @@
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
                                     <p class="text-sm font-semibold text-slate-100">Latest AI import batch</p>
                                     @if ($latestBatch)
-                                        <p class="mt-2 text-xs text-slate-300">Batch #{{ $latestBatch->id }} · {{ ucfirst($latestBatch->status) }}</p>
-                                        <p class="mt-1 text-xs text-slate-400">Started: {{ optional($latestBatch->started_at)->format('M d, Y H:i:s') ?: 'N/A' }}</p>
-                                        <p class="mt-1 text-xs text-slate-400">Completed: {{ optional($latestBatch->completed_at)->format('M d, Y H:i:s') ?: 'N/A' }}</p>
+                                        <p id="latest-batch-meta" class="mt-2 text-xs text-slate-300">Batch #{{ $latestBatch->id }} · {{ ucfirst($latestBatch->status) }}</p>
+                                        <p id="latest-batch-started" class="mt-1 text-xs text-slate-400">Started: {{ optional($latestBatch->started_at)->format('M d, Y H:i:s') ?: 'N/A' }}</p>
+                                        <p id="latest-batch-completed" class="mt-1 text-xs text-slate-400">Completed: {{ optional($latestBatch->completed_at)->format('M d, Y H:i:s') ?: 'N/A' }}</p>
                                         @if ($latestBatch->error_message)
                                             <p class="mt-3 text-xs text-rose-300">{{ $latestBatch->error_message }}</p>
                                         @endif
                                     @else
-                                        <p class="mt-2 text-xs text-slate-400">No tracked AI import batches yet.</p>
+                                        <p id="latest-batch-meta" class="mt-2 text-xs text-slate-400">No tracked AI import batches yet.</p>
+                                        <p id="latest-batch-started" class="mt-1 text-xs text-slate-500">Started: N/A</p>
+                                        <p id="latest-batch-completed" class="mt-1 text-xs text-slate-500">Completed: N/A</p>
                                     @endif
 
-                                    <form class="mt-4 space-y-3" method="POST" action="{{ route('ai-data-import.reset') }}" onsubmit="return confirm('Reset the latest AI import and clear derived AI data?');">
+                                    <form id="ai-reset-form" class="mt-4 space-y-3" method="POST" action="{{ route('ai-data-import.reset') }}" onsubmit="return confirm('Reset the latest AI import and clear derived AI data?');">
                                         @csrf
                                         <label class="flex items-start gap-2 text-xs text-slate-300">
                                             <input type="checkbox" name="delete_customers_if_safe" value="1" @checked($customerAssessment['can_delete_all_customers_safely'] ?? false)>
                                             <span>Also remove customers if the strict safety check says the table is legacy AI-import-only.</span>
                                         </label>
-                                        <button type="submit" class="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-200">
+                                        <button id="reset-submit-button" type="submit" class="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-200">
                                             Reset AI Import Data
                                         </button>
                                     </form>
+
+                                    <section id="reset-progress-panel" class="mt-4 {{ in_array(data_get($resetProgress ?? [], 'status'), ['pending', 'running']) ? '' : 'hidden' }} rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-100">
+                                        <div class="flex flex-wrap items-center justify-between gap-2">
+                                            <p class="font-semibold text-amber-50">Reset progress</p>
+                                            <p id="reset-progress-value" class="text-xs font-semibold text-amber-100">{{ (int) (data_get($resetProgress ?? [], 'progress', 0)) }}%</p>
+                                        </div>
+                                        <p id="reset-progress-label" class="mt-2 text-xs text-amber-200">{{ data_get($resetProgress ?? [], 'message', 'Waiting for queue worker...') }}</p>
+                                        <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-950/60">
+                                            <div id="reset-progress-bar" class="reset-progress-bar h-full rounded-full bg-gradient-to-r from-amber-300 via-orange-300 to-rose-300 transition-[width] duration-300 ease-out {{ in_array(data_get($resetProgress ?? [], 'status'), ['pending', 'running']) ? '' : '' }}" style="--reset-progress-width: {{ (int) (data_get($resetProgress ?? [], 'progress', 0)) }}%"></div>
+                                        </div>
+                                        <div class="mt-4 rounded-xl border border-amber-500/30 bg-slate-950/40 p-3">
+                                            <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">Activity log</p>
+                                            <ul id="reset-activity-list" class="mt-2 max-h-44 space-y-1 overflow-y-auto pr-1 text-[11px] text-amber-100">
+                                                @foreach (data_get($resetProgress ?? [], 'logs', []) as $log)
+                                                    <li>[{{ $log['time'] ?? '--:--:--' }}] {{ $log['message'] ?? '' }}</li>
+                                                @endforeach
+                                            </ul>
+                                        </div>
+                                    </section>
                                 </div>
 
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
@@ -335,6 +363,17 @@
                 const progressBar = document.getElementById('import-progress-bar');
                 const errorsPanel = document.getElementById('import-errors');
                 const errorsList = document.getElementById('import-errors-list');
+                const resetForm = document.getElementById('ai-reset-form');
+                const resetSubmitButton = document.getElementById('reset-submit-button');
+                const resetProgressPanel = document.getElementById('reset-progress-panel');
+                const resetProgressLabel = document.getElementById('reset-progress-label');
+                const resetProgressValue = document.getElementById('reset-progress-value');
+                const resetProgressBar = document.getElementById('reset-progress-bar');
+                const latestBatchMeta = document.getElementById('latest-batch-meta');
+                const latestBatchStarted = document.getElementById('latest-batch-started');
+                const latestBatchCompleted = document.getElementById('latest-batch-completed');
+                const resetActivityList = document.getElementById('reset-activity-list');
+                let resetPollTimer = null;
 
                 // Apply light or dark styles and update the button label.
                 const applyTheme = (theme) => {
@@ -495,6 +534,170 @@
                         xhr.send(data);
                     });
                 }
+
+                const formatDateTime = (value) => {
+                    if (!value) {
+                        return 'N/A';
+                    }
+                    const date = new Date(value);
+                    if (Number.isNaN(date.getTime())) {
+                        return value;
+                    }
+                    return date.toLocaleString();
+                };
+
+                const setResetProgress = (value, label, processing = false) => {
+                    if (!resetProgressPanel || !resetProgressLabel || !resetProgressValue || !resetProgressBar) {
+                        return;
+                    }
+
+                    resetProgressPanel.classList.remove('hidden');
+                    resetProgressLabel.textContent = label;
+
+                    if (processing) {
+                        resetProgressValue.textContent = 'Processing';
+                        resetProgressBar.classList.add('processing');
+                        resetProgressBar.style.setProperty('--reset-progress-width', '55%');
+                        return;
+                    }
+
+                    const boundedValue = Math.max(0, Math.min(100, value));
+                    resetProgressValue.textContent = `${Math.round(boundedValue)}%`;
+                    resetProgressBar.classList.remove('processing');
+                    resetProgressBar.style.setProperty('--reset-progress-width', `${boundedValue}%`);
+                };
+
+                const updateLatestBatch = (latestBatch) => {
+                    if (!latestBatchMeta || !latestBatchStarted || !latestBatchCompleted) {
+                        return;
+                    }
+
+                    if (!latestBatch) {
+                        latestBatchMeta.textContent = 'No tracked AI import batches yet.';
+                        latestBatchStarted.textContent = 'Started: N/A';
+                        latestBatchCompleted.textContent = 'Completed: N/A';
+                        return;
+                    }
+
+                    latestBatchMeta.textContent = `Batch #${latestBatch.id} · ${String(latestBatch.status || 'unknown').charAt(0).toUpperCase()}${String(latestBatch.status || 'unknown').slice(1)}`;
+                    latestBatchStarted.textContent = `Started: ${formatDateTime(latestBatch.started_at)}`;
+                    latestBatchCompleted.textContent = `Completed: ${formatDateTime(latestBatch.completed_at)}`;
+                };
+
+                const stopResetPolling = () => {
+                    if (!resetPollTimer) {
+                        return;
+                    }
+                    window.clearInterval(resetPollTimer);
+                    resetPollTimer = null;
+                };
+
+                const updateResetActivity = (logs) => {
+                    if (!resetActivityList) {
+                        return;
+                    }
+
+                    const entries = Array.isArray(logs) ? logs : [];
+                    resetActivityList.innerHTML = '';
+                    entries.forEach((entry) => {
+                        const item = document.createElement('li');
+                        const time = entry && typeof entry.time === 'string' ? entry.time : '--:--:--';
+                        const message = entry && typeof entry.message === 'string' ? entry.message : '';
+                        item.textContent = `[${time}] ${message}`;
+                        resetActivityList.appendChild(item);
+                    });
+                    resetActivityList.scrollTop = resetActivityList.scrollHeight;
+                };
+
+                const pollResetStatus = () => {
+                    fetch('{{ route('ai-data-import.reset-status') }}', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                        .then((response) => response.json())
+                        .then((payload) => {
+                            const progress = payload.progress || {};
+                            updateLatestBatch(payload.latest_batch || null);
+                            updateResetActivity(progress.logs || []);
+
+                            const status = progress.status || 'none';
+                            const progressValueNumber = Number(progress.progress ?? 0);
+                            const progressMessage = progress.message || 'Waiting for queue worker...';
+
+                            if (status === 'running' || status === 'pending') {
+                                const processing = status === 'running' && progressValueNumber <= 0;
+                                setResetProgress(progressValueNumber || (status === 'pending' ? 5 : 10), progressMessage, processing);
+                                return;
+                            }
+
+                            if (status === 'completed') {
+                                setResetProgress(100, progressMessage || 'Reset completed.');
+                                stopResetPolling();
+                                return;
+                            }
+
+                            if (status === 'failed') {
+                                setResetProgress(Math.max(5, progressValueNumber), progressMessage || 'Reset failed.');
+                                stopResetPolling();
+                                return;
+                            }
+
+                            stopResetPolling();
+                        })
+                        .catch(() => {
+                            // Ignore transient polling failures and keep interval alive.
+                        });
+                };
+
+                const startResetPolling = () => {
+                    if (resetPollTimer) {
+                        return;
+                    }
+                    pollResetStatus();
+                    resetPollTimer = window.setInterval(pollResetStatus, 2000);
+                };
+
+                if (resetForm && resetSubmitButton) {
+                    resetForm.addEventListener('submit', (event) => {
+                        event.preventDefault();
+                        if (!window.confirm('Reset the latest AI import and clear derived AI data?')) {
+                            return;
+                        }
+
+                        const data = new FormData(resetForm);
+                        resetSubmitButton.disabled = true;
+                        resetSubmitButton.classList.add('cursor-not-allowed', 'opacity-70');
+                        setResetProgress(5, 'Queuing reset job...');
+
+                        fetch(resetForm.action, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name=\"csrf-token\"]')?.getAttribute('content') || '',
+                            },
+                            body: data,
+                        })
+                            .then(async (response) => {
+                                const payload = await response.json().catch(() => ({}));
+                                if (!response.ok) {
+                                    const message = payload.message || 'Failed to queue reset.';
+                                    throw new Error(message);
+                                }
+
+                                setResetProgress(8, payload.message || 'Reset queued.');
+                                startResetPolling();
+                            })
+                            .catch((error) => {
+                                setResetProgress(0, error.message || 'Failed to queue reset.');
+                            })
+                            .finally(() => {
+                                resetSubmitButton.disabled = false;
+                                resetSubmitButton.classList.remove('cursor-not-allowed', 'opacity-70');
+                            });
+                    });
+                }
+
+                @if (in_array(data_get($resetProgress ?? [], 'status'), ['pending', 'running']))
+                startResetPolling();
+                @endif
             })();
         </script>
     </body>

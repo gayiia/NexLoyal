@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\CustomerFeature;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 // This class centralizes AI feature engineering for customers and delegates model requests to the AI client.
@@ -47,6 +48,7 @@ class AiInsightsService
                     'upserted_customers' => 0,
                     'fallback_to_full' => $usedFallbackToFull,
                     'reason' => $incremental ? 'no_changed_customers_with_new_points' : 'no_customers',
+                    'computed_at' => null,
                 ],
             ];
         }
@@ -226,12 +228,33 @@ class AiInsightsService
                 'reason' => $incremental
                     ? ($usedFallbackToFull ? 'first_run_full_recompute' : 'changed_customers_with_new_points')
                     : 'explicit_full_recompute',
+                'computed_at' => $now->toIso8601String(),
             ],
         ];
     }
 
     // This summarizes the current feature dataset so preflight checks can explain cluster readiness.
-    public function getFeatureDatasetStats(): array
+    public function getFeatureDatasetStats(bool $fresh = false): array
+    {
+        $cacheKey = 'ai_feature_dataset_stats';
+        $cacheTtlSeconds = max(5, (int) config('ai.feature_stats_cache_seconds', 20));
+        if ($fresh) {
+            Cache::forget($cacheKey);
+        }
+
+        return Cache::remember($cacheKey, now()->addSeconds($cacheTtlSeconds), function (): array {
+            return $this->buildFeatureDatasetStats();
+        });
+    }
+
+    // This clears cached feature stats after feature recomputation updates.
+    public function flushFeatureDatasetStatsCache(): void
+    {
+        Cache::forget('ai_feature_dataset_stats');
+    }
+
+    // This calculates feature dataset stats directly from the database.
+    private function buildFeatureDatasetStats(): array
     {
         $minCustomers = (int) config('ai.min_customers_for_training', 20);
 
@@ -515,6 +538,69 @@ class AiInsightsService
         return $this->client->predictBatchFromJsonFile($path);
     }
 
+    // This exports only newly computed eligible features so prediction can run in delta mode.
+    public function exportStoredDeltaPredictionPayloadByComputedAt(string $computedAt): array
+    {
+        $featureKeys = (array) config('ai.feature_keys', []);
+        $path = tempnam(sys_get_temp_dir(), 'ai-predict-delta-');
+        if ($path === false) {
+            throw new \RuntimeException('Unable to create AI delta prediction payload file.');
+        }
+
+        $handle = fopen($path, 'wb');
+        if ($handle === false) {
+            @unlink($path);
+            throw new \RuntimeException('Unable to open AI delta prediction payload file.');
+        }
+
+        $count = 0;
+        $customerIds = [];
+
+        try {
+            fwrite($handle, '{"features":[');
+            $isFirst = true;
+
+            DB::table('customer_features')
+                ->select(['customer_id', 'features'])
+                ->where('is_excluded', false)
+                ->where('computed_at', '=', $computedAt)
+                ->orderBy('customer_id')
+                ->chunk(500, function ($rows) use (&$count, &$isFirst, &$customerIds, $handle, $featureKeys): void {
+                    foreach ($rows as $row) {
+                        $decoded = json_decode((string) ($row->features ?? '[]'), true);
+                        $features = is_array($decoded) ? $decoded : [];
+                        $vector = array_values(array_map(
+                            fn ($key) => (float) Arr::get($features, $key, 0),
+                            $featureKeys
+                        ));
+
+                        if (!$isFirst) {
+                            fwrite($handle, ',');
+                        }
+                        fwrite($handle, json_encode($vector, JSON_THROW_ON_ERROR));
+                        $isFirst = false;
+                        $count++;
+                        $customerIds[] = (int) ($row->customer_id ?? 0);
+                    }
+                });
+
+            fwrite($handle, ']}');
+        } catch (\Throwable $exception) {
+            fclose($handle);
+            @unlink($path);
+            throw $exception;
+        }
+
+        fclose($handle);
+
+        return [
+            'path' => $path,
+            'count' => $count,
+            'customer_ids' => $customerIds,
+            'feature_keys' => $featureKeys,
+        ];
+    }
+
     // This streams the stored feature rows in training order so callers can align them with returned labels.
     public function chunkStoredTrainingRows(int $size, callable $callback): void
     {
@@ -529,6 +615,25 @@ class AiInsightsService
                 'redeemed_coupons',
             ])
             ->where('is_excluded', false)
+            ->orderBy('customer_id')
+            ->chunk($size, $callback);
+    }
+
+    // This streams only newly computed eligible rows in customer order for delta persistence alignment.
+    public function chunkStoredRowsByComputedAt(string $computedAt, int $size, callable $callback): void
+    {
+        DB::table('customer_features')
+            ->select([
+                'customer_id',
+                'orders_count',
+                'total_spent',
+                'loyalty_points',
+                'points_earned',
+                'points_spent',
+                'redeemed_coupons',
+            ])
+            ->where('is_excluded', false)
+            ->where('computed_at', '=', $computedAt)
             ->orderBy('customer_id')
             ->chunk($size, $callback);
     }
