@@ -232,7 +232,7 @@
                                     {{-- Clusters and K show how many segments were produced. --}}
                                     <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Clusters</p>
                                     <p class="mt-3 text-2xl font-semibold text-slate-50">{{ $latestRun?->total_clusters ?? 0 }}</p>
-                                    <p class="mt-1 text-xs text-slate-400">Fixed K: {{ $latestRun?->selected_k ?? config('ai.fixed_k') ?? '-' }}</p>
+                                    <p class="mt-1 text-xs text-slate-400">Selected K: {{ $latestRun?->selected_k ?? '-' }}</p>
                                 </div>
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5">
                                     {{-- Silhouette and inertia give model quality signals. --}}

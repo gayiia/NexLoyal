@@ -506,7 +506,12 @@ async def train_clusters(request: Request):
             silhouette_scores.append({"k": k, "score": score})
 
             # Track the best scoring model so far.
-            if score is not None and (best_score is None or score > best_score):
+            # Silhouette remains the primary selector; inertia breaks near-ties toward tighter clusters.
+            if score is not None and (
+                best_score is None
+                or score > best_score
+                or (np.isclose(score, best_score) and (best_inertia is None or inertia < best_inertia))
+            ):
                 best_score = score
                 best_k = k
                 best_labels = labels
