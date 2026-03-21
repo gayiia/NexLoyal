@@ -181,6 +181,7 @@ class AiInsightsService
                             'points_earned_snapshot' => (int) ($raw['points_earned'] ?? 0),
                             'points_spent_snapshot' => (int) ($raw['points_spent'] ?? 0),
                             'redeemed_coupons_snapshot' => (int) ($raw['redeemed_coupons'] ?? 0),
+                            'days_since_last_order_snapshot' => (int) ($raw['days_since_last_order'] ?? 0),
                         ];
                     }
                 }
@@ -613,6 +614,7 @@ class AiInsightsService
                 'points_earned',
                 'points_spent',
                 'redeemed_coupons',
+                'days_since_last_order',
             ])
             ->where('is_excluded', false)
             ->orderBy('customer_id')
@@ -631,6 +633,7 @@ class AiInsightsService
                 'points_earned',
                 'points_spent',
                 'redeemed_coupons',
+                'days_since_last_order',
             ])
             ->where('is_excluded', false)
             ->where('computed_at', '=', $computedAt)
@@ -657,6 +660,7 @@ class AiInsightsService
                 'points_earned',
                 'points_spent',
                 'redeemed_coupons',
+                'days_since_last_order',
                 'features',
             ])
             ->where('is_excluded', false)
@@ -679,6 +683,7 @@ class AiInsightsService
                         'points_earned_snapshot' => (int) ($row->points_earned ?? 0),
                         'points_spent_snapshot' => (int) ($row->points_spent ?? 0),
                         'redeemed_coupons_snapshot' => (int) ($row->redeemed_coupons ?? 0),
+                        'days_since_last_order_snapshot' => (int) ($row->days_since_last_order ?? 0),
                     ];
                 }
             });

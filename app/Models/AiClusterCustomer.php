@@ -20,6 +20,10 @@ class AiClusterCustomer extends Model
         'points_earned_snapshot',
         'points_spent_snapshot',
         'redeemed_coupons_snapshot',
+        'days_since_last_order_snapshot',
+        'projection_x',
+        'projection_y',
+        'projection_method',
     ];
 
     // These casts normalize numeric snapshot fields.
@@ -30,6 +34,9 @@ class AiClusterCustomer extends Model
         'points_earned_snapshot' => 'integer',
         'points_spent_snapshot' => 'integer',
         'redeemed_coupons_snapshot' => 'integer',
+        'days_since_last_order_snapshot' => 'integer',
+        'projection_x' => 'decimal:6',
+        'projection_y' => 'decimal:6',
     ];
 
     // This links the record to the clustering run.

@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 import numpy as np
 # K-Means clustering and quality metrics.
 from sklearn.cluster import KMeans, MiniBatchKMeans
+from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 
@@ -340,6 +341,49 @@ def _score_silhouette(scaled: np.ndarray, labels: np.ndarray) -> Optional[float]
     )
 
 
+def _fit_projection(scaled: np.ndarray) -> Optional[Dict[str, Any]]:
+    # Fit a lightweight 2D PCA projection for visualization without changing the clustering model.
+    if scaled.ndim != 2 or scaled.shape[0] < 2 or scaled.shape[1] < 2:
+        return None
+
+    projector = PCA(n_components=2)
+    points = projector.fit_transform(scaled)
+
+    return {
+        "method": "pca_2d",
+        "points": points.tolist(),
+        "mean": projector.mean_.tolist(),
+        "components": projector.components_.tolist(),
+        "explained_variance_ratio": projector.explained_variance_ratio_.tolist(),
+    }
+
+
+def _project_with_state(scaled: np.ndarray, state: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    # Reuse the saved PCA parameters so delta predictions land in the same 2D space as the latest model.
+    projection_state = state.get("projection") or {}
+    method = projection_state.get("method")
+    components = projection_state.get("components")
+    mean = projection_state.get("mean")
+
+    if method != "pca_2d" or not isinstance(components, list) or not isinstance(mean, list):
+        return None
+
+    component_matrix = np.array(components, dtype=float)
+    mean_vector = np.array(mean, dtype=float)
+    if component_matrix.ndim != 2 or component_matrix.shape[0] != 2:
+        return None
+    if mean_vector.ndim != 1 or mean_vector.shape[0] != scaled.shape[1]:
+        return None
+
+    projected = (scaled - mean_vector) @ component_matrix.T
+
+    return {
+        "method": "pca_2d",
+        "points": projected.tolist(),
+        "explained_variance_ratio": projection_state.get("explained_variance_ratio") or [],
+    }
+
+
 @app.post("/ai/cluster/train")
 async def train_clusters(request: Request):
     # Train a K-Means model, select best k, and persist model state.
@@ -420,6 +464,7 @@ async def train_clusters(request: Request):
     # Standardization keeps each feature on the same scale.
     scaler = StandardScaler()
     scaled = scaler.fit_transform(processed)
+    projection = _fit_projection(scaled)
 
     # ---------------------------
     # Step 3: Train model
@@ -507,6 +552,14 @@ async def train_clusters(request: Request):
         "log_transforms": payload.log_transforms or [],
         "selected_k": best_k,
         "model_metadata": model_metadata,
+        "projection": None
+        if projection is None
+        else {
+            "method": projection["method"],
+            "mean": projection["mean"],
+            "components": projection["components"],
+            "explained_variance_ratio": projection["explained_variance_ratio"],
+        },
     }
 
     # Update in-memory cache and persist to disk.
@@ -556,6 +609,14 @@ async def train_clusters(request: Request):
         },
         # Metadata that ties the model to a dataset and version.
         "model_metadata": model_metadata,
+        # 2D projection points for thesis/report visualizations.
+        "projection": None
+        if projection is None
+        else {
+            "method": projection["method"],
+            "points": projection["points"],
+            "explained_variance_ratio": projection["explained_variance_ratio"],
+        },
     }
 
 
@@ -710,10 +771,12 @@ async def predict_batch(request: Request):
 
     distances = np.linalg.norm(centroids[None, :, :] - scaled[:, None, :], axis=2)
     labels = np.argmin(distances, axis=1)
+    projection = _project_with_state(scaled, state)
 
     return {
         "labels": labels.tolist(),
         "centroids": centroids.tolist(),
         "selected_k": state.get("selected_k"),
         "model_metadata": state.get("model_metadata"),
+        "projection": projection,
     }

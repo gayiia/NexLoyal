@@ -217,7 +217,15 @@ class RunAIClusteringJob implements ShouldQueue
                     throw new \RuntimeException('AI service returned mismatched labels for delta prediction.');
                 }
 
-                $persistedCount = $this->persistDeltaRun($insights, $baseRun, $labels, $computedAt, $decisionReason, $decisionMessage);
+                $persistedCount = $this->persistDeltaRun(
+                    $insights,
+                    $baseRun,
+                    $labels,
+                    $response,
+                    $computedAt,
+                    $decisionReason,
+                    $decisionMessage
+                );
                 AiClusterProgress::markCompleted(
                     $baseRun->id,
                     'Delta prediction completed. Persisted changed customers: ' . number_format($persistedCount) . '.'
@@ -263,6 +271,10 @@ class RunAIClusteringJob implements ShouldQueue
         $clusterRecords = [];
         $clusterStats = [];
         $labelIndex = 0;
+        $projectionPoints = $this->resolveProjectionPoints($response, $trainingCount);
+        $projectionMethod = is_string(data_get($response, 'projection.method'))
+            ? data_get($response, 'projection.method')
+            : null;
         $insights->chunkStoredTrainingRows(500, function ($rows) use (&$clusterStats, &$labelIndex, $labels): void {
             foreach ($rows as $row) {
                 $labelKey = (string) ($labels[$labelIndex] ?? '');
@@ -312,6 +324,8 @@ class RunAIClusteringJob implements ShouldQueue
             $clusterRecords,
             $labels,
             $response,
+            $projectionPoints,
+            $projectionMethod,
             $trainingCount,
             $retrainDecision,
             $shouldRetrain,
@@ -328,15 +342,26 @@ class RunAIClusteringJob implements ShouldQueue
             $labelIndex = 0;
             $customerRows = [];
             $now = now();
-            $insights->chunkStoredTrainingRows(500, function ($rows) use (&$customerRows, &$labelIndex, $labels, $clusterIdMap, $run, $now): void {
+            $insights->chunkStoredTrainingRows(500, function ($rows) use (
+                &$customerRows,
+                &$labelIndex,
+                $labels,
+                $clusterIdMap,
+                $run,
+                $now,
+                $projectionPoints,
+                $projectionMethod
+            ): void {
                 foreach ($rows as $row) {
-                    $labelKey = (string) ($labels[$labelIndex] ?? '');
+                    $currentIndex = $labelIndex;
+                    $labelKey = (string) ($labels[$currentIndex] ?? '');
                     $labelIndex++;
                     $clusterId = $clusterIdMap[$labelKey] ?? null;
                     if (!$clusterId) {
                         continue;
                     }
 
+                    $projection = $projectionPoints[$currentIndex] ?? null;
                     $customerRows[] = [
                         'ai_cluster_run_id' => $run->id,
                         'ai_cluster_id' => $clusterId,
@@ -347,6 +372,10 @@ class RunAIClusteringJob implements ShouldQueue
                         'points_earned_snapshot' => (int) ($row->points_earned ?? 0),
                         'points_spent_snapshot' => (int) ($row->points_spent ?? 0),
                         'redeemed_coupons_snapshot' => (int) ($row->redeemed_coupons ?? 0),
+                        'days_since_last_order_snapshot' => (int) ($row->days_since_last_order ?? 0),
+                        'projection_x' => $projection['x'] ?? null,
+                        'projection_y' => $projection['y'] ?? null,
+                        'projection_method' => $projectionMethod,
                         'created_at' => $now,
                         'updated_at' => $now,
                     ];
@@ -382,6 +411,10 @@ class RunAIClusteringJob implements ShouldQueue
                 'model_metadata' => $response['model_metadata'] ?? data_get($retrainDecision, 'model_metadata'),
                 'params' => array_merge((array) ($run->params ?? []), [
                     'prediction_mode' => 'full',
+                    'projection' => [
+                        'method' => $projectionMethod,
+                        'explained_variance_ratio' => data_get($response, 'projection.explained_variance_ratio'),
+                    ],
                     'retraining' => [
                         'should_retrain' => $shouldRetrain,
                         'reason' => $decisionReason,
@@ -398,6 +431,7 @@ class RunAIClusteringJob implements ShouldQueue
         AiInsightsService $insights,
         AiClusterRun $baseRun,
         array $labels,
+        array $response,
         string $computedAt,
         string $decisionReason,
         string $decisionMessage
@@ -413,12 +447,18 @@ class RunAIClusteringJob implements ShouldQueue
         $persisted = 0;
         $labelIndex = 0;
         $now = now();
+        $projectionPoints = $this->resolveProjectionPoints($response, count($labels));
+        $projectionMethod = is_string(data_get($response, 'projection.method'))
+            ? data_get($response, 'projection.method')
+            : null;
 
         DB::transaction(function () use (
             $insights,
             $baseRun,
             $computedAt,
             $labels,
+            $projectionPoints,
+            $projectionMethod,
             $clustersByIndex,
             $now,
             &$persisted,
@@ -430,6 +470,8 @@ class RunAIClusteringJob implements ShouldQueue
             $insights->chunkStoredRowsByComputedAt($computedAt, 500, function ($rows) use (
                 &$upsertRows,
                 $labels,
+                $projectionPoints,
+                $projectionMethod,
                 $clustersByIndex,
                 $baseRun,
                 $now,
@@ -437,7 +479,8 @@ class RunAIClusteringJob implements ShouldQueue
                 &$labelIndex
             ): void {
                 foreach ($rows as $row) {
-                    $labelKey = (int) ($labels[$labelIndex] ?? -1);
+                    $currentIndex = $labelIndex;
+                    $labelKey = (int) ($labels[$currentIndex] ?? -1);
                     $labelIndex++;
 
                     /** @var AiCluster|null $cluster */
@@ -446,6 +489,7 @@ class RunAIClusteringJob implements ShouldQueue
                         continue;
                     }
 
+                    $projection = $projectionPoints[$currentIndex] ?? null;
                     $upsertRows[] = [
                         'ai_cluster_run_id' => $baseRun->id,
                         'ai_cluster_id' => $cluster->id,
@@ -456,6 +500,10 @@ class RunAIClusteringJob implements ShouldQueue
                         'points_earned_snapshot' => (int) ($row->points_earned ?? 0),
                         'points_spent_snapshot' => (int) ($row->points_spent ?? 0),
                         'redeemed_coupons_snapshot' => (int) ($row->redeemed_coupons ?? 0),
+                        'days_since_last_order_snapshot' => (int) ($row->days_since_last_order ?? 0),
+                        'projection_x' => $projection['x'] ?? null,
+                        'projection_y' => $projection['y'] ?? null,
+                        'projection_method' => $projectionMethod,
                         'created_at' => $now,
                         'updated_at' => $now,
                     ];
@@ -472,6 +520,10 @@ class RunAIClusteringJob implements ShouldQueue
                                 'points_earned_snapshot',
                                 'points_spent_snapshot',
                                 'redeemed_coupons_snapshot',
+                                'days_since_last_order_snapshot',
+                                'projection_x',
+                                'projection_y',
+                                'projection_method',
                                 'updated_at',
                             ]
                         );
@@ -493,6 +545,10 @@ class RunAIClusteringJob implements ShouldQueue
                         'points_earned_snapshot',
                         'points_spent_snapshot',
                         'redeemed_coupons_snapshot',
+                        'days_since_last_order_snapshot',
+                        'projection_x',
+                        'projection_y',
+                        'projection_method',
                         'updated_at',
                     ]
                 );
@@ -623,5 +679,20 @@ class RunAIClusteringJob implements ShouldQueue
 
         return $clusterRecords;
     }
-}
 
+    // This normalizes AI-service projection points so row persistence can align by label index.
+    private function resolveProjectionPoints(array $response, int $expectedCount): array
+    {
+        $points = data_get($response, 'projection.points');
+        if (!is_array($points) || count($points) !== $expectedCount) {
+            return [];
+        }
+
+        return array_map(function ($point): array {
+            return [
+                'x' => isset($point[0]) ? (float) $point[0] : null,
+                'y' => isset($point[1]) ? (float) $point[1] : null,
+            ];
+        }, $points);
+    }
+}

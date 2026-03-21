@@ -232,15 +232,15 @@
                                     {{-- Clusters and K show how many segments were produced. --}}
                                     <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Clusters</p>
                                     <p class="mt-3 text-2xl font-semibold text-slate-50">{{ $latestRun?->total_clusters ?? 0 }}</p>
-                                    <p class="mt-1 text-xs text-slate-400">Selected K: {{ $latestRun?->selected_k ?? '-' }}</p>
+                                    <p class="mt-1 text-xs text-slate-400">Fixed K: {{ $latestRun?->selected_k ?? config('ai.fixed_k') ?? '-' }}</p>
                                 </div>
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5">
                                     {{-- Silhouette and inertia give model quality signals. --}}
-                                    <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Silhouette</p>
+                                    <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Silhouette Score</p>
                                     <p class="mt-3 text-2xl font-semibold text-slate-50">
                                         {{ $latestRun?->silhouette_score !== null ? number_format($latestRun->silhouette_score, 3) : '-' }}
                                     </p>
-                                    <p class="mt-1 text-xs text-slate-400">Inertia: {{ $latestRun?->final_inertia ?? '-' }}</p>
+                                    <p class="mt-1 text-xs text-slate-400">Latest run quality metric. Inertia: {{ $latestRun?->final_inertia ?? '-' }}</p>
                                 </div>
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5">
                                     {{-- Customer counts show how many were included in clustering. --}}
@@ -250,43 +250,106 @@
                                 </div>
                             </section>
 
-                            <section class="mt-8 grid gap-6 lg:grid-cols-3">
+                            <section class="mt-8 grid gap-4 xl:grid-cols-4">
+                                @foreach ($summaries as $summary)
+                                    <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-5">
+                                        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ $summary['title'] }}</p>
+                                        <p class="mt-3 text-xl font-semibold text-slate-50">{{ $summary['value'] }}</p>
+                                        <p class="mt-2 text-xs leading-5 text-slate-400">{{ $summary['description'] }}</p>
+                                    </div>
+                                @endforeach
+                            </section>
+
+                            <section class="mt-8 grid gap-6 xl:grid-cols-2">
+                                <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6 xl:col-span-2">
+                                    <div class="flex flex-wrap items-center justify-between gap-3">
+                                        <div>
+                                            <p class="text-sm font-semibold text-slate-100">Clustered customer scatter plot</p>
+                                            <p class="text-xs text-slate-400">{{ $charts['scatter']['method_label'] ?? 'Points Earned vs Points Spent' }}</p>
+                                        </div>
+                                        <span class="nl-chip nl-badge-muted">{{ $charts['scatter']['x_label'] ?? 'Points Earned' }} x {{ $charts['scatter']['y_label'] ?? 'Points Spent' }}</span>
+                                    </div>
+                                    <p class="mt-2 text-xs text-slate-400">{{ $charts['scatter']['description'] ?? 'No scatter data available yet.' }}</p>
+                                    <div class="mt-6 h-[24rem]">
+                                        <canvas id="cluster-scatter-chart" class="h-full w-full"></canvas>
+                                        <p id="cluster-scatter-empty" class="mt-4 text-xs text-slate-400 hidden">No scatter plot data yet.</p>
+                                    </div>
+                                </div>
+
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
                                     <div class="flex items-center justify-between">
                                         <div>
-                                            <p class="text-sm font-semibold text-slate-100">Customer distribution</p>
-                                            <p class="text-xs text-slate-400">Customers per cluster.</p>
+                                            <p class="text-sm font-semibold text-slate-100">Cluster distribution</p>
+                                            <p class="text-xs text-slate-400">Customers assigned to each cluster.</p>
                                         </div>
                                     </div>
-                                    <div class="mt-6">
-                                        {{-- The chart renders when data is available; otherwise the empty message shows. --}}
-                                        <canvas id="cluster-distribution-chart" height="180"></canvas>
+                                    <div class="mt-6 h-72">
+                                        <canvas id="cluster-distribution-chart" class="h-full w-full"></canvas>
                                         <p id="cluster-distribution-empty" class="mt-4 text-xs text-slate-400 hidden">No clustering data yet.</p>
                                     </div>
                                 </div>
+
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
                                     <div class="flex items-center justify-between">
                                         <div>
-                                            <p class="text-sm font-semibold text-slate-100">Avg spend per cluster</p>
-                                            <p class="text-xs text-slate-400">Total spent snapshot.</p>
+                                            <p class="text-sm font-semibold text-slate-100">Average total spend by cluster</p>
+                                            <p class="text-xs text-slate-400">Stored customer spend snapshots from the latest run.</p>
                                         </div>
                                     </div>
-                                    <div class="mt-6">
-                                        {{-- The chart renders when spend data exists for clusters. --}}
-                                        <canvas id="cluster-spend-chart" height="180"></canvas>
+                                    <div class="mt-6 h-72">
+                                        <canvas id="cluster-spend-chart" class="h-full w-full"></canvas>
                                         <p id="cluster-spend-empty" class="mt-4 text-xs text-slate-400 hidden">No spend data yet.</p>
                                     </div>
                                 </div>
+
+                                <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <p class="text-sm font-semibold text-slate-100">Average points earned vs spent</p>
+                                            <p class="text-xs text-slate-400">Grouped cluster comparison for loyalty activity.</p>
+                                        </div>
+                                    </div>
+                                    <div class="mt-6 h-72">
+                                        <canvas id="cluster-points-chart" class="h-full w-full"></canvas>
+                                        <p id="cluster-points-empty" class="mt-4 text-xs text-slate-400 hidden">No loyalty points data yet.</p>
+                                    </div>
+                                </div>
+
+                                <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <p class="text-sm font-semibold text-slate-100">Average order count by cluster</p>
+                                            <p class="text-xs text-slate-400">Order frequency differences between segments.</p>
+                                        </div>
+                                    </div>
+                                    <div class="mt-6 h-72">
+                                        <canvas id="cluster-orders-chart" class="h-full w-full"></canvas>
+                                        <p id="cluster-orders-empty" class="mt-4 text-xs text-slate-400 hidden">No order count data yet.</p>
+                                    </div>
+                                </div>
+
+                                <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <p class="text-sm font-semibold text-slate-100">Average days since last order</p>
+                                            <p class="text-xs text-slate-400">Recency comparison across the three fixed clusters.</p>
+                                        </div>
+                                    </div>
+                                    <div class="mt-6 h-72">
+                                        <canvas id="cluster-recency-chart" class="h-full w-full"></canvas>
+                                        <p id="cluster-recency-empty" class="mt-4 text-xs text-slate-400 hidden">No recency data yet.</p>
+                                    </div>
+                                </div>
+
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
                                     <div class="flex items-center justify-between">
                                         <div>
                                             <p class="text-sm font-semibold text-slate-100">Award issuance overview</p>
-                                            <p class="text-xs text-slate-400">Points vs coupons.</p>
+                                            <p class="text-xs text-slate-400">Points awards versus coupon awards.</p>
                                         </div>
                                     </div>
-                                    <div class="mt-6">
-                                        {{-- The chart renders only when awards have been issued. --}}
-                                        <canvas id="award-mix-chart" height="180"></canvas>
+                                    <div class="mt-6 h-72">
+                                        <canvas id="award-mix-chart" class="h-full w-full"></canvas>
                                         <p id="award-mix-empty" class="mt-4 text-xs text-slate-400 hidden">No awards issued yet.</p>
                                     </div>
                                 </div>
@@ -317,12 +380,16 @@
                                                     <span>{{ number_format($cluster->avg_orders_count, 1) }}</span>
                                                 </div>
                                                 <div class="flex items-center justify-between">
-                                                    <span>Avg loyalty points</span>
-                                                    <span>{{ number_format($cluster->avg_loyalty_points, 1) }}</span>
+                                                    <span>Avg points earned</span>
+                                                    <span>{{ number_format($cluster->avg_points_earned ?? 0, 1) }}</span>
                                                 </div>
                                                 <div class="flex items-center justify-between">
                                                     <span>Avg points spent</span>
                                                     <span>{{ number_format($cluster->avg_points_spent, 1) }}</span>
+                                                </div>
+                                                <div class="flex items-center justify-between">
+                                                    <span>Avg days since last order</span>
+                                                    <span>{{ number_format($cluster->avg_days_since_last_order ?? 0, 1) }}</span>
                                                 </div>
                                             </div>
                                             <div class="mt-5 flex flex-wrap gap-2">
@@ -514,110 +581,292 @@
 
             (function () {
                 // Chart data is injected from the server-side insights calculations.
-                const labels = @json($charts['labels']);
-                const distribution = @json($charts['distribution']);
-                const avgSpend = @json($charts['avg_spend']);
-                const awardMix = @json($charts['award_mix']);
+                const charts = @json($charts);
+                const labels = charts.labels || [];
+                const distribution = charts.distribution || [];
+                const avgSpend = charts.avg_spend || [];
+                const avgPoints = charts.avg_points || { earned: [], spent: [] };
+                const avgOrders = charts.avg_orders || [];
+                const avgRecency = charts.avg_days_since_last_order || [];
+                const scatter = charts.scatter || { datasets: [] };
+                const awardMix = charts.award_mix || {};
+                const scatterBounds = scatter.display_bounds || {
+                    x: { min: undefined, max: undefined },
+                    y: { min: undefined, max: undefined },
+                };
+                const palette = [
+                    'rgba(56, 189, 248, 0.78)',
+                    'rgba(129, 140, 248, 0.78)',
+                    'rgba(244, 114, 182, 0.78)',
+                    'rgba(34, 197, 94, 0.78)',
+                    'rgba(250, 204, 21, 0.78)',
+                    'rgba(251, 146, 60, 0.78)',
+                ];
+                const labelColor = '#e2e8f0';
+                const tickColor = '#94a3b8';
+                const gridColor = 'rgba(148, 163, 184, 0.12)';
+                const borderColor = 'rgba(15, 23, 42, 0.9)';
+                const clusterColors = labels.map((_, index) => palette[index % palette.length]);
 
-                // Shared chart styling matches the dark theme.
-                const chartOptions = {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            labels: {
-                                color: '#e2e8f0',
-                            },
+                const formatCurrency = (value) => Number(value || 0).toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                });
+                const formatNumber = (value) => Number(value || 0).toLocaleString(undefined, {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 1,
+                });
+
+                const sharedPlugins = {
+                    legend: {
+                        labels: {
+                            color: labelColor,
                         },
                     },
-                    scales: {
-                        x: {
-                            ticks: { color: '#94a3b8' },
-                            grid: { color: 'rgba(148, 163, 184, 0.12)' },
-                        },
-                        y: {
-                            ticks: { color: '#94a3b8' },
-                            grid: { color: 'rgba(148, 163, 184, 0.12)' },
-                        },
+                    tooltip: {
+                        backgroundColor: 'rgba(15, 23, 42, 0.96)',
+                        titleColor: '#f8fafc',
+                        bodyColor: '#e2e8f0',
+                        borderColor: 'rgba(148, 163, 184, 0.25)',
+                        borderWidth: 1,
                     },
                 };
 
-                // Only show the distribution chart when data exists.
-                const hasDistribution = labels.length > 0 && distribution.some((value) => value > 0);
-                const distributionCanvas = document.getElementById('cluster-distribution-chart');
-                const distributionEmpty = document.getElementById('cluster-distribution-empty');
-                if (!hasDistribution) {
-                    distributionEmpty?.classList.remove('hidden');
-                    distributionCanvas?.classList.add('hidden');
-                } else if (distributionCanvas) {
-                    new Chart(distributionCanvas, {
-                        type: 'bar',
-                        data: {
-                            labels,
-                            datasets: [{
-                                label: 'Customers',
-                                data: distribution,
-                                backgroundColor: 'rgba(56, 189, 248, 0.7)',
-                                borderRadius: 6,
-                            }],
+                const createCartesianOptions = (overrides = {}) => ({
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        ...sharedPlugins,
+                        ...(overrides.plugins || {}),
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: tickColor },
+                            grid: { color: gridColor },
+                            ...(overrides.scales?.x || {}),
                         },
-                        options: chartOptions,
-                    });
-                }
+                        y: {
+                            ticks: { color: tickColor },
+                            grid: { color: gridColor },
+                            beginAtZero: true,
+                            ...(overrides.scales?.y || {}),
+                        },
+                    },
+                });
 
-                // Only show the spend chart when data exists.
-                const hasSpend = labels.length > 0 && avgSpend.some((value) => value > 0);
-                const spendCanvas = document.getElementById('cluster-spend-chart');
-                const spendEmpty = document.getElementById('cluster-spend-empty');
-                if (!hasSpend) {
-                    spendEmpty?.classList.remove('hidden');
-                    spendCanvas?.classList.add('hidden');
-                } else if (spendCanvas) {
-                    new Chart(spendCanvas, {
-                        type: 'bar',
-                        data: {
-                            labels,
-                            datasets: [{
-                                label: 'Avg Total Spent',
-                                data: avgSpend,
-                                backgroundColor: 'rgba(129, 140, 248, 0.7)',
-                                borderRadius: 6,
-                            }],
-                        },
-                        options: chartOptions,
-                    });
-                }
+                const mountChart = (canvasId, emptyId, hasData, config) => {
+                    const canvas = document.getElementById(canvasId);
+                    const empty = document.getElementById(emptyId);
+                    if (!canvas) {
+                        return;
+                    }
 
-                // Only show the award mix chart when there are issued awards.
-                const awardCanvas = document.getElementById('award-mix-chart');
-                const awardEmpty = document.getElementById('award-mix-empty');
-                const awardValues = [awardMix.points || 0, awardMix.coupon || 0];
-                const hasAwards = awardValues.some((value) => value > 0);
-                if (!hasAwards) {
-                    awardEmpty?.classList.remove('hidden');
-                    awardCanvas?.classList.add('hidden');
-                } else if (awardCanvas) {
-                    new Chart(awardCanvas, {
-                        type: 'doughnut',
-                        data: {
-                            labels: ['Points awards', 'Coupon awards'],
-                            datasets: [{
-                                data: awardValues,
-                                backgroundColor: ['rgba(56, 189, 248, 0.8)', 'rgba(244, 114, 182, 0.8)'],
-                                borderWidth: 0,
-                            }],
-                        },
-                        options: {
-                            responsive: true,
-                            plugins: {
-                                legend: {
-                                    labels: {
-                                        color: '#e2e8f0',
-                                    },
+                    if (!hasData) {
+                        canvas.classList.add('hidden');
+                        empty?.classList.remove('hidden');
+                        return;
+                    }
+
+                    canvas.classList.remove('hidden');
+                    empty?.classList.add('hidden');
+                    new Chart(canvas, config);
+                };
+
+                mountChart('cluster-distribution-chart', 'cluster-distribution-empty', labels.length > 0, {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: 'Customers',
+                            data: distribution,
+                            backgroundColor: clusterColors,
+                            borderColor,
+                            borderWidth: 1,
+                            borderRadius: 8,
+                        }],
+                    },
+                    options: createCartesianOptions(),
+                });
+
+                mountChart('cluster-spend-chart', 'cluster-spend-empty', labels.length > 0, {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: 'Average Total Spend',
+                            data: avgSpend,
+                            backgroundColor: clusterColors,
+                            borderColor,
+                            borderWidth: 1,
+                            borderRadius: 8,
+                        }],
+                    },
+                    options: createCartesianOptions({
+                        scales: {
+                            y: {
+                                ticks: {
+                                    color: tickColor,
+                                    callback: (value) => formatCurrency(value),
                                 },
                             },
                         },
-                    });
-                }
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => `Average spend: ${formatCurrency(context.parsed.y)}`,
+                                },
+                            },
+                        },
+                    }),
+                });
+
+                mountChart('cluster-points-chart', 'cluster-points-empty', labels.length > 0, {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [
+                            {
+                                label: 'Points Earned',
+                                data: avgPoints.earned || [],
+                                backgroundColor: 'rgba(56, 189, 248, 0.78)',
+                                borderColor,
+                                borderWidth: 1,
+                                borderRadius: 8,
+                            },
+                            {
+                                label: 'Points Spent',
+                                data: avgPoints.spent || [],
+                                backgroundColor: 'rgba(244, 114, 182, 0.78)',
+                                borderColor,
+                                borderWidth: 1,
+                                borderRadius: 8,
+                            },
+                        ],
+                    },
+                    options: createCartesianOptions(),
+                });
+
+                mountChart('cluster-orders-chart', 'cluster-orders-empty', labels.length > 0, {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: 'Average Order Count',
+                            data: avgOrders,
+                            backgroundColor: clusterColors,
+                            borderColor,
+                            borderWidth: 1,
+                            borderRadius: 8,
+                        }],
+                    },
+                    options: createCartesianOptions({
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => `Average orders: ${formatNumber(context.parsed.y)}`,
+                                },
+                            },
+                        },
+                    }),
+                });
+
+                mountChart('cluster-recency-chart', 'cluster-recency-empty', labels.length > 0, {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: 'Average Days Since Last Order',
+                            data: avgRecency,
+                            backgroundColor: clusterColors,
+                            borderColor,
+                            borderWidth: 1,
+                            borderRadius: 8,
+                        }],
+                    },
+                    options: createCartesianOptions({
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => `Average recency: ${formatNumber(context.parsed.y)} days`,
+                                },
+                            },
+                        },
+                    }),
+                });
+
+                const scatterDatasets = (scatter.datasets || []).map((dataset, index) => ({
+                    label: dataset.label,
+                    data: dataset.data || [],
+                    backgroundColor: clusterColors[index % clusterColors.length] || palette[index % palette.length],
+                    borderColor: clusterColors[index % clusterColors.length] || palette[index % palette.length],
+                    pointRadius: 2.5,
+                    pointHoverRadius: 4,
+                }));
+
+                mountChart('cluster-scatter-chart', 'cluster-scatter-empty', scatterDatasets.some((dataset) => (dataset.data || []).length > 0), {
+                    type: 'scatter',
+                    data: {
+                        datasets: scatterDatasets,
+                    },
+                    options: createCartesianOptions({
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                min: scatterBounds.x?.min,
+                                max: scatterBounds.x?.max,
+                                title: {
+                                    display: true,
+                                    text: scatter.x_label || 'X Axis',
+                                    color: labelColor,
+                                },
+                                ticks: {
+                                    color: tickColor,
+                                    callback: (value) => formatNumber(value),
+                                },
+                            },
+                            y: {
+                                beginAtZero: false,
+                                min: scatterBounds.y?.min,
+                                max: scatterBounds.y?.max,
+                                title: {
+                                    display: true,
+                                    text: scatter.y_label || 'Y Axis',
+                                    color: labelColor,
+                                },
+                                ticks: {
+                                    color: tickColor,
+                                    callback: (value) => formatNumber(value),
+                                },
+                            },
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => `${context.dataset.label}: (${formatNumber(context.parsed.x)}, ${formatNumber(context.parsed.y)})`,
+                                },
+                            },
+                        },
+                    }),
+                });
+
+                const awardValues = [awardMix.points || 0, awardMix.coupon || 0];
+                mountChart('award-mix-chart', 'award-mix-empty', awardValues.some((value) => value > 0), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Points awards', 'Coupon awards'],
+                        datasets: [{
+                            data: awardValues,
+                            backgroundColor: ['rgba(56, 189, 248, 0.82)', 'rgba(244, 114, 182, 0.82)'],
+                            borderColor: 'rgba(2, 6, 23, 0.92)',
+                            borderWidth: 2,
+                        }],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: sharedPlugins,
+                    },
+                });
             })();
 
             (function () {
