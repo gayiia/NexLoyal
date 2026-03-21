@@ -3,6 +3,7 @@
 // This service decides whether the AI model should be retrained based on points activity deltas.
 namespace App\Services;
 
+use App\Models\AiClusterRun;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -20,6 +21,11 @@ class AiSmartRetrainingService
         $intervalDays = max(1, (int) config('ai.retrain_interval_days', 7));
         $fixedK = config('ai.fixed_k');
         $fixedK = is_numeric($fixedK) ? (int) $fixedK : null;
+        $minK = (int) data_get(config('ai.k_range'), 'min', 2);
+        $maxK = (int) data_get(config('ai.k_range'), 'max', 6);
+        $featureKeys = array_values((array) config('ai.feature_keys', []));
+        $featureSchemaVersion = (int) config('ai.feature_schema_version', 1);
+        $featurePayloadMode = 'preprocessed_vectors';
 
         if (!(bool) config('ai.smart_retraining_enabled', true)) {
             return [
@@ -44,6 +50,73 @@ class AiSmartRetrainingService
                     'error' => $model['error'],
                 ],
             ];
+        }
+
+        $latestCompletedRun = $this->latestCompletedRunWithClusters();
+        if ($latestCompletedRun) {
+            $runFixedK = $this->toNullableInt(data_get($latestCompletedRun->params, 'fixed_k'));
+            $runMinK = (int) data_get($latestCompletedRun->params, 'min_k', $minK);
+            $runMaxK = (int) data_get($latestCompletedRun->params, 'max_k', $maxK);
+            $runFeatureKeys = array_values((array) data_get($latestCompletedRun->params, 'feature_keys', []));
+            $runFeatureSchemaVersion = (int) data_get($latestCompletedRun->params, 'feature_schema_version', 0);
+            $runFeaturePayloadMode = (string) data_get($latestCompletedRun->params, 'feature_payload_mode', '');
+
+            if (
+                $runFixedK !== $fixedK
+                || ($fixedK === null && ($runMinK !== $minK || $runMaxK !== $maxK))
+            ) {
+                $currentStrategy = $fixedK !== null ? "fixed K={$fixedK}" : "K-search {$minK}-{$maxK}";
+                $previousStrategy = $runFixedK !== null ? "fixed K={$runFixedK}" : "K-search {$runMinK}-{$runMaxK}";
+
+                return [
+                    'should_retrain' => true,
+                    'reason' => 'cluster_configuration_changed',
+                    'message' => "Clustering configuration changed from {$previousStrategy} to {$currentStrategy}. Forcing retraining.",
+                    'snapshot' => $snapshot,
+                    'details' => [
+                        'latest_run_id' => $latestCompletedRun->id,
+                        'previous_fixed_k' => $runFixedK,
+                        'previous_min_k' => $runMinK,
+                        'previous_max_k' => $runMaxK,
+                        'current_fixed_k' => $fixedK,
+                        'current_min_k' => $minK,
+                        'current_max_k' => $maxK,
+                    ],
+                    'model_metadata' => $metadata,
+                ];
+            }
+
+            if ($runFeaturePayloadMode !== $featurePayloadMode) {
+                return [
+                    'should_retrain' => true,
+                    'reason' => 'feature_payload_mode_changed',
+                    'message' => 'Feature preprocessing payload mode changed. Forcing retraining.',
+                    'snapshot' => $snapshot,
+                    'details' => [
+                        'latest_run_id' => $latestCompletedRun->id,
+                        'previous_feature_payload_mode' => $runFeaturePayloadMode ?: null,
+                        'current_feature_payload_mode' => $featurePayloadMode,
+                    ],
+                    'model_metadata' => $metadata,
+                ];
+            }
+
+            if ($runFeatureSchemaVersion !== $featureSchemaVersion || $runFeatureKeys !== $featureKeys) {
+                return [
+                    'should_retrain' => true,
+                    'reason' => 'feature_schema_changed',
+                    'message' => 'Clustering feature schema changed. Forcing retraining.',
+                    'snapshot' => $snapshot,
+                    'details' => [
+                        'latest_run_id' => $latestCompletedRun->id,
+                        'previous_feature_schema_version' => $runFeatureSchemaVersion,
+                        'current_feature_schema_version' => $featureSchemaVersion,
+                        'previous_feature_keys' => $runFeatureKeys,
+                        'current_feature_keys' => $featureKeys,
+                    ],
+                    'model_metadata' => $metadata,
+                ];
+            }
         }
 
         if ($fixedK !== null && $selectedK === null) {
@@ -264,5 +337,21 @@ class AiSmartRetrainingService
 
         $normalized = (int) $value;
         return $normalized > 0 ? $normalized : null;
+    }
+
+    // This safely converts scalar values to nullable ints so config comparisons stay strict.
+    private function toNullableInt(mixed $value): ?int
+    {
+        return is_numeric($value) ? (int) $value : null;
+    }
+
+    // This uses the latest completed run with persisted clusters as the baseline clustering configuration.
+    private function latestCompletedRunWithClusters(): ?AiClusterRun
+    {
+        return AiClusterRun::query()
+            ->where('status', 'completed')
+            ->whereHas('clusters')
+            ->orderByDesc('id')
+            ->first();
     }
 }

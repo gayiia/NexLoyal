@@ -275,7 +275,7 @@
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
                                     <p class="text-sm font-semibold text-slate-100">Latest AI import batch</p>
                                     @if ($latestBatch)
-                                        <p id="latest-batch-meta" class="mt-2 text-xs text-slate-300">Batch #{{ $latestBatch->id }} · {{ ucfirst($latestBatch->status) }}</p>
+                                        <p id="latest-batch-meta" class="mt-2 text-xs text-slate-300">Batch #{{ $latestBatch->id }} · {{ \Illuminate\Support\Str::headline($latestBatch->status) }}</p>
                                         <p id="latest-batch-started" class="mt-1 text-xs text-slate-400">Started: {{ optional($latestBatch->started_at)->format('M d, Y H:i:s') ?: 'N/A' }}</p>
                                         <p id="latest-batch-completed" class="mt-1 text-xs text-slate-400">Completed: {{ optional($latestBatch->completed_at)->format('M d, Y H:i:s') ?: 'N/A' }}</p>
                                         @if ($latestBatch->error_message)
@@ -546,6 +546,11 @@
                     return date.toLocaleString();
                 };
 
+                const humanizeStatus = (value) => {
+                    const normalized = String(value || 'unknown').replace(/_/g, ' ');
+                    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+                };
+
                 const setResetProgress = (value, label, processing = false) => {
                     if (!resetProgressPanel || !resetProgressLabel || !resetProgressValue || !resetProgressBar) {
                         return;
@@ -579,7 +584,7 @@
                         return;
                     }
 
-                    latestBatchMeta.textContent = `Batch #${latestBatch.id} · ${String(latestBatch.status || 'unknown').charAt(0).toUpperCase()}${String(latestBatch.status || 'unknown').slice(1)}`;
+                    latestBatchMeta.textContent = `Batch #${latestBatch.id} · ${humanizeStatus(latestBatch.status)}`;
                     latestBatchStarted.textContent = `Started: ${formatDateTime(latestBatch.started_at)}`;
                     latestBatchCompleted.textContent = `Completed: ${formatDateTime(latestBatch.completed_at)}`;
                 };

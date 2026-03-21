@@ -27,7 +27,7 @@ class RunAIClusteringJob implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
-    public function __construct()
+    public function __construct(public bool $forceRetrain = false)
     {
         $this->onQueue((string) config('ai.queue', 'default'));
     }
@@ -60,7 +60,20 @@ class RunAIClusteringJob implements ShouldQueue
                 return;
             }
 
-            $retrainDecision = $smartRetraining->evaluate();
+            if ($this->forceRetrain) {
+                $retrainDecision = [
+                    'should_retrain' => true,
+                    'reason' => 'manual_force_retrain',
+                    'message' => 'Manual force retrain requested from AI Insights.',
+                    'details' => [
+                        'requested_from' => 'ai_insights',
+                        'smart_retraining_bypassed' => true,
+                    ],
+                ];
+            } else {
+                $retrainDecision = $smartRetraining->evaluate();
+            }
+
             $shouldRetrain = (bool) ($retrainDecision['should_retrain'] ?? true);
             $decisionReason = (string) ($retrainDecision['reason'] ?? 'unknown');
             $decisionMessage = (string) ($retrainDecision['message'] ?? 'No decision message provided.');
@@ -71,6 +84,7 @@ class RunAIClusteringJob implements ShouldQueue
                 'reason' => $decisionReason,
                 'message' => $decisionMessage,
                 'fixed_k' => $fixedK,
+                'force_retrain' => $this->forceRetrain,
                 'details' => $decisionDetails,
             ]);
             AiClusterProgress::log(
@@ -84,6 +98,7 @@ class RunAIClusteringJob implements ShouldQueue
                 'last_seen_points_transaction_id' => data_get($retrainDecision, 'snapshot.last_seen_points_transaction_id'),
                 'customer_count_at_training' => data_get($retrainDecision, 'snapshot.customer_count_at_training'),
                 'transaction_count_at_training' => data_get($retrainDecision, 'snapshot.transaction_count_at_training'),
+                'feature_payload_mode' => 'preprocessed_vectors',
             ];
 
             $latestCompletedRun = $this->latestCompletedRunWithClusters();
@@ -114,6 +129,8 @@ class RunAIClusteringJob implements ShouldQueue
                         'exclude_refund_only_customers' => config('ai.exclude_refund_only_customers'),
                         'smart_retraining_enabled' => $smartRetrainingEnabled,
                         'retrain_interval_days' => $retrainIntervalDays,
+                        'force_retrain' => $this->forceRetrain,
+                        'feature_payload_mode' => 'preprocessed_vectors',
                     ],
                 ]);
                 AiClusterProgress::attachRun($run->id, "Cluster run #{$run->id} started.");

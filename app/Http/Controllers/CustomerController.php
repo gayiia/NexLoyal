@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use App\Models\PointsTransaction;
+use App\Services\AiClusterStatsService;
 use App\Support\PointsHistoryFormatter;
 use App\Services\ShopifyCustomerService;
 use Illuminate\Http\Request;
@@ -268,7 +269,7 @@ class CustomerController extends Controller
     }
 
     // This deletes selected customers in Shopify and then removes local records.
-    public function bulkDestroy(Request $request, ShopifyCustomerService $shopify)
+    public function bulkDestroy(Request $request, ShopifyCustomerService $shopify, AiClusterStatsService $clusterStats)
     {
         $validator = Validator::make($request->all(), [
             'selected_customer_ids' => ['required', 'array', 'min:1'],
@@ -318,10 +319,14 @@ class CustomerController extends Controller
         }
 
         if ($failed) {
+            $clusterStats->refreshLatestCompletedRun();
+
             return redirect()
                 ->route('customers', $request->query())
                 ->with('status', "{$deletedCount} customer(s) deleted. Some failed: ".implode(', ', array_slice($failed, 0, 5)));
         }
+
+        $clusterStats->refreshLatestCompletedRun();
 
         return redirect()
             ->route('customers', $request->query())

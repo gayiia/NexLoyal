@@ -15,6 +15,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
+use App\Services\AiBenchmarkingService;
 use App\Support\AiClusterProgress;
 
 // This class powers the AI insights dashboard and export endpoints.
@@ -56,8 +57,16 @@ class AiInsightsController extends Controller
             'coupon' => (int) ($awardIssuanceCounts['coupon'] ?? 0),
         ];
         $clusters = $this->decorateClusters($clusters, $clusterMetrics);
+        $clusters = $clusters
+            ->filter(fn (AiCluster $cluster) => (int) $cluster->customer_count > 0)
+            ->values();
+        if ($latestRun && $clusterMetrics->isNotEmpty()) {
+            $latestRun->setAttribute('total_customers', (int) $clusterMetrics->sum('customer_count'));
+            $latestRun->setAttribute('total_clusters', (int) $clusters->count());
+        }
         $charts = $this->buildCharts($latestRun, $clusters, $clusterMetrics, $awardMix);
         $summaries = $this->buildSummaries($latestRun, $clusters, $clusterMetrics, $charts);
+        $benchmarking = app(AiBenchmarkingService::class)->build($latestRun);
 
         // This renders the dashboard view with all derived data.
         return view('ai-insights', [
@@ -68,6 +77,7 @@ class AiInsightsController extends Controller
             'featureStats' => $featureStats,
             'charts' => $charts,
             'summaries' => $summaries,
+            'benchmarking' => $benchmarking,
         ]);
     }
 
@@ -81,15 +91,23 @@ class AiInsightsController extends Controller
                 ->with('error', 'AI service is offline. Start the FastAPI service before clustering.');
         }
 
-        AiClusterProgress::startPending('AI clustering queued. Waiting for the worker to start.');
+        $forceRetrain = $request->boolean('force_retrain');
+
+        AiClusterProgress::startPending(
+            $forceRetrain
+                ? 'Forced AI retraining queued. Waiting for the worker to start.'
+                : 'AI clustering queued. Waiting for the worker to start.'
+        );
 
         // This ensures feature computation happens before clustering.
         Bus::chain([
             new ComputeCustomerFeaturesJob(),
-            new RunAIClusteringJob(),
+            new RunAIClusteringJob($forceRetrain),
         ])->dispatch();
 
-        return redirect()->route('ai-insights')->with('status', 'AI clustering started.');
+        return redirect()
+            ->route('ai-insights')
+            ->with('status', $forceRetrain ? 'Forced AI retraining started.' : 'AI clustering started.');
     }
 
     // This streams a CSV export of customers in a selected cluster.
@@ -140,6 +158,17 @@ class AiInsightsController extends Controller
 
             fclose($handle);
         }, $fileName, $headers);
+    }
+
+    // This exports the thesis benchmarking tables as CSV files into storage/app/exports.
+    public function exportBenchmarks(AiBenchmarkingService $benchmarking)
+    {
+        $tables = $benchmarking->build($this->resolveLatestRun());
+        $export = $benchmarking->export($tables);
+
+        return redirect()
+            ->route('ai-insights')
+            ->with('status', 'Benchmark CSVs exported to ' . ($export['directory'] ?? storage_path('app/exports/ai-benchmarking')) . '.');
     }
 
     // This returns a small customer sample for a cluster modal without loading the entire run into memory.
@@ -337,7 +366,11 @@ class AiInsightsController extends Controller
         return $clusters
             ->map(function (AiCluster $cluster) use ($metricsByCluster): AiCluster {
                 $metrics = $metricsByCluster->get($cluster->id, []);
+                $cluster->setAttribute('customer_count', (int) ($metrics['customer_count'] ?? $cluster->customer_count));
+                $cluster->setAttribute('avg_total_spent', (float) ($metrics['avg_total_spent'] ?? $cluster->avg_total_spent));
+                $cluster->setAttribute('avg_orders_count', (float) ($metrics['avg_orders_count'] ?? $cluster->avg_orders_count));
                 $cluster->setAttribute('avg_points_earned', (float) ($metrics['avg_points_earned'] ?? 0));
+                $cluster->setAttribute('avg_points_spent', (float) ($metrics['avg_points_spent'] ?? $cluster->avg_points_spent));
                 $cluster->setAttribute('avg_days_since_last_order', (float) ($metrics['avg_days_since_last_order'] ?? 0));
 
                 return $cluster;
@@ -372,7 +405,7 @@ class AiInsightsController extends Controller
     {
         $emptyState = [
             'method' => 'fallback_features',
-            'method_label' => 'Points Earned vs Points Spent',
+            'method_label' => 'Customer Activity Projection',
             'description' => 'No clustering run is available yet.',
             'x_label' => 'Points Earned',
             'y_label' => 'Points Spent',
@@ -461,12 +494,12 @@ class AiInsightsController extends Controller
 
         return [
             'method' => $usePca ? 'pca_2d' : 'fallback_features',
-            'method_label' => $usePca ? 'PCA 2D Projection' : 'Points Earned vs Points Spent',
+            'method_label' => $usePca ? 'Principal Component Projection' : 'Customer Activity Projection',
             'description' => $usePca
                 ? ($variance !== []
                     ? 'PC1 and PC2 explain ' . number_format(array_sum(array_slice($variance, 0, 2)), 1) . '% of the variance in the latest run.' . $trimmedMessage
                     : 'PCA coordinates were generated from the standardized clustering feature space.' . $trimmedMessage)
-                : 'Fallback scatter using the stored points-earned and points-spent snapshots.' . $trimmedMessage,
+                : 'Fallback projection using stored points-earned and points-spent snapshots.' . $trimmedMessage,
             'x_label' => $usePca ? 'Principal Component 1 (PC1)' : 'Points Earned',
             'y_label' => $usePca ? 'Principal Component 2 (PC2)' : 'Points Spent',
             'datasets' => $datasets,
@@ -608,8 +641,8 @@ class AiInsightsController extends Controller
                     'description' => 'Recency analysis depends on persisted cluster-customer snapshots.',
                 ],
                 [
-                    'title' => 'Scatter basis',
-                    'value' => 'Points feature space',
+                    'title' => 'Projection basis',
+                    'value' => 'Customer activity space',
                     'description' => 'The page will switch to PCA automatically once the latest run stores 2D coordinates.',
                 ],
             ];
@@ -636,8 +669,8 @@ class AiInsightsController extends Controller
                 'description' => 'Average recency: ' . number_format((float) data_get($mostDormantCluster, 'avg_days_since_last_order', 0), 1) . ' days since last order.',
             ],
             [
-                'title' => 'Scatter basis',
-                'value' => $charts['scatter']['method_label'] ?? 'Points Earned vs Points Spent',
+                'title' => 'Projection basis',
+                'value' => $charts['scatter']['method_label'] ?? 'Customer Activity Projection',
                 'description' => $charts['scatter']['description'] ?? 'The latest run does not yet include PCA coordinates.',
             ],
         ];

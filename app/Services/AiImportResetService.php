@@ -89,9 +89,10 @@ class AiImportResetService
         $remainingCoupons = (int) DB::table('customer_coupons')->count();
         $remainingFeatures = (int) DB::table('customer_features')->count();
         $batchLinkedCustomers = (int) DB::table('customers')->whereNotNull('ai_import_batch_id')->count();
+        $allCustomersBatchLinked = $totalCustomers > 0 && $batchLinkedCustomers === $totalCustomers;
 
         $canDeleteAllCustomersSafely = $totalCustomers > 0
-            && $batchLinkedCustomers === 0
+            && $allCustomersBatchLinked
             && $rowsWithNativeSignals <= 5
             && $remainingPoints === 0
             && $remainingCoupons === 0
@@ -104,10 +105,11 @@ class AiImportResetService
             'remaining_customer_coupons' => $remainingCoupons,
             'remaining_customer_features' => $remainingFeatures,
             'batch_linked_customers' => $batchLinkedCustomers,
+            'all_customers_batch_linked' => $allCustomersBatchLinked,
             'can_delete_all_customers_safely' => $canDeleteAllCustomersSafely,
             'message' => $canDeleteAllCustomersSafely
                 ? 'The current customers table looks like legacy AI-import-only data and can be removed safely.'
-                : 'The current customers table is not fully attributable to a legacy AI import.',
+                : 'The current customers table is not fully attributable to a legacy AI import, or not all remaining customers are batch-linked.',
         ];
     }
 

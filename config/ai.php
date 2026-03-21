@@ -12,7 +12,7 @@ return [
         'avg_order_value',
     ],
     'min_customers_for_training' => (int) env('AI_MIN_CUSTOMERS', 20),
-    'feature_schema_version' => (int) env('AI_FEATURE_SCHEMA_VERSION', 1),
+    'feature_schema_version' => (int) env('AI_FEATURE_SCHEMA_VERSION', 2),
     'algorithm_version' => env('AI_ALGORITHM_VERSION', 'kmeans_v1'),
     'code_version' => env('AI_CODE_VERSION', 'local'),
     'api_key' => env('AI_API_KEY'),
@@ -26,14 +26,10 @@ return [
     'new_customer_recency_days' => (int) env('AI_NEW_CUSTOMER_RECENCY_DAYS', 365),
     'cleanup_days' => (int) env('AI_CLEANUP_DAYS', 90),
     'feature_keys' => [
-        'orders_count',
         'total_spent',
         'avg_order_value',
-        'redeemed_coupons',
         'points_earned',
         'points_spent',
-        'loyalty_points',
         'days_since_last_order',
-        'tenure_days',
     ],
 ];

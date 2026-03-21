@@ -148,6 +148,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('admin/ai-insights/status', [AiInsightsController::class, 'status'])->name('ai-insights.status');
     Route::get('admin/ai-insights/clusters/{cluster}/customers', [AiInsightsController::class, 'clusterCustomers'])
         ->name('ai-insights.clusters.customers');
+    Route::get('admin/ai-insights/benchmarks/export', [AiInsightsController::class, 'exportBenchmarks'])
+        ->name('ai-insights.benchmarks.export');
     Route::get('admin/ai/sandbox', [AiSandboxController::class, 'index'])->name('ai-sandbox');
     Route::post('admin/ai/sandbox/compute-features', [AiSandboxController::class, 'computeFeatures'])
         ->middleware('throttle:6,1')

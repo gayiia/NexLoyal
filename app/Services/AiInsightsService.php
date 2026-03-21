@@ -444,7 +444,6 @@ class AiInsightsService
     public function exportStoredTrainingPayload(array $trainingMetadata = []): array
     {
         $featureKeys = (array) config('ai.feature_keys', []);
-        $logTransforms = (array) config('ai.log_transforms', []);
         $fixedK = config('ai.fixed_k');
         $path = tempnam(sys_get_temp_dir(), 'ai-train-');
         if ($path === false) {
@@ -467,8 +466,7 @@ class AiInsightsService
             fwrite($handle, ',"fixed_k":');
             fwrite($handle, json_encode(is_numeric($fixedK) ? (int) $fixedK : null, JSON_THROW_ON_ERROR));
             fwrite($handle, ',"outlier_caps":{}');
-            fwrite($handle, ',"log_transforms":');
-            fwrite($handle, json_encode($logTransforms, JSON_THROW_ON_ERROR));
+            fwrite($handle, ',"log_transforms":[]');
             fwrite($handle, ',"feature_schema_version":');
             fwrite($handle, json_encode(config('ai.feature_schema_version'), JSON_THROW_ON_ERROR));
             fwrite($handle, ',"algorithm_version":');
@@ -477,6 +475,7 @@ class AiInsightsService
             fwrite($handle, json_encode(config('ai.code_version'), JSON_THROW_ON_ERROR));
             fwrite($handle, ',"training_metadata":');
             fwrite($handle, json_encode($trainingMetadata, JSON_THROW_ON_ERROR));
+            fwrite($handle, ',"feature_payload_mode":"preprocessed_vectors"');
             fwrite($handle, ',"features":[');
 
             $isFirst = true;
@@ -486,12 +485,7 @@ class AiInsightsService
                 ->orderBy('customer_id')
                 ->chunk(500, function ($rows) use (&$count, &$isFirst, $handle, $featureKeys): void {
                     foreach ($rows as $row) {
-                        $decoded = json_decode((string) ($row->features ?? '[]'), true);
-                        $features = is_array($decoded) ? $decoded : [];
-                        $vector = array_values(array_map(
-                            fn ($key) => (float) Arr::get($features, $key, 0),
-                            $featureKeys
-                        ));
+                        $vector = $this->decodeStoredFeatureVector((string) ($row->features ?? '[]'), $featureKeys);
 
                         if (!$isFirst) {
                             fwrite($handle, ',');
@@ -515,7 +509,7 @@ class AiInsightsService
             'path' => $path,
             'count' => $count,
             'feature_keys' => $featureKeys,
-            'log_transforms' => $logTransforms,
+            'log_transforms' => [],
         ];
     }
 
@@ -645,7 +639,6 @@ class AiInsightsService
     public function getTrainingDatasetFromStoredFeatures(): array
     {
         $featureKeys = (array) config('ai.feature_keys', []);
-        $logTransforms = (array) config('ai.log_transforms', []);
 
         $customerIds = [];
         $vectors = [];
@@ -667,14 +660,8 @@ class AiInsightsService
             ->orderBy('customer_id')
             ->chunk(500, function ($rows) use (&$customerIds, &$vectors, &$snapshots, $featureKeys): void {
                 foreach ($rows as $row) {
-                    $decoded = json_decode((string) ($row->features ?? '[]'), true);
-                    $features = is_array($decoded) ? $decoded : [];
-
                     $customerIds[] = (int) $row->customer_id;
-                    $vectors[] = array_values(array_map(
-                        fn ($key) => (float) ($features[$key] ?? 0),
-                        $featureKeys
-                    ));
+                    $vectors[] = $this->decodeStoredFeatureVector((string) ($row->features ?? '[]'), $featureKeys);
                     $snapshots[] = [
                         'customer_id' => (int) $row->customer_id,
                         'orders_count_snapshot' => (int) ($row->orders_count ?? 0),
@@ -690,7 +677,7 @@ class AiInsightsService
 
         return [
             'feature_keys' => $featureKeys,
-            'log_transforms' => $logTransforms,
+            'log_transforms' => [],
             'outlier_caps' => new \stdClass(),
             'customer_ids' => $customerIds,
             'vectors' => $vectors,
@@ -716,30 +703,25 @@ class AiInsightsService
             throw new \RuntimeException("Customer is excluded from AI predictions ({$reason}).");
         }
 
-        // This reconstructs the raw feature values from the stored record.
         $featureKeys = (array) config('ai.feature_keys', []);
-        $raw = [
-            'orders_count' => (int) $feature->orders_count,
-            'total_spent' => (float) $feature->total_spent,
-            'avg_order_value' => (float) $feature->avg_order_value,
-            'redeemed_coupons' => (int) $feature->redeemed_coupons,
-            'points_earned' => (int) $feature->points_earned,
-            'points_spent' => (int) $feature->points_spent,
-            'loyalty_points' => (int) $feature->loyalty_points,
-            'days_since_last_order' => (int) ($feature->days_since_last_order ?? 0),
-            'tenure_days' => (int) ($feature->tenure_days ?? 0),
-        ];
-
-        $vector = [];
-        foreach ($featureKeys as $key) {
-            // This preserves feature ordering expected by the AI service.
-            $vector[] = (float) ($raw[$key] ?? 0);
-        }
+        $vector = $this->decodeStoredFeatureVector((string) ($feature->features ?? '[]'), $featureKeys);
 
         // This calls the AI service for a single-customer prediction.
         return $this->client->predict([
             'features' => $vector,
         ]);
+    }
+
+    // This decodes the stored feature JSON into a consistently ordered vector for training and prediction.
+    private function decodeStoredFeatureVector(string $encodedFeatures, array $featureKeys): array
+    {
+        $decoded = json_decode($encodedFeatures, true);
+        $features = is_array($decoded) ? $decoded : [];
+
+        return array_values(array_map(
+            fn ($key) => (float) Arr::get($features, $key, 0),
+            $featureKeys
+        ));
     }
 
     // This computes a simple percentile to cap outliers without heavy statistics dependencies.

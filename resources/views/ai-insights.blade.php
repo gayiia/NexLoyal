@@ -145,6 +145,13 @@
                                             Run clustering
                                         </button>
                                     </form>
+                                    <form method="POST" action="{{ route('ai-insights.run') }}">
+                                        @csrf
+                                        <input type="hidden" name="force_retrain" value="1">
+                                        <button class="rounded-xl border border-amber-400/40 bg-amber-400/15 px-4 py-2 text-sm font-semibold text-amber-100 shadow-lg shadow-amber-500/10" type="submit">
+                                            Force retrain
+                                        </button>
+                                    </form>
                                     {{-- Awards are created from clustering results. --}}
                                     <a href="{{ route('ai-insights.awards.create') }}" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-sm text-slate-200 nl-panel-muted">
                                         Create award
@@ -161,6 +168,10 @@
                                     {{ session('status') }}
                                 </div>
                             @endif
+
+                            <div class="mt-3 rounded-2xl border border-slate-800 bg-slate-900/50 px-4 py-3 text-xs text-slate-400 nl-panel">
+                                <span class="font-semibold text-slate-200">Force retrain</span> bypasses smart retraining reuse and runs a fresh clustering cycle with the current K-search configuration.
+                            </div>
 
                             @if (session('error'))
                                 <div class="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
@@ -264,15 +275,15 @@
                                 <div class="rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6 xl:col-span-2">
                                     <div class="flex flex-wrap items-center justify-between gap-3">
                                         <div>
-                                            <p class="text-sm font-semibold text-slate-100">Clustered customer scatter plot</p>
-                                            <p class="text-xs text-slate-400">{{ $charts['scatter']['method_label'] ?? 'Points Earned vs Points Spent' }}</p>
+                                            <p class="text-sm font-semibold text-slate-100">Customer Cluster Projection</p>
+                                            <p class="text-xs text-slate-400">{{ $charts['scatter']['method_label'] ?? 'Customer Activity Projection' }}</p>
                                         </div>
                                         <span class="nl-chip nl-badge-muted">{{ $charts['scatter']['x_label'] ?? 'Points Earned' }} x {{ $charts['scatter']['y_label'] ?? 'Points Spent' }}</span>
                                     </div>
                                     <p class="mt-2 text-xs text-slate-400">{{ $charts['scatter']['description'] ?? 'No scatter data available yet.' }}</p>
                                     <div class="mt-6 h-[24rem]">
                                         <canvas id="cluster-scatter-chart" class="h-full w-full"></canvas>
-                                        <p id="cluster-scatter-empty" class="mt-4 text-xs text-slate-400 hidden">No scatter plot data yet.</p>
+                                        <p id="cluster-scatter-empty" class="mt-4 text-xs text-slate-400 hidden">No projection data available yet.</p>
                                     </div>
                                 </div>
 
@@ -352,6 +363,111 @@
                                         <canvas id="award-mix-chart" class="h-full w-full"></canvas>
                                         <p id="award-mix-empty" class="mt-4 text-xs text-slate-400 hidden">No awards issued yet.</p>
                                     </div>
+                                </div>
+                            </section>
+
+                            <section class="mt-10 rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel p-6">
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <p class="text-sm font-semibold text-slate-100">Benchmarking Tables</p>
+                                        <p class="text-xs text-slate-400">Rule-based baseline benchmarking against the latest AI clustering run.</p>
+                                    </div>
+                                    <a href="{{ route('ai-insights.benchmarks.export') }}" class="rounded-xl border border-slate-700 px-4 py-2 text-xs text-slate-200">
+                                        Export Benchmark CSVs
+                                    </a>
+                                </div>
+                                <p class="mt-3 text-xs text-slate-400">{{ data_get($benchmarking, 'meta.threshold_summary', 'Benchmark thresholds are calculated from the current eligible feature dataset.') }}</p>
+
+                                <div class="mt-6 grid gap-6 xl:grid-cols-2">
+                                    <div class="rounded-2xl border border-slate-800/70 bg-slate-950/40 p-5">
+                                        <p class="text-sm font-semibold text-slate-100">Baseline Definition Table</p>
+                                        <div class="mt-4 overflow-x-auto">
+                                            <table class="w-full text-left text-xs">
+                                                <thead class="text-slate-400">
+                                                    <tr class="border-b border-slate-800/60">
+                                                        @foreach (data_get($benchmarking, 'baseline_definition.columns', []) as $column)
+                                                            <th class="px-3 py-2">{{ $column }}</th>
+                                                        @endforeach
+                                                    </tr>
+                                                </thead>
+                                                <tbody class="divide-y divide-slate-800/60">
+                                                    @forelse (data_get($benchmarking, 'baseline_definition.rows', []) as $row)
+                                                        <tr>
+                                                            <td class="px-3 py-3 text-slate-200">{{ $row['Cluster'] ?? '-' }}</td>
+                                                            <td class="px-3 py-3 text-slate-300">{{ $row['Rule'] ?? '-' }}</td>
+                                                        </tr>
+                                                    @empty
+                                                        <tr>
+                                                            <td colspan="2" class="px-3 py-6 text-center text-slate-400">No baseline rule definitions available.</td>
+                                                        </tr>
+                                                    @endforelse
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    <div class="rounded-2xl border border-slate-800/70 bg-slate-950/40 p-5">
+                                        <p class="text-sm font-semibold text-slate-100">Baseline Results Table</p>
+                                        <div class="mt-4 overflow-x-auto">
+                                            <table class="w-full text-left text-xs">
+                                                <thead class="text-slate-400">
+                                                    <tr class="border-b border-slate-800/60">
+                                                        @foreach (data_get($benchmarking, 'baseline_results.columns', []) as $column)
+                                                            <th class="px-3 py-2">{{ $column }}</th>
+                                                        @endforeach
+                                                    </tr>
+                                                </thead>
+                                                <tbody class="divide-y divide-slate-800/60">
+                                                    @forelse (data_get($benchmarking, 'baseline_results.rows', []) as $row)
+                                                        <tr>
+                                                            <td class="px-3 py-3 text-slate-200">{{ $row['Cluster'] ?? '-' }}</td>
+                                                            <td class="px-3 py-3 text-slate-300">{{ number_format((int) ($row['Customer Count'] ?? 0)) }}</td>
+                                                            <td class="px-3 py-3 text-slate-300">{{ number_format((float) ($row['Avg Spend'] ?? 0), 2) }}</td>
+                                                            <td class="px-3 py-3 text-slate-300">{{ number_format((float) ($row['Avg Points Earned'] ?? 0), 2) }}</td>
+                                                            <td class="px-3 py-3 text-slate-300">{{ number_format((float) ($row['Avg Orders'] ?? 0), 2) }}</td>
+                                                            <td class="px-3 py-3 text-slate-300">{{ number_format((float) ($row['Avg Days Since Last Order'] ?? 0), 2) }}</td>
+                                                        </tr>
+                                                    @empty
+                                                        <tr>
+                                                            <td colspan="6" class="px-3 py-6 text-center text-slate-400">No baseline dataset is available yet.</td>
+                                                        </tr>
+                                                    @endforelse
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    <div class="rounded-2xl border border-slate-800/70 bg-slate-950/40 p-5 xl:col-span-2">
+                                        <p class="text-sm font-semibold text-slate-100">AI Cluster Results Table</p>
+                                        <div class="mt-4 overflow-x-auto">
+                                            <table class="w-full text-left text-xs">
+                                                <thead class="text-slate-400">
+                                                    <tr class="border-b border-slate-800/60">
+                                                        @foreach (data_get($benchmarking, 'ai_cluster_results.columns', []) as $column)
+                                                            <th class="px-3 py-2">{{ $column }}</th>
+                                                        @endforeach
+                                                    </tr>
+                                                </thead>
+                                                <tbody class="divide-y divide-slate-800/60">
+                                                    @forelse (data_get($benchmarking, 'ai_cluster_results.rows', []) as $row)
+                                                        <tr>
+                                                            <td class="px-3 py-3 text-slate-200">{{ $row['Cluster'] ?? '-' }}</td>
+                                                            <td class="px-3 py-3 text-slate-300">{{ number_format((int) ($row['Customer Count'] ?? 0)) }}</td>
+                                                            <td class="px-3 py-3 text-slate-300">{{ number_format((float) ($row['Avg Spend'] ?? 0), 2) }}</td>
+                                                            <td class="px-3 py-3 text-slate-300">{{ number_format((float) ($row['Avg Points Earned'] ?? 0), 2) }}</td>
+                                                            <td class="px-3 py-3 text-slate-300">{{ number_format((float) ($row['Avg Orders'] ?? 0), 2) }}</td>
+                                                            <td class="px-3 py-3 text-slate-300">{{ number_format((float) ($row['Avg Days Since Last Order'] ?? 0), 2) }}</td>
+                                                        </tr>
+                                                    @empty
+                                                        <tr>
+                                                            <td colspan="6" class="px-3 py-6 text-center text-slate-400">No completed clustering run is available yet.</td>
+                                                        </tr>
+                                                    @endforelse
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
                                 </div>
                             </section>
 
