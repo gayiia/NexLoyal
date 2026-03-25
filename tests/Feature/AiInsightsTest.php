@@ -93,7 +93,7 @@ test('award issuing is idempotent per customer', function () {
     expect($customer->loyalty_points)->toBe(50);
 });
 
-test('coupon awards require sufficient coupon codes', function () {
+test('coupon awards without a ready shopify coupon fail issuance after activation', function () {
     $this->actingAs(User::factory()->create());
 
     $run = AiClusterRun::create([
@@ -143,18 +143,18 @@ test('coupon awards require sufficient coupon codes', function () {
         ]);
     }
 
-    CouponCode::create([
-        'coupon_id' => $coupon->id,
-        'code' => 'AI-CODE-ONE',
-        'status' => 'available',
-    ]);
-
     $response = $this->patch(route('ai-insights.awards.activate', $award));
     $response->assertRedirect(route('ai-insights'));
-    $response->assertSessionHasErrors('award');
 
     $award->refresh();
-    expect($award->status)->toBe('draft');
+    expect($award->status)->toBe('active');
+    expect(AiAwardIssuance::count())->toBe(0);
+    expect(
+        AiClusterAwardCustomer::query()
+            ->where('ai_cluster_award_id', $award->id)
+            ->where('status', 'failed')
+            ->count()
+    )->toBe(2);
 });
 
 test('points history formatter labels smart offers', function () {
