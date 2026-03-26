@@ -282,17 +282,19 @@
                                     </div>
                                     @php $maxWeekly = max($series['weekly_redemptions'] ?: [0]); @endphp
                                     {{-- Weekly bars are scaled relative to the highest redemption count. --}}
-                                    <div class="mt-6 grid grid-cols-7 items-end gap-2 text-xs text-slate-400">
-                                        @foreach ($series['weekly_redemptions'] as $index => $count)
-                                            @php
-                                                $height = $maxWeekly > 0 ? max(8, round(($count / $maxWeekly) * 96)) : 8;
-                                                $label = \Illuminate\Support\Carbon::parse($series['days_7'][$index])->format('m/d');
-                                            @endphp
-                                            <div class="flex flex-col items-center gap-2">
-                                                <div class="w-6 rounded-lg bg-sky-400/80" style="height: {{ $height }}px"></div>
-                                                <span>{{ $label }}</span>
-                                            </div>
-                                        @endforeach
+                                    <div class="mt-6 overflow-x-auto nl-mobile-scroll">
+                                        <div class="grid grid-cols-7 items-end gap-2 text-[10px] text-slate-400 sm:text-xs">
+                                            @foreach ($series['weekly_redemptions'] as $index => $count)
+                                                @php
+                                                    $height = $maxWeekly > 0 ? max(8, round(($count / $maxWeekly) * 96)) : 8;
+                                                    $label = \Illuminate\Support\Carbon::parse($series['days_7'][$index])->format('m/d');
+                                                @endphp
+                                                <div class="flex flex-col items-center gap-2">
+                                                    <div class="w-6 rounded-lg bg-sky-400/80" style="height: {{ $height }}px"></div>
+                                                    <span>{{ $label }}</span>
+                                                </div>
+                                            @endforeach
+                                        </div>
                                     </div>
                                 </div>
 
@@ -306,20 +308,22 @@
                                     </div>
                                     @php $maxMystery = max($mystery_box_outcomes->pluck('count')->all() ?: [0]); @endphp
                                     {{-- Reward bars are scaled relative to the most frequent outcome. --}}
-                                    <div class="mt-6 grid grid-cols-5 items-end gap-3 text-xs text-slate-400">
-                                        @foreach ($mystery_box_outcomes as $item)
-                                            @php
-                                                $height = $maxMystery > 0 ? max(10, round(($item['count'] / $maxMystery) * 96)) : 10;
-                                            @endphp
-                                            <div class="flex flex-col items-center gap-2">
-                                                <div class="w-8 rounded-lg bg-purple-400/80" style="height: {{ $height }}px"></div>
-                                                <span class="text-[10px] text-center text-slate-400">{{ \Illuminate\Support\Str::limit($item['title'], 8) }}</span>
-                                            </div>
-                                        @endforeach
-                                        {{-- This empty state preserves layout when no outcomes exist. --}}
-                                        @if ($mystery_box_outcomes->isEmpty())
-                                            <p class="col-span-5 text-center text-xs text-slate-400">No mystery box claims yet.</p>
-                                        @endif
+                                    <div class="mt-6 overflow-x-auto nl-mobile-scroll">
+                                        <div class="grid grid-cols-5 items-end gap-2 text-[10px] text-slate-400 sm:gap-3">
+                                            @foreach ($mystery_box_outcomes as $item)
+                                                @php
+                                                    $height = $maxMystery > 0 ? max(10, round(($item['count'] / $maxMystery) * 96)) : 10;
+                                                @endphp
+                                                <div class="flex flex-col items-center gap-2">
+                                                    <div class="w-8 rounded-lg bg-purple-400/80" style="height: {{ $height }}px"></div>
+                                                    <span class="text-[10px] text-center text-slate-400">{{ \Illuminate\Support\Str::limit($item['title'], 8) }}</span>
+                                                </div>
+                                            @endforeach
+                                            {{-- This empty state preserves layout when no outcomes exist. --}}
+                                            @if ($mystery_box_outcomes->isEmpty())
+                                                <p class="col-span-5 text-center text-xs text-slate-400">No mystery box claims yet.</p>
+                                            @endif
+                                        </div>
                                     </div>
                                 </div>
 

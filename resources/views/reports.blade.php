@@ -227,8 +227,8 @@
                                     <h2 class="text-lg font-semibold">Trend Visualization</h2>
                                     <div class="text-xs text-slate-400 nl-text-muted">Chart-ready series</div>
                                 </div>
-                                <div class="mt-4 overflow-x-auto">
-                                    <svg width="680" height="220" viewBox="0 0 680 220" class="min-w-[520px]">
+                                <div class="mt-4">
+                                    <svg viewBox="0 0 680 220" class="h-auto w-full">
                                         <rect x="0" y="0" width="680" height="220" fill="transparent"></rect>
                                         {{-- Each dataset is rendered as a polyline. --}}
                                         @foreach($datasets as $index => $dataset)

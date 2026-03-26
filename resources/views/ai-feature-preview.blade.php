@@ -28,9 +28,9 @@
                             <h1 class="mt-2 text-2xl font-semibold">Feature Preview</h1>
                             <p class="mt-2 text-sm text-slate-400 nl-text-muted">Computed customer features before training.</p>
                         </div>
-                        <form method="GET" action="{{ route('ai-features') }}" class="flex items-center gap-2">
+                        <form method="GET" action="{{ route('ai-features') }}" class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                             <input type="text" name="search" value="{{ $search }}" placeholder="Search id/email"
-                                   class="rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-100">
+                                   class="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 sm:w-64">
                             <button type="submit" class="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500">Search</button>
                         </form>
                     </div>
