@@ -8,7 +8,6 @@ use App\Models\AiClusterAwardCustomer;
 use App\Models\AiClusterCustomer;
 use App\Models\AiClusterRun;
 use App\Models\Coupon;
-use App\Models\CouponCode;
 use App\Models\Customer;
 use App\Models\PointsTransaction;
 use App\Models\User;

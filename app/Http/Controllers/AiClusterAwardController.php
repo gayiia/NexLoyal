@@ -11,7 +11,6 @@ use App\Models\AiClusterAwardCustomer;
 use App\Models\AiClusterCustomer;
 use App\Models\AiClusterRun;
 use App\Models\Coupon;
-use App\Models\CouponCode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
