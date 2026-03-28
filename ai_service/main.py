@@ -1,3 +1,15 @@
+"""FastAPI AI service for NexLoyal customer clustering.
+
+This file does four main jobs:
+1. exposes HTTP endpoints that Laravel calls
+2. validates and preprocesses incoming feature data
+3. trains or reuses a K-Means clustering model
+4. stores enough model state on disk to support later predictions
+
+The comments in this file are intentionally explanatory so the training,
+prediction, and persistence flow is easy to discuss in a viva.
+"""
+
 # Typing helpers used throughout request/response shapes.
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -61,8 +73,11 @@ def _load_env_file(path: Path) -> None:
         os.environ[key] = value
 
 
+# Resolve the AI service folder first so we can look for local and project-level .env files.
 _SERVICE_DIR = Path(__file__).resolve().parent
+# Load environment values from ai_service/.env first.
 _load_env_file(_SERVICE_DIR / ".env")
+# Then load the project root .env as a fallback for shared settings.
 _load_env_file(_SERVICE_DIR.parent / ".env")
 
 # Configuration and feature flags.
@@ -74,6 +89,7 @@ MINIBATCH_THRESHOLD = int(os.getenv("AI_MINIBATCH_THRESHOLD", "10000"))
 MINIBATCH_SIZE = int(os.getenv("AI_MINIBATCH_BATCH_SIZE", "2048"))
 KMEANS_MAX_ITER = int(os.getenv("AI_KMEANS_MAX_ITER", "100"))
 AI_FIXED_K_RAW = os.getenv("AI_FIXED_K", "").strip()
+# Keep the API key requirement explicit so the service is never accidentally exposed.
 REQUIRE_API_KEY = True
 API_KEY = os.getenv("AI_API_KEY", "").strip()
 CODE_VERSION = os.getenv("AI_CODE_VERSION", "").strip() or "unknown"
@@ -126,6 +142,7 @@ class TrainRequest(BaseModel):
         feature_names = values.get("feature_names")
         feature_keys = values.get("feature_keys")
         if not feature_names and feature_keys:
+            # Laravel sometimes sends feature_keys; normalize it into feature_names for one schema.
             values["feature_names"] = feature_keys
         return values
 
@@ -181,6 +198,7 @@ async def _parse_json_body(request: Request, model_cls: type[BaseModel]) -> Base
         _raise_validation("body_empty", "Request body is empty.", status=400)
 
     try:
+        # Decode the raw HTTP body ourselves so we can report JSON syntax issues clearly.
         decoded = json.loads(raw_body)
     except json.JSONDecodeError as exc:
         _raise_validation(
@@ -196,6 +214,7 @@ async def _parse_json_body(request: Request, model_cls: type[BaseModel]) -> Base
         )
 
     try:
+        # Let Pydantic enforce field types and required structure after JSON decoding succeeds.
         return model_cls.model_validate(decoded)
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
@@ -214,6 +233,7 @@ def _validate_api_key(request: Request) -> None:
                 hint="Set AI_API_KEY in the AI service environment.",
             ),
         )
+    # Laravel sends the service key in X-AI-KEY for every protected AI endpoint.
     provided = request.headers.get("X-AI-KEY", "")
     if not provided or provided != API_KEY:
         raise HTTPException(
@@ -231,9 +251,11 @@ def _load_model_state() -> Optional[Dict[str, Any]]:
     if not os.path.exists(MODEL_STATE_PATH):
         return None
     try:
+        # The saved JSON contains centroids, scaler stats, feature names, and metadata.
         with open(MODEL_STATE_PATH, "r", encoding="utf-8") as handle:
             return json.load(handle)
     except Exception:
+        # If the file is corrupt or unreadable, behave as if there is no trained model.
         return None
 
 
@@ -264,6 +286,7 @@ def _startup() -> None:
 def _compute_dataset_hash(features: List[List[float]], feature_names: List[str]) -> str:
     # Generate a stable hash for the training dataset and schema.
     payload = json.dumps(
+        # sort_keys + compact separators make the hash deterministic for the same input.
         {"features": features, "feature_names": feature_names},
         sort_keys=True,
         separators=(",", ":"),
@@ -278,6 +301,7 @@ def _resolve_fixed_k(payload_fixed_k: Optional[int]) -> Optional[int]:
     if AI_FIXED_K_RAW == "":
         return None
     try:
+        # Environment values are strings, so convert them only when they are valid integers.
         return int(AI_FIXED_K_RAW)
     except ValueError:
         return None
@@ -294,11 +318,14 @@ def _apply_preprocessing(
     log_keys = set([name for name in (log_transforms or [])])
     processed = raw.astype(float).copy()
     for idx, name in enumerate(feature_names):
+        # Work column-by-column so each feature can have its own cap and transform rules.
         column = processed[:, idx]
         cap = caps.get(name)
         if cap is not None:
+            # Cap extreme values to reduce the effect of outliers.
             column = np.minimum(column, float(cap))
         if name in log_keys:
+            # log1p handles skewed positive features while safely keeping zeros valid.
             column = np.log1p(np.maximum(column, 0))
         processed[:, idx] = column
     return processed
@@ -335,6 +362,7 @@ def _score_silhouette(scaled: np.ndarray, labels: np.ndarray) -> Optional[float]
         silhouette_score(
             scaled,
             labels,
+            # Use a subset on large datasets; pass None to score all rows when the dataset is small.
             sample_size=sample_size if sample_size < n_samples else None,
             random_state=42,
         )
@@ -346,6 +374,7 @@ def _fit_projection(scaled: np.ndarray) -> Optional[Dict[str, Any]]:
     if scaled.ndim != 2 or scaled.shape[0] < 2 or scaled.shape[1] < 2:
         return None
 
+    # PCA compresses the standardized feature space into two dimensions for charts and reports.
     projector = PCA(n_components=2)
     points = projector.fit_transform(scaled)
 
@@ -375,6 +404,7 @@ def _project_with_state(scaled: np.ndarray, state: Dict[str, Any]) -> Optional[D
     if mean_vector.ndim != 1 or mean_vector.shape[0] != scaled.shape[1]:
         return None
 
+    # Center new rows with the original PCA mean, then project them onto the saved axes.
     projected = (scaled - mean_vector) @ component_matrix.T
 
     return {
@@ -463,7 +493,9 @@ async def train_clusters(request: Request):
 
     # Standardization keeps each feature on the same scale.
     scaler = StandardScaler()
+    # fit_transform learns mean/std from this dataset and immediately applies them.
     scaled = scaler.fit_transform(processed)
+    # Build a 2D projection once so the frontend can visualize the same run.
     projection = _fit_projection(scaled)
 
     # ---------------------------
@@ -484,6 +516,7 @@ async def train_clusters(request: Request):
     if fixed_k is not None:
         # Fixed-k mode: train only once and skip k-search for predictable runtime.
         model = _build_cluster_model(fixed_k, n_samples)
+        # fit_predict both trains the model and returns a label for each customer row.
         labels = model.fit_predict(scaled)
         best_k = fixed_k
         best_labels = labels
@@ -533,6 +566,7 @@ async def train_clusters(request: Request):
         )
 
     finished = datetime.now(timezone.utc)
+    # Store runtime in milliseconds because it is easy to compare in logs and UI panels.
     duration_ms = int((finished - started).total_seconds() * 1000)
 
     # Prepare metadata about the trained model for traceability.
@@ -549,6 +583,7 @@ async def train_clusters(request: Request):
 
     # Store all parameters needed to reproduce scaling and predictions.
     model_state = {
+        # Centroids are stored in scaled feature space because predictions use the same scaling.
         "centroids": best_centroids.tolist(),
         "scaler_mean": scaler.mean_.tolist(),
         "scaler_scale": scaler.scale_.tolist(),
@@ -557,6 +592,7 @@ async def train_clusters(request: Request):
         "log_transforms": payload.log_transforms or [],
         "selected_k": best_k,
         "model_metadata": model_metadata,
+        # Projection parameters are saved separately so later batch predictions can reuse them.
         "projection": None
         if projection is None
         else {
@@ -689,6 +725,7 @@ async def predict_cluster(request: Request):
     if mean.size and scale.size:
         # Protect against divide-by-zero in case a feature had zero variance.
         scale = np.where(scale == 0, 1, scale)
+        # Recreate standardization manually using the saved training statistics.
         scaled = (processed - mean) / scale
     else:
         scaled = processed
@@ -704,7 +741,9 @@ async def predict_cluster(request: Request):
             detail=_error_response("model_state_invalid", "Centroids are missing from model state."),
         )
 
+    # Euclidean distance gives one distance value per centroid for this single customer.
     distances = np.linalg.norm(centroids - scaled, axis=1)
+    # The smallest distance means the customer belongs to that cluster.
     cluster_index = int(np.argmin(distances))
 
     # Return the closest cluster and metadata for traceability.
@@ -750,6 +789,7 @@ async def predict_batch(request: Request):
             details={"expected": len(feature_names), "received": int(data.shape[1])},
         )
     if not feature_names:
+        # Rebuild generic names so preprocessing still knows how many columns exist.
         feature_names = [f"f{i}" for i in range(int(data.shape[1]))]
 
     processed = _apply_preprocessing(
@@ -763,6 +803,7 @@ async def predict_batch(request: Request):
     scale = np.array(state.get("scaler_scale", []), dtype=float)
     if mean.size and scale.size:
         scale = np.where(scale == 0, 1, scale)
+        # Apply the exact same standardization formula used in single prediction.
         scaled = (processed - mean) / scale
     else:
         scaled = processed
@@ -774,8 +815,11 @@ async def predict_batch(request: Request):
             detail=_error_response("model_state_invalid", "Centroids are missing from model state."),
         )
 
+    # Broadcast rows against centroids to build an n_samples x n_clusters distance matrix.
     distances = np.linalg.norm(centroids[None, :, :] - scaled[:, None, :], axis=2)
+    # Choose the nearest centroid for every input row at once.
     labels = np.argmin(distances, axis=1)
+    # Reuse saved PCA parameters so new predictions can be plotted beside the training run.
     projection = _project_with_state(scaled, state)
 
     return {
