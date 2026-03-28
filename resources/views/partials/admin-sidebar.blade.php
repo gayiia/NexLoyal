@@ -7,7 +7,6 @@
         request()->routeIs('user-password.edit') ||
         request()->routeIs('two-factor.show') ||
         request()->routeIs('appearance.edit') ||
-        request()->routeIs('customer-groups') ||
         request()->routeIs('tier-rules') ||
         request()->routeIs('point-rules');
     $isNotifications =
@@ -137,20 +136,33 @@
             </div>
         </details>
         <div>
-            {{-- Settings are handled by a custom toggle to keep the menu compact. --}}
-            <button id="settings-toggle"
-                    type="button"
-                    class="flex w-full items-center justify-between rounded-lg border border-transparent px-3 py-2 text-slate-300 transition hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
-                <span>Settings</span>
-                <span class="text-xs text-slate-500 nl-text-muted">Rules</span>
-            </button>
+            {{-- Settings link navigates to the default settings page while the toggle reveals sub-pages. --}}
+            <div class="flex items-center gap-2">
+                <a href="{{ url('/settings') }}"
+                   @class([
+                       'flex flex-1 items-center justify-between rounded-lg border border-transparent px-3 py-2 transition nl-sidebar-link',
+                       'border-slate-800 bg-slate-900/80 text-slate-100 nl-sidebar-link-active' => $isSettings,
+                       'text-slate-300 hover:border-slate-800 hover:bg-slate-900/60' => !$isSettings,
+                   ])>
+                    <span>Settings</span>
+                    <span class="text-xs text-slate-500 nl-text-muted">Rules</span>
+                </a>
+                <button id="settings-toggle"
+                        type="button"
+                        aria-controls="settings-menu"
+                        aria-expanded="{{ $isSettings ? 'true' : 'false' }}"
+                        class="flex h-10 w-10 items-center justify-center rounded-lg border border-transparent text-slate-300 transition hover:border-slate-800 hover:bg-slate-900/60">
+                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+            </div>
             <div id="settings-menu" class="mt-2 space-y-1 pl-3 text-xs @if(!$isSettings) hidden @endif">
                 {{-- Settings links remain expanded when a settings route is active. --}}
                 <a href="{{ route('profile.edit') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Profile</a>
                 <a href="{{ route('user-password.edit') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Password</a>
                 <a href="{{ route('two-factor.show') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Two-Factor Auth</a>
                 <a href="{{ route('appearance.edit') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Appearance</a>
-                <a href="{{ route('customer-groups') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Customer groups</a>
                 <a href="{{ route('tier-rules') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Tier rules</a>
                 <a href="{{ route('point-rules') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Point rules</a>
             </div>
@@ -223,8 +235,14 @@
             desktopQuery.addListener(syncDesktopState);
         }
 
+        const setSettingsMenuOpen = (isOpen) => {
+            settingsMenu?.classList.toggle('hidden', !isOpen);
+            settingsToggle?.setAttribute('aria-expanded', String(isOpen));
+        };
+
         settingsToggle?.addEventListener('click', () => {
-            settingsMenu?.classList.toggle('hidden');
+            const isOpen = settingsMenu && !settingsMenu.classList.contains('hidden');
+            setSettingsMenuOpen(!isOpen);
         });
 
         const initMobileTables = () => {
@@ -263,6 +281,7 @@
             initMobileTables();
         }
 
+        setSettingsMenuOpen(settingsMenu ? !settingsMenu.classList.contains('hidden') : false);
         syncDesktopState();
     })();
 </script>

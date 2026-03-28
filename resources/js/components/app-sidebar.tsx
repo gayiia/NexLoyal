@@ -7,6 +7,7 @@ import {
     SidebarFooter,
     SidebarHeader,
     SidebarMenu,
+    SidebarMenuAction,
     SidebarMenuButton,
     SidebarMenuItem,
     SidebarMenuSub,
@@ -55,7 +56,6 @@ export function AppSidebar() {
             { title: 'Password', href: '/settings/password' },
             { title: 'Two-Factor Auth', href: '/settings/two-factor' },
             { title: 'Appearance', href: '/settings/appearance' },
-            { title: 'Customer groups', href: '/settings/customer-groups' },
         ],
         [],
     );
@@ -87,17 +87,34 @@ export function AppSidebar() {
                 <SidebarMenu className="px-2">
                     <SidebarMenuItem>
                         <SidebarMenuButton
+                            asChild
                             isActive={isSettingsActive}
-                            onClick={() => setSettingsOpen((open) => !open)}
+                            tooltip={{ children: 'Settings' }}
                         >
-                            <Settings />
-                            <span>Settings</span>
+                            <Link href="/settings" prefetch>
+                                <Settings />
+                                <span>Settings</span>
+                            </Link>
+                        </SidebarMenuButton>
+                        <SidebarMenuAction
+                            aria-label={
+                                settingsOpen
+                                    ? 'Collapse settings menu'
+                                    : 'Expand settings menu'
+                            }
+                            onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setSettingsOpen((open) => !open);
+                            }}
+                            showOnHover
+                        >
                             <ChevronDown
-                                className={`ml-auto h-4 w-4 transition-transform ${
+                                className={`h-4 w-4 transition-transform ${
                                     settingsOpen ? 'rotate-180' : ''
                                 }`}
                             />
-                        </SidebarMenuButton>
+                        </SidebarMenuAction>
                         {settingsOpen && (
                             <SidebarMenuSub>
                                 {settingsItems.map((item) => (
