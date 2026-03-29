@@ -7,6 +7,7 @@ use App\Models\PointRule;
 use App\Models\PointsTransaction;
 use App\Models\ShopifyWebhookLog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 class ShopifyCustomerWebhookTest extends TestCase
@@ -141,6 +142,17 @@ class ShopifyCustomerWebhookTest extends TestCase
             'id' => 8001,
         ]);
 
+        $loggedMessage = null;
+        $loggedContext = null;
+
+        Log::shouldReceive('warning')->once()->withAnyArgs()->andReturnUsing(
+            function (string $message, array $context) use (&$loggedMessage, &$loggedContext): void {
+                $loggedMessage = $message;
+                $loggedContext = $context;
+            }
+        );
+        Log::shouldReceive('error')->zeroOrMoreTimes();
+
         $this->call(
             'POST',
             '/webhooks/shopify/customers',
@@ -148,8 +160,13 @@ class ShopifyCustomerWebhookTest extends TestCase
             [],
             [],
             [
-                'HTTP_X_SHOPIFY_HMAC_SHA256' => 'invalid-signature',
+                'HTTP_X_SHOPIFY_HMAC_SHA256' => 'bogus',
                 'HTTP_X_SHOPIFY_TOPIC' => 'customers/create',
+                'HTTP_X_SHOPIFY_WEBHOOK_ID' => 'webhook-123',
+                'HTTP_X_SHOPIFY_EVENT_ID' => 'event-456',
+                'HTTP_X_SHOPIFY_SHOP_DOMAIN' => 'example.myshopify.com',
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_USER_AGENT' => 'Shopify-Captain-Hook',
             ],
             $payload
         )->assertUnauthorized();
@@ -159,5 +176,53 @@ class ShopifyCustomerWebhookTest extends TestCase
             'delivery_state' => 'invalid_signature',
             'response_status' => 401,
         ]);
+
+        $log = ShopifyWebhookLog::query()->latest('id')->first();
+
+        $this->assertNotNull($log);
+        $this->assertIsArray($log->request_headers);
+        $this->assertSame('Shopify-Captain-Hook', $log->request_headers['user-agent'] ?? null);
+        $this->assertSame('application/json', $log->request_headers['content-type'] ?? null);
+        $this->assertSame('example.myshopify.com', $log->request_headers['x-shopify-shop-domain'] ?? null);
+        $this->assertSame('webhook-123', $log->request_headers['x-shopify-webhook-id'] ?? null);
+        $this->assertSame('event-456', $log->request_headers['x-shopify-event-id'] ?? null);
+        $this->assertSame('customers/create', $log->request_headers['x-shopify-topic'] ?? null);
+        $this->assertSame('bogus...', $log->request_headers['x-shopify-hmac-sha256'] ?? null);
+        $this->assertSame($payload, $log->payload);
+        $this->assertNull($log->error_message);
+
+        $diagnostics = $log->request_headers['diagnostics'] ?? null;
+
+        $this->assertIsArray($diagnostics);
+        $this->assertSame(5, $diagnostics['provided_hmac_length'] ?? null);
+        $this->assertSame('bogus', $diagnostics['provided_hmac_prefix'] ?? null);
+        $this->assertFalse($diagnostics['provided_hmac_is_base64'] ?? true);
+        $this->assertSame(44, $diagnostics['computed_hmac_length'] ?? null);
+        $this->assertSame(6, $diagnostics['secret_length'] ?? null);
+        $this->assertSame(strlen($payload), $diagnostics['payload_length'] ?? null);
+        $this->assertSame(hash('sha256', $payload), $diagnostics['payload_sha256'] ?? null);
+        $this->assertSame(12, strlen($diagnostics['computed_hmac_prefix'] ?? ''));
+        $this->assertSame(12, strlen($diagnostics['secret_fingerprint'] ?? ''));
+        $this->assertSame('Shopify webhook rejected', $loggedMessage);
+        $this->assertIsArray($loggedContext);
+        $this->assertSame('customers/create', $loggedContext['topic'] ?? null);
+        $this->assertSame('example.myshopify.com', $loggedContext['shop_domain'] ?? null);
+        $this->assertSame('webhook-123', $loggedContext['shopify_webhook_id'] ?? null);
+        $this->assertSame('event-456', $loggedContext['shopify_event_id'] ?? null);
+        $this->assertSame('application/json', $loggedContext['content_type'] ?? null);
+        $this->assertSame('Shopify-Captain-Hook', $loggedContext['user_agent'] ?? null);
+        $this->assertSame(strlen($payload), $loggedContext['payload_length'] ?? null);
+        $this->assertSame(hash('sha256', $payload), $loggedContext['payload_sha256'] ?? null);
+        $this->assertSame(5, $loggedContext['provided_hmac_length'] ?? null);
+        $this->assertSame('bogus', $loggedContext['provided_hmac_prefix'] ?? null);
+        $this->assertFalse($loggedContext['provided_hmac_is_base64'] ?? true);
+        $this->assertSame(44, $loggedContext['computed_hmac_length'] ?? null);
+        $this->assertSame(6, $loggedContext['secret_length'] ?? null);
+        $this->assertSame('invalid_signature', $loggedContext['delivery_state'] ?? null);
+        $this->assertSame(401, $loggedContext['response_status'] ?? null);
+        $this->assertFalse($loggedContext['hmac_valid'] ?? true);
+        $this->assertSame(12, strlen($loggedContext['computed_hmac_prefix'] ?? ''));
+        $this->assertSame(12, strlen($loggedContext['secret_fingerprint'] ?? ''));
+
     }
 }
