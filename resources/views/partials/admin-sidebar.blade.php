@@ -8,7 +8,9 @@
         request()->routeIs('two-factor.show') ||
         request()->routeIs('appearance.edit') ||
         request()->routeIs('tier-rules') ||
-        request()->routeIs('point-rules');
+        request()->routeIs('point-rules') ||
+        request()->routeIs('shopify-webhooks') ||
+        request()->routeIs('shopify-webhooks.logs.show');
     $isNotifications =
         request()->routeIs('exclusive-chat') ||
         request()->routeIs('exclusive-chat.settings') ||
@@ -165,6 +167,7 @@
                 <a href="{{ route('appearance.edit') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Appearance</a>
                 <a href="{{ route('tier-rules') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Tier rules</a>
                 <a href="{{ route('point-rules') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Point rules</a>
+                <a href="{{ route('shopify-webhooks') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Shopify webhooks</a>
             </div>
         </div>
     </nav>
