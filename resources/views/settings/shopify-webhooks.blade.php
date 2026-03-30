@@ -20,9 +20,12 @@
             .nl-theme-light .nl-sidebar-link { color: #0b1736; }
             .nl-theme-light .nl-sidebar-link:hover { background-color: rgba(214, 229, 248, 0.7); border-color: rgba(15, 23, 42, 0.2); }
             .nl-theme-light .nl-sidebar-link-active { background-color: rgba(199, 219, 245, 0.9); border-color: rgba(15, 23, 42, 0.24); color: #0b1736; }
-            .nl-theme-light .text-slate-50, .nl-theme-light .text-slate-100, .nl-theme-light .text-slate-200 { color: #0b1736; }
-            .nl-theme-light .text-slate-300 { color: #1f2f4d; }
-            .nl-theme-light .text-slate-400, .nl-theme-light .text-slate-500 { color: #4b5f7a; }
+            .nl-theme-light .nl-webhook-page .text-slate-50,
+            .nl-theme-light .nl-webhook-page .text-slate-100,
+            .nl-theme-light .nl-webhook-page .text-slate-200 { color: #0b1736; }
+            .nl-theme-light .nl-webhook-page .text-slate-300 { color: #1f2f4d; }
+            .nl-theme-light .nl-webhook-page .text-slate-400,
+            .nl-theme-light .nl-webhook-page .text-slate-500 { color: #4b5f7a; }
             .nl-card { border-radius: 22px; border: 1px solid rgba(148, 163, 184, 0.2); background: rgba(15, 23, 42, 0.62); overflow: hidden; }
             .nl-card-head { background: rgba(2, 6, 23, 0.35); }
             .nl-theme-light .nl-card { background: rgba(255, 255, 255, 0.98); border-color: rgba(15, 23, 42, 0.14); }
@@ -81,7 +84,7 @@
             .nl-log-meta { font-size: 12px; color: #94a3b8; }
             .nl-pre { margin-top: 10px; border-radius: 12px; background: rgba(15, 23, 42, 0.82); color: #e2e8f0; padding: 14px; font-size: 12px; white-space: pre-wrap; word-break: break-word; overflow: auto; }
             .nl-theme-light .nl-pre { background: #0f172a; color: #e2e8f0; }
-            details summary { cursor: pointer; font-size: 12px; font-weight: 600; color: #93c5fd; }
+            .nl-webhook-page details summary { cursor: pointer; font-size: 12px; font-weight: 600; color: #93c5fd; }
             @media (max-width: 820px) {
                 .nl-action-bar { flex-direction: column; align-items: stretch; }
                 .nl-modal-head { flex-direction: column; }
@@ -95,7 +98,7 @@
                     <div class="flex min-h-screen flex-col lg:flex-row">
                         @include('partials.admin-sidebar')
 
-                        <main class="flex-1 px-4 py-6 sm:px-6 lg:px-10">
+                        <main class="nl-webhook-page flex-1 px-4 py-6 sm:px-6 lg:px-10">
                             <div class="mx-auto w-full max-w-7xl">
                                 <x-page-header eyebrow="" title="Shopify Webhooks" breadcrumb="Settings / Shopify webhooks">
                                     <x-slot name="actions">

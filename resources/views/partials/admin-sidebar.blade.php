@@ -35,6 +35,18 @@
         request()->routeIs('reports.export.pdf');
 @endphp
 
+<style>
+    .nl-sidebar-summary {
+        list-style: none;
+        font: inherit;
+        color: inherit;
+    }
+
+    .nl-sidebar-summary::-webkit-details-marker {
+        display: none;
+    }
+</style>
+
 <div class="nl-mobile-header fixed inset-x-0 top-0 z-40 border-b border-slate-800/70 bg-slate-950/90 px-4 pb-3 backdrop-blur lg:hidden nl-panel">
     <div class="flex items-center justify-between gap-3">
         <div class="flex w-32 items-center">
@@ -106,8 +118,8 @@
         </a>
         <details class="group" @if($isAiMenu) open @endif>
             {{-- AI submenu expands when any AI route is active. --}}
-            <summary class="flex cursor-pointer items-center justify-between rounded-lg border border-transparent px-3 py-2 text-slate-300 transition hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
-                <span>AI</span>
+            <summary class="nl-sidebar-summary flex cursor-pointer items-center justify-between rounded-lg border border-transparent px-3 py-2 text-sm font-normal leading-5 text-slate-300 transition hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
+                <span class="font-normal text-slate-300">AI</span>
                 <span class="text-xs text-slate-500 nl-text-muted">Modules</span>
             </summary>
             <div class="mt-2 space-y-1 pl-3 text-xs">
@@ -119,8 +131,8 @@
         </details>
         <details class="group" @if($isReports) open @endif>
             {{-- Reports submenu expands when any report route is active. --}}
-            <summary class="flex cursor-pointer items-center justify-between rounded-lg border border-transparent px-3 py-2 text-slate-300 transition hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
-                <span>Reports</span>
+            <summary class="nl-sidebar-summary flex cursor-pointer items-center justify-between rounded-lg border border-transparent px-3 py-2 text-sm font-normal leading-5 text-slate-300 transition hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
+                <span class="font-normal text-slate-300">Reports</span>
                 <span class="text-xs text-slate-500 nl-text-muted">Builder</span>
             </summary>
             <div class="mt-2 space-y-1 pl-3 text-xs">
@@ -129,47 +141,39 @@
         </details>
         <details class="group" @if($isNotifications) open @endif>
             {{-- Notifications submenu expands when exclusive chat routes are active. --}}
-            <summary class="flex cursor-pointer items-center justify-between rounded-lg border border-transparent px-3 py-2 text-slate-300 transition hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
-                <span>Notifications</span>
+            <summary class="nl-sidebar-summary flex cursor-pointer items-center justify-between rounded-lg border border-transparent px-3 py-2 text-sm font-normal leading-5 text-slate-300 transition hover:border-slate-800 hover:bg-slate-900/60 nl-sidebar-link">
+                <span class="font-normal text-slate-300">Notifications</span>
                 <span class="text-xs text-slate-500 nl-text-muted">Engage</span>
             </summary>
             <div class="mt-2 space-y-1 pl-3 text-xs">
                 <a href="{{ route('exclusive-chat') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Exclusive Chat</a>
             </div>
         </details>
-        <div>
-            {{-- Settings link navigates to the default settings page while the toggle reveals sub-pages. --}}
-            <div class="flex items-center gap-2">
-                <a href="{{ url('/settings') }}"
-                   @class([
-                       'flex flex-1 items-center justify-between rounded-lg border border-transparent px-3 py-2 transition nl-sidebar-link',
-                       'border-slate-800 bg-slate-900/80 text-slate-100 nl-sidebar-link-active' => $isSettings,
-                       'text-slate-300 hover:border-slate-800 hover:bg-slate-900/60' => !$isSettings,
-                   ])>
-                    <span>Settings</span>
-                    <span class="text-xs text-slate-500 nl-text-muted">Rules</span>
-                </a>
-                <button id="settings-toggle"
-                        type="button"
-                        aria-controls="settings-menu"
-                        aria-expanded="{{ $isSettings ? 'true' : 'false' }}"
-                        class="flex h-10 w-10 items-center justify-center rounded-lg border border-transparent text-slate-300 transition hover:border-slate-800 hover:bg-slate-900/60">
-                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" />
-                    </svg>
-                </button>
-            </div>
-            <div id="settings-menu" class="mt-2 space-y-1 pl-3 text-xs @if(!$isSettings) hidden @endif">
+        <details class="group" @if($isSettings) open @endif>
+            {{-- Settings uses the same native details toggle pattern as the other grouped sections. --}}
+            <summary @class([
+                'nl-sidebar-summary flex cursor-pointer items-center justify-between rounded-lg border border-transparent px-3 py-2 text-sm font-normal leading-5 transition nl-sidebar-link',
+                'border-slate-800 bg-slate-900/80 text-slate-100 nl-sidebar-link-active' => $isSettings,
+                'text-slate-300 hover:border-slate-800 hover:bg-slate-900/60' => !$isSettings,
+            ])>
+                <span @class([
+                    'font-normal',
+                    'text-slate-100' => $isSettings,
+                    'text-slate-300' => !$isSettings,
+                ])>Settings</span>
+                <span class="text-xs text-slate-500 nl-text-muted">Rules</span>
+            </summary>
+            <div class="mt-2 space-y-1 pl-3 text-xs">
                 {{-- Settings links remain expanded when a settings route is active. --}}
-                <a href="{{ route('profile.edit') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Profile</a>
-                <a href="{{ route('user-password.edit') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Password</a>
-                <a href="{{ route('two-factor.show') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Two-Factor Auth</a>
-                <a href="{{ route('appearance.edit') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Appearance</a>
-                <a href="{{ route('tier-rules') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Tier rules</a>
-                <a href="{{ route('point-rules') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Point rules</a>
-                <a href="{{ route('shopify-webhooks') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60">Shopify webhooks</a>
+                <a href="{{ route('profile.edit') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60 @if(request()->routeIs('profile.edit')) bg-slate-900/70 text-slate-100 @endif">Profile</a>
+                <a href="{{ route('user-password.edit') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60 @if(request()->routeIs('user-password.edit')) bg-slate-900/70 text-slate-100 @endif">Password</a>
+                <a href="{{ route('two-factor.show') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60 @if(request()->routeIs('two-factor.show')) bg-slate-900/70 text-slate-100 @endif">Two-Factor Auth</a>
+                <a href="{{ route('appearance.edit') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60 @if(request()->routeIs('appearance.edit')) bg-slate-900/70 text-slate-100 @endif">Appearance</a>
+                <a href="{{ route('tier-rules') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60 @if(request()->routeIs('tier-rules')) bg-slate-900/70 text-slate-100 @endif">Tier rules</a>
+                <a href="{{ route('point-rules') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60 @if(request()->routeIs('point-rules')) bg-slate-900/70 text-slate-100 @endif">Point rules</a>
+                <a href="{{ route('shopify-webhooks') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60 @if(request()->routeIs('shopify-webhooks') || request()->routeIs('shopify-webhooks.logs.show')) bg-slate-900/70 text-slate-100 @endif">Shopify webhooks</a>
             </div>
-        </div>
+        </details>
     </nav>
 
     {{-- Account summary and logout action appear at the bottom of the sidebar. --}}
@@ -193,8 +197,6 @@
         const overlay = document.getElementById('mobile-nav-overlay');
         const openButton = document.getElementById('mobile-nav-toggle');
         const closeButton = document.getElementById('mobile-nav-close');
-        const settingsToggle = document.getElementById('settings-toggle');
-        const settingsMenu = document.getElementById('settings-menu');
         const desktopQuery = window.matchMedia('(min-width: 1024px)');
 
         if (!sidebar) {
@@ -238,16 +240,6 @@
             desktopQuery.addListener(syncDesktopState);
         }
 
-        const setSettingsMenuOpen = (isOpen) => {
-            settingsMenu?.classList.toggle('hidden', !isOpen);
-            settingsToggle?.setAttribute('aria-expanded', String(isOpen));
-        };
-
-        settingsToggle?.addEventListener('click', () => {
-            const isOpen = settingsMenu && !settingsMenu.classList.contains('hidden');
-            setSettingsMenuOpen(!isOpen);
-        });
-
         const initMobileTables = () => {
             document.querySelectorAll('main table').forEach((table) => {
                 const headers = Array.from(table.querySelectorAll('thead th')).map((header) =>
@@ -284,7 +276,6 @@
             initMobileTables();
         }
 
-        setSettingsMenuOpen(settingsMenu ? !settingsMenu.classList.contains('hidden') : false);
         syncDesktopState();
     })();
 </script>
