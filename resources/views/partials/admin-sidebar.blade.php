@@ -5,7 +5,6 @@
     $isSettings =
         request()->routeIs('profile.edit') ||
         request()->routeIs('user-password.edit') ||
-        request()->routeIs('two-factor.show') ||
         request()->routeIs('appearance.edit') ||
         request()->routeIs('tier-rules') ||
         request()->routeIs('point-rules') ||
@@ -167,7 +166,6 @@
                 {{-- Settings links remain expanded when a settings route is active. --}}
                 <a href="{{ route('profile.edit') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60 @if(request()->routeIs('profile.edit')) bg-slate-900/70 text-slate-100 @endif">Profile</a>
                 <a href="{{ route('user-password.edit') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60 @if(request()->routeIs('user-password.edit')) bg-slate-900/70 text-slate-100 @endif">Password</a>
-                <a href="{{ route('two-factor.show') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60 @if(request()->routeIs('two-factor.show')) bg-slate-900/70 text-slate-100 @endif">Two-Factor Auth</a>
                 <a href="{{ route('appearance.edit') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60 @if(request()->routeIs('appearance.edit')) bg-slate-900/70 text-slate-100 @endif">Appearance</a>
                 <a href="{{ route('tier-rules') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60 @if(request()->routeIs('tier-rules')) bg-slate-900/70 text-slate-100 @endif">Tier rules</a>
                 <a href="{{ route('point-rules') }}" class="block rounded-md px-2 py-1.5 text-slate-300 hover:bg-slate-900/60 @if(request()->routeIs('point-rules')) bg-slate-900/70 text-slate-100 @endif">Point rules</a>

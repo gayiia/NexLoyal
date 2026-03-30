@@ -4,11 +4,13 @@
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 
 // This class renders and updates profile data for the settings area.
@@ -23,6 +25,7 @@ class ProfileController extends Controller
         return view('settings.profile', [
             'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
             'status' => $request->session()->get('status'),
+            'users' => User::query()->orderBy('name')->orderBy('email')->get(),
         ]);
     }
 
@@ -33,11 +36,6 @@ class ProfileController extends Controller
     {
         // This fills the user model with validated profile data.
         $request->user()->fill($request->validated());
-
-        // Changing email resets verification so the user must re-verify.
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
-        }
 
         $request->user()->save();
 
@@ -66,5 +64,47 @@ class ProfileController extends Controller
         $request->session()->regenerateToken();
 
         return redirect('/');
+    }
+
+    /**
+     * Update the password for a managed user from the profile screen.
+     */
+    public function updateManagedUserPassword(Request $request, User $user): RedirectResponse
+    {
+        $validated = $request->validateWithBag('managedUserPassword', [
+            'password' => ['required', Password::defaults(), 'confirmed'],
+        ]);
+
+        $user->update([
+            'password' => $validated['password'],
+        ]);
+
+        return redirect()
+            ->route('profile.edit')
+            ->with('status', 'user-password-updated');
+    }
+
+    /**
+     * Delete a managed user from the profile screen.
+     */
+    public function destroyManagedUser(Request $request, User $user): RedirectResponse
+    {
+        if ($request->user()->is($user)) {
+            return redirect()
+                ->route('profile.edit')
+                ->withErrors(['managed_user' => 'Use the delete account section to remove your own account.']);
+        }
+
+        if (User::query()->count() <= 1) {
+            return redirect()
+                ->route('profile.edit')
+                ->withErrors(['managed_user' => 'You cannot delete the last remaining user account.']);
+        }
+
+        $user->delete();
+
+        return redirect()
+            ->route('profile.edit')
+            ->with('status', 'user-deleted');
     }
 }

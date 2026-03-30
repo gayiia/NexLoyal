@@ -3,6 +3,7 @@
 // This middleware supplies shared Inertia props and asset versioning.
 namespace App\Http\Middleware;
 
+use App\Models\BrandingSetting;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -48,6 +49,7 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
+            'appLogoUrl' => BrandingSetting::logoUrl(),
             // This remembers sidebar state based on a cookie.
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];

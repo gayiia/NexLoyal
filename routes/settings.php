@@ -8,7 +8,6 @@ use App\Http\Controllers\Settings\PointRuleController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\ShopifyWebhookMonitorController;
 use App\Http\Controllers\Settings\TierRuleController;
-use App\Http\Controllers\Settings\TwoFactorAuthenticationController;
 use Illuminate\Support\Facades\Route;
 
 // Settings pages are only available to authenticated users.
@@ -19,6 +18,11 @@ Route::middleware('auth')->group(function () {
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('settings/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::patch('settings/profile/users/{user}/password', [ProfileController::class, 'updateManagedUserPassword'])
+        ->middleware('throttle:6,1')
+        ->name('profile.users.password');
+    Route::delete('settings/profile/users/{user}', [ProfileController::class, 'destroyManagedUser'])
+        ->name('profile.users.destroy');
 
     Route::get('settings/password', [PasswordController::class, 'edit'])->name('user-password.edit');
 
@@ -47,7 +51,4 @@ Route::middleware('auth')->group(function () {
         ->name('shopify-webhooks.destroy');
     Route::get('settings/shopify-webhooks/logs/{log}', [ShopifyWebhookMonitorController::class, 'showLog'])
         ->name('shopify-webhooks.logs.show');
-
-    Route::get('settings/two-factor', [TwoFactorAuthenticationController::class, 'show'])
-        ->name('two-factor.show');
 });
