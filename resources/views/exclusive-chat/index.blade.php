@@ -42,6 +42,38 @@
                 display: none;
             }
             .nl-upload-spinner.is-active { display: inline-block; }
+            .nl-attachment-preview {
+                display: grid;
+                gap: 12px;
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            }
+            .nl-attachment-card {
+                overflow: hidden;
+                border-radius: 14px;
+                border: 1px solid rgba(148, 163, 184, 0.18);
+                background: rgba(15, 23, 42, 0.6);
+            }
+            .nl-attachment-card img {
+                display: block;
+                width: 100%;
+                height: 96px;
+                object-fit: cover;
+                background: rgba(15, 23, 42, 0.9);
+            }
+            .nl-attachment-meta {
+                padding: 10px;
+            }
+            .nl-attachment-name {
+                font-size: 11px;
+                font-weight: 600;
+                color: #e2e8f0;
+                word-break: break-word;
+            }
+            .nl-attachment-size {
+                margin-top: 4px;
+                font-size: 11px;
+                color: #94a3b8;
+            }
             @keyframes nl-spin { to { transform: rotate(360deg); } }
         </style>
     </head>
@@ -133,7 +165,9 @@
                                         <span id="chat-upload-spinner" class="nl-upload-spinner" aria-hidden="true"></span>
                                         <span class="text-xs text-slate-400">PNG, JPG, or GIF up to 5MB each.</span>
                                     </div>
+                                    <p id="chat-attachments-summary" class="mt-2 text-xs text-slate-400">No files selected.</p>
                                     <p id="chat-attachments-error" class="mt-2 hidden text-xs text-rose-300"></p>
+                                    <div id="chat-attachments-preview" class="nl-attachment-preview mt-4 hidden"></div>
                                 </div>
 
                                 <div id="poll-options" class="grid gap-3 rounded-xl border border-slate-800/80 bg-slate-950/40 p-4">
@@ -288,6 +322,85 @@
                 const attachmentsInput = document.getElementById('chat-attachments');
                 const uploadSpinner = document.getElementById('chat-upload-spinner');
                 const attachmentsError = document.getElementById('chat-attachments-error');
+                const attachmentsSummary = document.getElementById('chat-attachments-summary');
+                const attachmentsPreview = document.getElementById('chat-attachments-preview');
+                const maxAttachmentBytes = 5 * 1024 * 1024;
+
+                const formatFileSize = (bytes) => {
+                    if (!Number.isFinite(bytes) || bytes <= 0) {
+                        return '0 KB';
+                    }
+                    if (bytes >= 1024 * 1024) {
+                        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+                    }
+                    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+                };
+
+                const clearAttachmentPreview = () => {
+                    if (attachmentsPreview) {
+                        attachmentsPreview.innerHTML = '';
+                        attachmentsPreview.classList.add('hidden');
+                    }
+                    if (attachmentsSummary) {
+                        attachmentsSummary.textContent = 'No files selected.';
+                    }
+                };
+
+                const renderAttachmentPreview = (files) => {
+                    clearAttachmentPreview();
+                    if (!attachmentsPreview || !attachmentsSummary || !files.length) {
+                        return;
+                    }
+
+                    attachmentsSummary.textContent = `${files.length} file${files.length === 1 ? '' : 's'} selected.`;
+                    attachmentsPreview.classList.remove('hidden');
+
+                    files.forEach((file) => {
+                        const card = document.createElement('div');
+                        card.className = 'nl-attachment-card';
+
+                        const image = document.createElement('img');
+                        image.alt = file.name;
+                        const objectUrl = URL.createObjectURL(file);
+                        image.src = objectUrl;
+                        image.addEventListener('load', () => URL.revokeObjectURL(objectUrl), { once: true });
+
+                        const meta = document.createElement('div');
+                        meta.className = 'nl-attachment-meta';
+
+                        const name = document.createElement('div');
+                        name.className = 'nl-attachment-name';
+                        name.textContent = file.name;
+
+                        const size = document.createElement('div');
+                        size.className = 'nl-attachment-size';
+                        size.textContent = formatFileSize(file.size);
+
+                        meta.appendChild(name);
+                        meta.appendChild(size);
+                        card.appendChild(image);
+                        card.appendChild(meta);
+                        attachmentsPreview.appendChild(card);
+                    });
+                };
+
+                const validateAttachments = (files) => {
+                    if (!attachmentsError) {
+                        return true;
+                    }
+
+                    attachmentsError.classList.add('hidden');
+                    attachmentsError.textContent = '';
+
+                    const oversized = files.filter((file) => file.size > maxAttachmentBytes);
+                    if (!oversized.length) {
+                        return true;
+                    }
+
+                    attachmentsError.textContent = `These files exceed the 5MB app limit: ${oversized.map((file) => file.name).join(', ')}.`;
+                    attachmentsError.classList.remove('hidden');
+                    return false;
+                };
 
                 // Show or hide poll fields based on the selected type.
                 const updatePollVisibility = () => {
@@ -326,15 +439,16 @@
                     attachmentsInput.addEventListener('change', () => {
                         // Reset error state when files change.
                         uploadSpinner.classList.remove('is-active');
-                        if (attachmentsError) {
-                            attachmentsError.classList.add('hidden');
-                            attachmentsError.textContent = '';
-                        }
+                        const files = Array.from(attachmentsInput.files || []);
+                        validateAttachments(files);
+                        renderAttachmentPreview(files);
                     });
 
                     form.addEventListener('submit', (event) => {
+                        const files = Array.from(attachmentsInput.files || []);
+
                         // Polls require at least one image attachment in this UI.
-                        if (typeSelect && typeSelect.value === 'POLL' && attachmentsInput.files && attachmentsInput.files.length === 0) {
+                        if (typeSelect && typeSelect.value === 'POLL' && files.length === 0) {
                             event.preventDefault();
                             if (attachmentsError) {
                                 attachmentsError.textContent = 'Please upload at least one image before sending a poll.';
@@ -342,8 +456,14 @@
                             }
                             return;
                         }
+
+                        if (!validateAttachments(files)) {
+                            event.preventDefault();
+                            return;
+                        }
+
                         // Show a spinner while uploading attachments.
-                        if (attachmentsInput.files && attachmentsInput.files.length > 0) {
+                        if (files.length > 0) {
                             uploadSpinner.classList.add('is-active');
                         }
                     });
