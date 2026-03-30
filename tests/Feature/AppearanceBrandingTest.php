@@ -7,7 +7,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class AppearanceBrandingTest extends TestCase
@@ -18,20 +18,7 @@ class AppearanceBrandingTest extends TestCase
     {
         parent::setUp();
 
-        File::ensureDirectoryExists(public_path('branding'));
-
-        foreach (glob(public_path('branding/logo-*')) ?: [] as $uploadedLogo) {
-            File::delete($uploadedLogo);
-        }
-    }
-
-    protected function tearDown(): void
-    {
-        foreach (glob(public_path('branding/logo-*')) ?: [] as $uploadedLogo) {
-            File::delete($uploadedLogo);
-        }
-
-        parent::tearDown();
+        Storage::fake('public');
     }
 
     public function test_uploaded_logo_is_used_on_settings_and_login_views(): void
@@ -52,7 +39,7 @@ class AppearanceBrandingTest extends TestCase
         $this->assertNotNull($branding);
         $this->assertNotNull($branding?->logo_path);
         $this->assertStringStartsWith('branding/logo-', $branding->logo_path);
-        $this->assertFileExists(public_path($branding->logo_path));
+        Storage::disk('public')->assertExists($branding->logo_path);
 
         $this->actingAs($user)
             ->get(route('appearance.edit'))

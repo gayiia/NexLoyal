@@ -8,6 +8,7 @@ use App\Models\BrandingSetting;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -27,20 +28,21 @@ class AppearanceController extends Controller
         $branding = BrandingSetting::current() ?? BrandingSetting::query()->create();
         $logo = $validated['logo'];
 
-        File::ensureDirectoryExists(public_path('branding'));
-
         $extension = $logo->extension() ?: 'png';
         $fileName = 'logo-'.Str::uuid().'.'.$extension;
         $relativePath = 'branding/'.$fileName;
+        $disk = Storage::disk('public');
 
-        $logo->move(public_path('branding'), $fileName);
+        $disk->putFileAs('branding', $logo, $fileName);
 
-        if (
-            $branding->logo_path &&
-            str_starts_with($branding->logo_path, 'branding/logo-') &&
-            File::exists(public_path($branding->logo_path))
-        ) {
-            File::delete(public_path($branding->logo_path));
+        if ($branding->logo_path && str_starts_with($branding->logo_path, 'branding/logo-')) {
+            if ($disk->exists($branding->logo_path)) {
+                $disk->delete($branding->logo_path);
+            }
+
+            if (File::exists(public_path($branding->logo_path))) {
+                File::delete(public_path($branding->logo_path));
+            }
         }
 
         $branding->logo_path = $relativePath;

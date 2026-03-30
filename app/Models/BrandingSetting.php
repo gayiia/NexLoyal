@@ -4,7 +4,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 class BrandingSetting extends Model
 {
@@ -27,7 +29,18 @@ class BrandingSetting extends Model
 
     public static function logoUrl(): string
     {
-        return asset(static::current()?->logo_path ?: 'branding/default-logo.svg');
+        $logoPath = static::current()?->logo_path;
+
+        if (! $logoPath) {
+            return asset('branding/default-logo.svg');
+        }
+
+        // Older uploads may still point at the legacy public/branding directory.
+        if (File::exists(public_path($logoPath))) {
+            return asset($logoPath);
+        }
+
+        return Storage::disk('public')->url($logoPath);
     }
 
     protected static function hasBackingTable(): bool
