@@ -655,6 +655,7 @@
   }
 </style>
 
+{% assign nexloyal_base_url = "https://nexloyal.store" %}
 <script>
   (function() {
     var config = {
@@ -663,18 +664,18 @@
       customerEmail: {{ customer.email | json }},
       shopDomain: "{{ shop.domain }}",
       loginUrl: "{{ routes.account_login_url }}",
-      tokenUrl: "https://certain-vbulletin-luggage-electron.trycloudflare.com/loyalty/token",
-      dataUrl: "https://certain-vbulletin-luggage-electron.trycloudflare.com/loyalty/data",
-      couponsUrl: "https://certain-vbulletin-luggage-electron.trycloudflare.com/loyalty/coupons",
-      myCouponsUrl: "https://certain-vbulletin-luggage-electron.trycloudflare.com/loyalty/my-coupons",
-      earnRulesUrl: "https://certain-vbulletin-luggage-electron.trycloudflare.com/api/widget/earn/rules",
-      earnStatusUrl: "https://certain-vbulletin-luggage-electron.trycloudflare.com/api/widget/earn/status",
-      earnSocialUrl: "https://certain-vbulletin-luggage-electron.trycloudflare.com/api/widget/earn/social",
-      mysteryBoxActiveUrl: "https://certain-vbulletin-luggage-electron.trycloudflare.com/api/widget/mystery-box/active",
-      mysteryBoxClaimUrl: "https://certain-vbulletin-luggage-electron.trycloudflare.com/api/widget/mystery-box",
-      chatMessagesUrl: "https://certain-vbulletin-luggage-electron.trycloudflare.com/api/widget/chat/messages",
-      chatVoteUrl: "https://certain-vbulletin-luggage-electron.trycloudflare.com/api/widget/chat/polls",
-      pointsHistoryUrl: "https://certain-vbulletin-luggage-electron.trycloudflare.com/api/widget/points/history"
+      tokenUrl: "{{ nexloyal_base_url }}/loyalty/token",
+      dataUrl: "{{ nexloyal_base_url }}/loyalty/data",
+      couponsUrl: "{{ nexloyal_base_url }}/loyalty/coupons",
+      myCouponsUrl: "{{ nexloyal_base_url }}/api/widget/my-coupons",
+      earnRulesUrl: "{{ nexloyal_base_url }}/api/widget/earn/rules",
+      earnStatusUrl: "{{ nexloyal_base_url }}/api/widget/earn/status",
+      earnSocialUrl: "{{ nexloyal_base_url }}/api/widget/earn/social",
+      mysteryBoxActiveUrl: "{{ nexloyal_base_url }}/api/widget/mystery-box/active",
+      mysteryBoxClaimUrl: "{{ nexloyal_base_url }}/api/widget/mystery-box",
+      chatMessagesUrl: "{{ nexloyal_base_url }}/api/widget/chat/messages",
+      chatVoteUrl: "{{ nexloyal_base_url }}/api/widget/chat/polls",
+      pointsHistoryUrl: "{{ nexloyal_base_url }}/api/widget/points/history"
     };
 
     var trigger = document.getElementById('nexloyal-trigger');
