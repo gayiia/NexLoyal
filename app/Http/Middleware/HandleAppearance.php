@@ -3,6 +3,7 @@
 // This middleware shares UI appearance settings with Blade views.
 namespace App\Http\Middleware;
 
+use App\Models\BrandingSetting;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\View;
@@ -18,8 +19,11 @@ class HandleAppearance
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // This exposes the appearance preference so layouts can set theme classes.
-        View::share('appearance', $request->cookie('appearance') ?? 'system');
+        // These shared values let Blade views render the current theme and brand logo.
+        View::share([
+            'appearance' => $request->cookie('appearance') ?? 'system',
+            'appLogoUrl' => BrandingSetting::logoUrl(),
+        ]);
 
         return $next($request);
     }

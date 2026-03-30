@@ -39,7 +39,7 @@
     <div class="flex items-center justify-between gap-3">
         <div class="flex w-32 items-center">
             {{-- Brand logo anchors the mobile header. --}}
-            <img src="{{ URL::asset('build\\Images\\logo-light.png') }}" alt="NexLoyal" class="h-8 w-auto">
+            <img src="{{ $appLogoUrl }}" alt="NexLoyal" class="h-8 w-auto">
         </div>
         <button id="mobile-nav-toggle"
                 type="button"
@@ -57,7 +57,7 @@
     <div class="flex items-center justify-between gap-3 px-2">
         <div class="flex w-40 items-center justify-center lg:justify-start">
             {{-- Brand logo anchors the navigation. --}}
-            <img src="{{ URL::asset('build\\Images\\logo-light.png') }}" alt="NexLoyal" class="w-auto">
+            <img src="{{ $appLogoUrl }}" alt="NexLoyal" class="w-auto">
         </div>
         <button id="mobile-nav-close"
                 type="button"

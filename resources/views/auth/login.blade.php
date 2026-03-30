@@ -47,7 +47,7 @@
                             {{-- Logo and marketing copy introduce the platform. --}}
                             <div class="flex items-center gap-4 nl-animate-up nl-delay-1">
                                 <div class="flex w-40 items-center justify-center">
-                                    <img src="{{ URL::asset('build\Images\logo-light.png') }}" alt="NexLoyal" class="w-auto">
+                                    <img src="{{ $appLogoUrl }}" alt="NexLoyal" class="w-auto">
                                 </div>
                             </div>
 

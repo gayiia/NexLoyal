@@ -122,6 +122,55 @@
                                     </div>
                                 </div>
                             </section>
+
+                            <section class="mt-6 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70 nl-panel">
+                                <div class="border-b border-slate-800/70 px-6 py-4">
+                                    <p class="text-sm font-semibold text-slate-100">Brand logo</p>
+                                    <p class="text-xs text-slate-400">Upload one logo and reuse it anywhere the admin UI displays your brand.</p>
+                                </div>
+
+                                <div class="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,20rem)_1fr]">
+                                    <div class="rounded-2xl border border-slate-800 bg-slate-950/40 p-5 nl-panel-muted">
+                                        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Current logo</p>
+                                        <div class="mt-4 flex min-h-32 items-center justify-center rounded-2xl border border-slate-800 bg-slate-950/70 p-6">
+                                            <img id="logo-preview" src="{{ $appLogoUrl }}" alt="Current brand logo" class="max-h-16 w-auto max-w-full">
+                                        </div>
+                                        <p class="mt-4 text-xs text-slate-400">
+                                            The uploaded file is used in the login screen and admin sidebar.
+                                        </p>
+                                    </div>
+
+                                    <form method="POST" action="{{ route('appearance.update') }}" enctype="multipart/form-data" class="space-y-5">
+                                        @csrf
+                                        @method('PATCH')
+
+                                        <div class="grid gap-2">
+                                            <label for="logo" class="text-xs uppercase tracking-[0.2em] text-slate-400">Upload logo</label>
+                                            <input
+                                                id="logo"
+                                                name="logo"
+                                                type="file"
+                                                accept=".png,.jpg,.jpeg,.webp"
+                                                class="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-3 text-sm text-slate-200 file:mr-4 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-900"
+                                                required
+                                            >
+                                            <p class="text-xs text-slate-400">PNG, JPG, or WEBP up to 2MB.</p>
+                                            @error('logo')
+                                                <p class="text-xs text-rose-300">{{ $message }}</p>
+                                            @enderror
+                                        </div>
+
+                                        <div class="flex items-center gap-3">
+                                            <button type="submit" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-900">
+                                                Save logo
+                                            </button>
+                                            @if (session('status') === 'branding-updated')
+                                                <span class="text-xs text-emerald-300">Logo updated.</span>
+                                            @endif
+                                        </div>
+                                    </form>
+                                </div>
+                            </section>
                         </main>
                     </div>
                 </div>
@@ -134,6 +183,9 @@
                 const body = document.body;
                 const button = document.getElementById('theme-toggle');
                 const buttons = document.querySelectorAll('[data-theme]');
+                const logoInput = document.getElementById('logo');
+                const logoPreview = document.getElementById('logo-preview');
+                let previewUrl = null;
 
                 // Apply a theme preference, falling back to system if selected.
                 const applyTheme = (theme) => {
@@ -178,6 +230,26 @@
                     });
                 });
 
+                logoInput?.addEventListener('change', (event) => {
+                    const [file] = event.target.files || [];
+                    if (!file || !logoPreview) {
+                        return;
+                    }
+
+                    if (previewUrl) {
+                        URL.revokeObjectURL(previewUrl);
+                    }
+
+                    previewUrl = URL.createObjectURL(file);
+                    logoPreview.src = previewUrl;
+                });
+
+                window.addEventListener('beforeunload', () => {
+                    if (previewUrl) {
+                        URL.revokeObjectURL(previewUrl);
+                    }
+                });
+
                 const settingsToggle = document.getElementById('settings-toggle');
                 const settingsMenu = document.getElementById('settings-menu');
                 // Settings submenu toggles via the sidebar caret.
@@ -190,4 +262,3 @@
         </script>
     </body>
 </html>
-

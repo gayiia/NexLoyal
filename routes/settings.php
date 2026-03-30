@@ -2,6 +2,7 @@
 
 // This file contains authenticated settings routes for profile, password, and rules management.
 
+use App\Http\Controllers\Settings\AppearanceController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\PointRuleController;
 use App\Http\Controllers\Settings\ProfileController;
@@ -26,10 +27,8 @@ Route::middleware('auth')->group(function () {
         ->middleware('throttle:6,1')
         ->name('user-password.update');
 
-    // Appearance settings are served from a simple Blade view.
-    Route::get('settings/appearance', function () {
-        return view('settings.appearance');
-    })->name('appearance.edit');
+    Route::get('settings/appearance', [AppearanceController::class, 'edit'])->name('appearance.edit');
+    Route::patch('settings/appearance', [AppearanceController::class, 'update'])->name('appearance.update');
 
     Route::get('settings/point-rules', [PointRuleController::class, 'edit'])->name('point-rules');
     Route::post('settings/point-rules', [PointRuleController::class, 'update'])->name('point-rules.update');
