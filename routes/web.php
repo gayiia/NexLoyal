@@ -30,7 +30,7 @@ Route::middleware('throttle:60,1')->group(function () {
         ->name('webhooks.shopify.orders.create');
     Route::post('webhooks/shopify/orders/fulfilled', [ShopifyWebhookController::class, 'handleOrders'])
         ->name('webhooks.shopify.orders.fulfilled');
-    Route::post('webhooks/shopify/orders/refunded', [ShopifyWebhookController::class, 'handleOrders'])
+    Route::post('webhooks/shopify/refunds/create', [ShopifyWebhookController::class, 'handleOrders'])
         ->name('webhooks.shopify.orders.refunded');
     Route::post('webhooks/shopify/orders/cancelled', [ShopifyWebhookController::class, 'handleOrders'])
         ->name('webhooks.shopify.orders.cancelled');

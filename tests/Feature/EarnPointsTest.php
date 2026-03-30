@@ -138,16 +138,16 @@ class EarnPointsTest extends TestCase
         ];
         $serverRefunded = [
             'HTTP_X_SHOPIFY_HMAC_SHA256' => $hmac,
-            'HTTP_X_SHOPIFY_TOPIC' => 'orders/refunded',
+            'HTTP_X_SHOPIFY_TOPIC' => 'refunds/create',
         ];
 
         $this->call('POST', '/webhooks/shopify/orders/paid', [], [], [], $serverPaid, $payload)
             ->assertOk();
         $this->call('POST', '/webhooks/shopify/orders/fulfilled', [], [], [], $serverFulfilled, $payload)
             ->assertOk();
-        $this->call('POST', '/webhooks/shopify/orders/refunded', [], [], [], $serverRefunded, $payload)
+        $this->call('POST', '/webhooks/shopify/refunds/create', [], [], [], $serverRefunded, $payload)
             ->assertOk();
-        $this->call('POST', '/webhooks/shopify/orders/refunded', [], [], [], $serverRefunded, $payload)
+        $this->call('POST', '/webhooks/shopify/refunds/create', [], [], [], $serverRefunded, $payload)
             ->assertOk();
 
         $customer->refresh();

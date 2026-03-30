@@ -1,4 +1,5 @@
 {{-- This view shows one row per Shopify webhook with modal-based delivery details. --}}
+@php($webhookFeedback = session('shopify_webhook_feedback'))
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
@@ -39,12 +40,31 @@
             .nl-status-issue .nl-status-dot { background: #fb7185; box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.14); }
             .nl-status-waiting { color: #fde68a; }
             .nl-status-waiting .nl-status-dot { background: #f59e0b; box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.14); }
+            .nl-flash { border-radius: 22px; border: 1px solid rgba(148, 163, 184, 0.2); padding: 20px 22px; }
+            .nl-flash-success { background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.28); }
+            .nl-flash-warning { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.28); }
+            .nl-flash-error { background: rgba(244, 63, 94, 0.12); border-color: rgba(244, 63, 94, 0.28); }
+            .nl-result-list { margin-top: 16px; display: grid; gap: 10px; }
+            .nl-result-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; border-radius: 14px; padding: 12px 14px; background: rgba(2, 6, 23, 0.24); }
+            .nl-result-pill { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 6px 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+            .nl-result-pill-created { background: rgba(34, 197, 94, 0.14); color: #86efac; }
+            .nl-result-pill-deleted { background: rgba(250, 204, 21, 0.14); color: #fde68a; }
+            .nl-result-pill-existing { background: rgba(59, 130, 246, 0.14); color: #93c5fd; }
+            .nl-result-pill-missing { background: rgba(59, 130, 246, 0.14); color: #93c5fd; }
+            .nl-result-pill-failed { background: rgba(244, 63, 94, 0.14); color: #fda4af; }
             .nl-action-bar { display: flex; gap: 10px; justify-content: flex-end; }
             .nl-button { border: 1px solid rgba(148, 163, 184, 0.25); background: transparent; color: #e2e8f0; border-radius: 10px; padding: 9px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
             .nl-button:hover { border-color: rgba(148, 163, 184, 0.45); }
+            .nl-button-primary { border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.12); color: #d1fae5; }
+            .nl-button-primary:hover { border-color: rgba(16, 185, 129, 0.5); }
+            .nl-button-danger { border-color: rgba(244, 63, 94, 0.3); background: rgba(244, 63, 94, 0.12); color: #fecdd3; }
+            .nl-button-danger:hover { border-color: rgba(244, 63, 94, 0.5); }
             .nl-theme-light .nl-button { color: #0b1736; }
+            .nl-theme-light .nl-button-primary { color: #065f46; }
+            .nl-theme-light .nl-button-danger { color: #9f1239; }
             .nl-panel-box { border-radius: 16px; border: 1px solid rgba(148, 163, 184, 0.16); background: rgba(2, 6, 23, 0.24); padding: 16px; }
             .nl-theme-light .nl-panel-box { background: rgba(236, 243, 255, 0.82); border-color: rgba(15, 23, 42, 0.14); }
+            .nl-theme-light .nl-result-item { background: rgba(236, 243, 255, 0.82); }
             .nl-muted-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.16em; color: #94a3b8; }
             .nl-value { margin-top: 8px; color: #e2e8f0; font-size: 14px; }
             .nl-code { font-family: "Courier New", Courier, monospace; font-size: 12px; word-break: break-all; }
@@ -79,9 +99,68 @@
                             <div class="mx-auto w-full max-w-7xl">
                                 <x-page-header eyebrow="" title="Shopify Webhooks" breadcrumb="Settings / Shopify webhooks">
                                     <x-slot name="actions">
-                                        <button id="theme-toggle" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-200 nl-panel-muted" type="button">Switch theme</button>
+                                        <div class="flex flex-wrap items-center justify-end gap-3">
+                                            <form method="POST" action="{{ route('shopify-webhooks.register') }}">
+                                                @csrf
+                                                <button class="nl-button nl-button-primary" type="submit">Connect</button>
+                                            </form>
+                                            <form method="POST" action="{{ route('shopify-webhooks.destroy') }}" onsubmit="return confirm('Delete the listed Shopify webhooks from Shopify?');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button class="nl-button nl-button-danger" type="submit">Delete webhooks</button>
+                                            </form>
+                                            <button id="theme-toggle" class="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-xs text-slate-200 nl-panel-muted" type="button">Switch theme</button>
+                                        </div>
                                     </x-slot>
                                 </x-page-header>
+
+                                @if ($webhookFeedback)
+                                    <section class="mt-6 nl-flash nl-flash-{{ $webhookFeedback['level'] ?? 'success' }}">
+                                        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                            <div>
+                                                <p class="text-sm font-semibold text-slate-50">{{ $webhookFeedback['title'] ?? 'Webhook result' }}</p>
+                                                <p class="mt-2 text-sm leading-6 text-slate-200">{{ $webhookFeedback['message'] ?? 'Shopify webhook action finished.' }}</p>
+                                            </div>
+                                            <div class="grid grid-cols-3 gap-3 text-center">
+                                                @foreach (($webhookFeedback['stats'] ?? []) as $stat)
+                                                    <div class="rounded-2xl border border-slate-700/60 px-4 py-3">
+                                                        <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">{{ $stat['label'] ?? 'Count' }}</p>
+                                                        <p class="mt-2 text-lg font-semibold text-slate-50">{{ $stat['value'] ?? 0 }}</p>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        </div>
+
+                                        @if (!empty($webhookFeedback['results']))
+                                            <div class="nl-result-list">
+                                                @foreach ($webhookFeedback['results'] as $result)
+                                                    <div class="nl-result-item">
+                                                        <div>
+                                                            <p class="font-semibold text-slate-50">{{ $result['label'] ?? $result['topic'] }}</p>
+                                                            <p class="mt-1 nl-topic">{{ $result['topic'] ?? '' }}</p>
+                                                            <p class="mt-2 text-sm text-slate-300">{{ $result['message'] ?? '' }}</p>
+                                                        </div>
+                                                        <div class="text-right">
+                                                            <span class="nl-result-pill nl-result-pill-{{ $result['status'] ?? 'existing' }}">
+                                                                {{ strtoupper($result['status'] ?? 'existing') }}
+                                                            </span>
+                                                            @if (!empty($result['id']))
+                                                                <p class="mt-2 text-xs text-slate-400">ID {{ $result['id'] }}</p>
+                                                            @endif
+                                                        </div>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        @endif
+                                    </section>
+                                @endif
+
+                                @if (!empty($shopifyVerificationError))
+                                    <section class="mt-6 nl-flash nl-flash-error">
+                                        <p class="text-sm font-semibold text-slate-50">Shopify verification issue</p>
+                                        <p class="mt-2 text-sm leading-6 text-slate-200">{{ $shopifyVerificationError }}</p>
+                                    </section>
+                                @endif
 
                                 <section class="mt-6 rounded-[22px] border border-sky-500/20 bg-sky-500/10 p-6 nl-panel">
                                     <p class="text-sm font-semibold text-sky-100">Send test notifications from Shopify</p>
@@ -89,6 +168,7 @@
                                         In Shopify Admin go to <span class="font-medium text-slate-50">Settings</span> -> <span class="font-medium text-slate-50">Notifications</span> -> <span class="font-medium text-slate-50">Webhooks</span> and use <span class="font-medium text-slate-50">Send test notification</span>.
                                         This screen shows one row per webhook and lets you inspect the latest delivery and log history in popups.
                                     </p>
+                                    <p class="mt-3 text-xs uppercase tracking-[0.18em] text-sky-100/80">Connect verifies Shopify registration and creates any missing webhooks using the env credentials configured on this server.</p>
                                 </section>
 
                                 <section class="mt-6 nl-card">
@@ -171,7 +251,7 @@
                             <p id="webhook-view-url" class="nl-value nl-code"></p>
                         </div>
                         <div class="nl-panel-box">
-                            <p class="nl-muted-label">Last delivery</p>
+                            <p class="nl-muted-label">Connection status</p>
                             <div class="mt-2">
                                 <span id="webhook-view-status" class="nl-status nl-status-waiting">
                                     <span class="nl-status-dot"></span>
@@ -282,8 +362,20 @@
                         document.getElementById('webhook-view-meta').textContent = 'No delivery recorded yet.';
                     }
 
+                    const connectionBits = [item.connection_message || ''];
+                    if (item.shopify_webhook_id) connectionBits.push('Shopify ID ' + item.shopify_webhook_id);
+                    if (item.checked_at_label) connectionBits.push('Verified ' + item.checked_at_label);
+                    document.getElementById('webhook-view-meta').textContent = connectionBits.filter(Boolean).join(' · ') || 'Connection not verified yet.';
+
                     const errorBox = document.getElementById('webhook-view-error-box');
                     const errorValue = document.getElementById('webhook-view-error');
+                    if (item.verification_error) {
+                        errorValue.textContent = item.verification_error;
+                        errorBox.style.display = '';
+                        openModal('webhook-view-modal');
+                        return;
+                    }
+
                     if (latest && latest.error_message) {
                         errorValue.textContent = latest.error_message;
                         errorBox.style.display = '';

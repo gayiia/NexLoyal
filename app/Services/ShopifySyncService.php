@@ -139,7 +139,7 @@ class ShopifySyncService
         } elseif ($topic === 'orders/fulfilled') {
             // This approves pending points once the order is fulfilled.
             $this->rulesEngine->approveOrderPoints($customer, (int) $orderId);
-        } elseif (in_array($topic, ['orders/refunded', 'orders/cancelled'], true)) {
+        } elseif (in_array($topic, ['refunds/create', 'orders/cancelled'], true)) {
             // This reverses points for refunds or cancellations using refund line data.
             $refunds = data_get($data, 'refunds', []);
             if (!is_array($refunds)) {

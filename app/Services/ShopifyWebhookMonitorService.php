@@ -44,10 +44,10 @@ class ShopifyWebhookMonitorService
                 'address' => "{$baseAddress}/orders/fulfilled",
             ],
             [
-                'topic' => 'orders/refunded',
+                'topic' => 'refunds/create',
                 'label' => 'Refund create',
-                'webhook_key' => 'orders/refunded',
-                'address' => "{$baseAddress}/orders/refunded",
+                'webhook_key' => 'refunds/create',
+                'address' => "{$baseAddress}/refunds/create",
             ],
             [
                 'topic' => 'orders/cancelled',

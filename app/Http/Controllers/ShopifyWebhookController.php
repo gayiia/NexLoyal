@@ -28,7 +28,7 @@ class ShopifyWebhookController extends Controller
     {
         return $this->handleWebhook(
             $request,
-            ['orders/paid', 'orders/create', 'orders/fulfilled', 'orders/refunded', 'orders/cancelled'],
+            ['orders/paid', 'orders/create', 'orders/fulfilled', 'refunds/create', 'orders/cancelled'],
             fn (array $data): bool => true,
             fn (array $data, string $topic) => $sync->syncOrder($data, $topic)
         );

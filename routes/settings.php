@@ -42,6 +42,10 @@ Route::middleware('auth')->group(function () {
 
     Route::get('settings/shopify-webhooks', [ShopifyWebhookMonitorController::class, 'index'])
         ->name('shopify-webhooks');
+    Route::post('settings/shopify-webhooks', [ShopifyWebhookMonitorController::class, 'register'])
+        ->name('shopify-webhooks.register');
+    Route::delete('settings/shopify-webhooks', [ShopifyWebhookMonitorController::class, 'destroy'])
+        ->name('shopify-webhooks.destroy');
     Route::get('settings/shopify-webhooks/logs/{log}', [ShopifyWebhookMonitorController::class, 'showLog'])
         ->name('shopify-webhooks.logs.show');
 

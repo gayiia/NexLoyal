@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Schedule;
 use App\Models\PointRule;
 use App\Models\AiClusterRun;
 use App\Services\AiInsightsService;
+use App\Services\ShopifyWebhookMonitorService;
+use App\Services\ShopifyWebhookRegistrationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 
@@ -179,64 +181,49 @@ Artisan::command('shopify:sync-customers {--prune}', function () {
 })->purpose('Sync customers from Shopify and optionally prune locals');
 
 // Register Shopify webhooks for customer and order events.
-Artisan::command('shopify:register-webhooks', function () {
-    $shopDomain = config('services.shopify.shop_domain');
-    $token = config('services.shopify.admin_token');
-    $apiVersion = config('services.shopify.api_version');
-    $baseAddress = config('services.shopify.webhook_address') ?: rtrim(config('app.url'), '/').'/webhooks/shopify';
+Artisan::command('shopify:register-webhooks', function (
+    ShopifyWebhookRegistrationService $registration,
+    ShopifyWebhookMonitorService $monitor
+) {
+    $baseAddress = rtrim(
+        config('services.shopify.webhook_address') ?: rtrim((string) config('app.url'), '/').'/webhooks/shopify',
+        '/'
+    );
 
-    // Shopify credentials are required for API access.
-    if (!$shopDomain || !$token) {
-        $this->error('Missing Shopify credentials. Set SHOPIFY_SHOP_DOMAIN and SHOPIFY_ADMIN_TOKEN.');
-        return 1;
-    }
-
-    // The webhook base URL must be configured.
-    if (!$baseAddress) {
-        $this->error('Missing webhook address. Set SHOPIFY_WEBHOOK_ADDRESS or APP_URL.');
-        return 1;
-    }
-
-    $topics = [
-        'customers/create',
-        'customers/update',
-        'customers/delete',
-        'orders/create',
-        'orders/paid',
-        'orders/fulfilled',
-        'orders/refunded',
-        'orders/cancelled',
+    $definitions = [
+        ...$monitor->definitions(),
+        [
+            'topic' => 'customers/delete',
+            'label' => 'Customer deletion',
+            'webhook_key' => 'customers',
+            'address' => "{$baseAddress}/customers",
+        ],
     ];
-    $endpoint = "https://{$shopDomain}/admin/api/{$apiVersion}/webhooks.json";
 
-    // Register each topic and log its webhook ID.
-    foreach ($topics as $topic) {
-        $address = str_starts_with($topic, 'orders/')
-            ? "{$baseAddress}/orders/".str_replace('orders/', '', $topic)
-            : "{$baseAddress}/customers";
-        $payload = [
-            'webhook' => [
-                'topic' => $topic,
-                'address' => $address,
-                'format' => 'json',
-            ],
-        ];
+    try {
+        $summary = $registration->register($definitions);
+    } catch (Throwable $exception) {
+        $this->error($exception->getMessage());
 
-        $response = Http::withHeaders([
-            'X-Shopify-Access-Token' => $token,
-        ])->post($endpoint, $payload);
+        return 1;
+    }
 
-        // Continue on errors so other topics can still be registered.
-        if (!$response->ok()) {
-            $this->error("Failed to register {$topic} ({$response->status()}): ".$response->body());
+    foreach ($summary['results'] as $result) {
+        if (($result['status'] ?? null) === 'created') {
+            $this->info("Registered {$result['topic']} webhook (id {$result['id']}).");
             continue;
         }
 
-        $id = data_get($response->json(), 'webhook.id');
-        $this->info("Registered {$topic} webhook (id {$id}).");
+        if (($result['status'] ?? null) === 'existing') {
+            $suffix = $result['id'] ? " (id {$result['id']})" : '';
+            $this->warn("Skipped {$result['topic']} webhook; already exists{$suffix}.");
+            continue;
+        }
+
+        $this->error("Failed to register {$result['topic']}: ".($result['message'] ?? 'Unknown Shopify error.'));
     }
 
-    return 0;
+    return (int) ($summary['failed_count'] ?? 0) > 0 ? 1 : 0;
 })->purpose('Register Shopify customer webhooks');
 
 // Mark expired coupon redemptions based on their expiry timestamp.
