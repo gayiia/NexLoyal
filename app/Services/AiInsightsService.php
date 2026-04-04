@@ -258,6 +258,10 @@ class AiInsightsService
     private function buildFeatureDatasetStats(): array
     {
         $minCustomers = (int) config('ai.min_customers_for_training', 20);
+        $fixedK = config('ai.fixed_k');
+        $fixedK = is_numeric($fixedK) ? (int) $fixedK : null;
+        $minK = (int) data_get(config('ai.k_range'), 'min', 2);
+        $maxK = (int) data_get(config('ai.k_range'), 'max', 6);
 
         $customerCount = Customer::query()->count();
         $featureCount = CustomerFeature::query()->count();
@@ -269,6 +273,11 @@ class AiInsightsService
             ->groupBy('excluded_reason')
             ->pluck('total', 'excluded_reason')
             ->toArray();
+        $requiredCustomersForConfiguredK = ($fixedK ?? $maxK) + 1;
+        $requiredCustomers = max($minCustomers, $requiredCustomersForConfiguredK);
+        $configuredClusterStrategy = $fixedK !== null
+            ? "fixed K={$fixedK}"
+            : "K-search {$minK}-{$maxK}";
 
         return [
             'customers' => $customerCount,
@@ -276,8 +285,11 @@ class AiInsightsService
             'eligible_customer_features' => $eligibleCount,
             'excluded_customer_features' => $excludedCount,
             'excluded_breakdown' => $excludedBreakdown,
+            'configured_cluster_strategy' => $configuredClusterStrategy,
+            'required_customers_for_configured_k' => $requiredCustomersForConfiguredK,
             'min_customers_for_training' => $minCustomers,
-            'is_ready_for_training' => $eligibleCount >= $minCustomers,
+            'required_customers_for_training' => $requiredCustomers,
+            'is_ready_for_training' => $eligibleCount >= $requiredCustomers,
         ];
     }
 

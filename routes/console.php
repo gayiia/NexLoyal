@@ -455,6 +455,9 @@ Artisan::command('ai:preflight', function (AiInsightsService $insights) {
     $this->line('Customer features: ' . number_format((int) ($stats['customer_features'] ?? 0)));
     $this->line('Eligible customer features: ' . number_format((int) ($stats['eligible_customer_features'] ?? 0)));
     $this->line('Excluded customer features: ' . number_format((int) ($stats['excluded_customer_features'] ?? 0)));
+    $this->line('Cluster strategy: ' . ($stats['configured_cluster_strategy'] ?? 'n/a'));
+    $this->line('Required customers for configured K: ' . number_format((int) ($stats['required_customers_for_configured_k'] ?? 0)));
+    $this->line('Required customers for training: ' . number_format((int) ($stats['required_customers_for_training'] ?? 0)));
 
     foreach (($stats['excluded_breakdown'] ?? []) as $reason => $total) {
         $this->line("Excluded ({$reason}): " . number_format((int) $total));

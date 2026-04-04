@@ -48,6 +48,7 @@ class RunAIClusteringJob implements ShouldQueue
         $fixedK = config('ai.fixed_k');
         $fixedK = is_numeric($fixedK) ? (int) $fixedK : null;
         $minCustomers = (int) config('ai.min_customers_for_training', 20);
+        $requiredCustomersForConfiguredK = ($fixedK ?? $maxK) + 1;
         $smartRetrainingEnabled = (bool) config('ai.smart_retraining_enabled', true);
         $retrainIntervalDays = (int) config('ai.retrain_interval_days', 7);
         $payloadPath = null;
@@ -144,6 +145,20 @@ class RunAIClusteringJob implements ShouldQueue
 
                 if ($trainingCount < $minCustomers) {
                     $message = "At least {$minCustomers} customers are required for clustering.";
+                    $run->update([
+                        'status' => AiRunStatus::FAILED->value,
+                        'error_message' => $message,
+                        'completed_at' => now(),
+                    ]);
+                    AiClusterProgress::markFailed($run->id, $message);
+                    return;
+                }
+
+                if ($trainingCount < $requiredCustomersForConfiguredK) {
+                    $strategy = $fixedK !== null
+                        ? "fixed K={$fixedK}"
+                        : "K-search {$minK}-{$maxK}";
+                    $message = "Configured {$strategy} requires at least {$requiredCustomersForConfiguredK} eligible customers, but only {$trainingCount} are available.";
                     $run->update([
                         'status' => AiRunStatus::FAILED->value,
                         'error_message' => $message,
