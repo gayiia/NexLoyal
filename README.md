@@ -154,5 +154,5 @@ AI settings live in `config/ai.php` and can be overridden via `.env`:
 
 ## Documentation
 
-Architecture notes are in `docs/ARCHITECTURE.md`.
+Additional architecture and thesis documentation is maintained outside this repository.
 Shopify widget snippet is in `docs/shopify-widget.liquid`.
